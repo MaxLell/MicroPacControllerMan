@@ -6,7 +6,7 @@ title: Traceability Matrix
 
 [[Index|← Back to Index]]
 
-Every requirement from [[02-System-Requirements-and-Architecture]] and [[03-Software-Requirements-and-Architecture]] is listed below with the verification test(s) from [[06-Verification-and-Validation]] that verify it.
+Every requirement from [[02-System-Requirements]] and [[03-Software-Requirements-and-Architecture]] is listed below with the verification test(s) from [[06-Verification-and-Validation]] that verify it.
 
 Two requirements (CON-101, NFR-102) are structural/process constraints rather than runtime behaviour — they are verified by build tooling or code review rather than a dynamic `VT-*` test. This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
 
@@ -59,8 +59,3 @@ Two requirements (CON-101, NFR-102) are structural/process constraints rather th
 - Every `FR-*`/`NFR-*` requirement has at least one verifying test. No orphaned requirements found.
 - Every `VT-*` test in [[06-Verification-and-Validation]] traces back to at least one requirement above. No orphaned tests found.
 - Known gap: NFR-102 and CON-101 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
-
-## 7.4 Related Documents
-
-- [[06-Verification-and-Validation]]
-- [[05-Risks-Assumptions-and-Dependencies]]

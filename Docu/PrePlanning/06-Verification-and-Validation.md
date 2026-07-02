@@ -47,8 +47,3 @@ Each on-target test is exposed as its own OTT CLI command (FR-106/FR-107, see [[
 ## 6.3 Test Harness (Python)
 
 An external Python script drives every **Automatic** test above sequentially over the serial console (sending the OTT command, reading back PASS/FAIL) and reports a summary. **Manual, button-confirmed** and **Manual, one-time bring-up** tests are excluded from this script's run list — they still have their own OTT command/procedure but require a human in the loop. Building this script is scoped to [[04-Implementation-Phases-and-Milestones|Board Bring-Up]], once the OTT CLI actually exists on target; see [[03-Software-Requirements-and-Architecture#3.7 On-Target Test (OTT) CLI Framework|OTT CLI Framework]] for the design.
-
-## 6.4 Related Documents
-
-- [[07-Traceability-Matrix]] — every requirement mapped to the test(s) above.
-- [[05-Risks-Assumptions-and-Dependencies]] — risks these tests are designed to close out.

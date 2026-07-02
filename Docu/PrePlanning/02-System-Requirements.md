@@ -1,8 +1,8 @@
 ---
-title: System Requirements & System Architecture
+title: System Requirements
 ---
 
-# 2 System Requirements & System Architecture
+# 2 System Requirements
 
 [[Index|← Back to Index]] · See also [[01-System-Overview-and-Context]]
 
@@ -55,16 +55,5 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | CON-001 | Target Hardware | The system shall run on the STM32G431RB Nucleo-64 board. |
 | CON-002 | Display Hardware | The system shall use the LCD Mono Click (Sharp LS013B7DH03, 128×128 monochrome memory LCD) as its display. |
 | CON-003 | Input Hardware | The system shall use the Touchpad Click (Microchip MTCH6102 capacitive touch controller) as its directional input device. |
-| CON-004 | Carrier Hardware | The system shall use the MikroE Click Shield for Nucleo-64 to connect the display (mikroBUS slot 1) and touchpad (mikroBUS slot 2) to the Nucleo board. |
+| CON-004 | Carrier Hardware | The system shall use the MikroE Click Shield for Nucleo-64 to connect the display (mikroBUS slot 1) and touchpad (mikroBUS slot 2) to the Nucleo board. *(exact pin mapping pending — see [[05-Risks-Assumptions-and-Dependencies\|R-001]])* |
 | CON-005 | Debug Interface | The system shall use the on-board STLINK V3 for debugging (SWD) and serial console output. |
-
-## 2.4 System Architecture
-
-The block diagram for this system is kept in one place — see [[01-System-Overview-and-Context#1.4 Context Diagram|the Context Diagram]] — rather than duplicated here. It documents interface *types* (SPI, I2C, GPIO) as listed in [[01-System-Overview-and-Context#1.3 External Interfaces|External Interfaces]], not final pin names.
-
-Exact mikroBUS-socket-to-MCU-GPIO pin assignments are **not yet confirmed** from public documentation alone — see [[05-Risks-Assumptions-and-Dependencies|R-001]]. These will be confirmed during [[04-Implementation-Phases-and-Milestones|Board Bring-Up]] and recorded here once verified.
-
-## 2.5 Related Documents
-
-- Software-level breakdown of how the firmware satisfies these system requirements: [[03-Software-Requirements-and-Architecture]]
-- Verification of these requirements: [[06-Verification-and-Validation]], cross-referenced in [[07-Traceability-Matrix]]

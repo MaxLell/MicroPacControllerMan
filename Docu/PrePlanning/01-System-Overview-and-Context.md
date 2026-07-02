@@ -38,20 +38,15 @@ Beyond delivering a playable game, the primary motivation for this project is to
 ## 1.4 Context Diagram
 
 ```
-                     +-----------------------------+
-   Touchpad Click ---|                             |
-   (I2C, slot 2)      |                             |
-                     |   STM32G431RB Nucleo-64      |---> LCD Mono Click
-   Nucleo User Btn --|   (+ Click Shield)          |     (SPI, slot 1)
-                     |                             |
-   STLINK V3 <--------|  Firmware: MVP + Pub-Sub    |
-   (debug/console)    |  + FreeRTOS tasks           |
-                     |                             |
-                     |          NVM (high score)   |
-                     +-----------------------------+
+                        +----------------------------------+
+      Touchpad Click -->|                                  |
+       (I2C, slot 2)    |                                  |
+                        |      STM32G431RB Nucleo-64       |  --> LCD Mono Click
+     Nucleo User Btn -->|         (+ Click Shield)         |      (SPI, slot 1)
+                        |                                  |
+           STLINK V3<-->|     Firmware: MVP + Pub-Sub      |
+     (debug/console)    |         + FreeRTOS tasks         |
+                        |                                  |
+                        |         NVM (high score)         |
+                        +----------------------------------+
 ```
-
-## 1.5 Related Documents
-
-- Requirements derived here are detailed in [[02-System-Requirements-and-Architecture]] and [[03-Software-Requirements-and-Architecture]].
-- Open items about the exact hardware wiring are tracked in [[05-Risks-Assumptions-and-Dependencies]].

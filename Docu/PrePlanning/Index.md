@@ -11,7 +11,7 @@ This document set is the **source of truth** for the project going forward. The 
 ## Documents
 
 1. [[01-System-Overview-and-Context]] — What the system is, its boundary, external interfaces, and stakeholders.
-2. [[02-System-Requirements-and-Architecture]] — System-level requirements (Functional / Non-Functional / Constraints) and the system architecture.
+2. [[02-System-Requirements]] — System-level requirements (Functional / Non-Functional / Constraints).
 3. [[03-Software-Requirements-and-Architecture]] — Software-level requirements, the MVP architecture, the pub-sub message bus, and the FreeRTOS task breakdown.
 4. [[04-Implementation-Phases-and-Milestones]] — The phased delivery plan, with entry/exit criteria per phase.
 5. [[05-Risks-Assumptions-and-Dependencies]] — Known risks, working assumptions, and external dependencies.

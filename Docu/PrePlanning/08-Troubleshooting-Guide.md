@@ -39,8 +39,3 @@ This guide is a skeleton, seeded from known risks ([[05-Risks-Assumptions-and-De
 |---|---|---|
 | No I2C response from MTCH6102 | Wrong I2C address, or SDA/SCL pin mapping incorrect | Re-verify I2C pin mapping per [[06-Verification-and-Validation\|VT-INT-004]]. |
 | Game-Control-Cross feels unreliable as a d-pad | Quadrant boundaries/dead-zone untuned for raw touch position | Tune quadrant boundaries empirically, see [[05-Risks-Assumptions-and-Dependencies\|R-003]]; fall back to the Touchpad Click's gesture-detection API if raw-position mapping proves unworkable. |
-
-## 8.6 Related Documents
-
-- [[05-Risks-Assumptions-and-Dependencies]]
-- [[06-Verification-and-Validation]]

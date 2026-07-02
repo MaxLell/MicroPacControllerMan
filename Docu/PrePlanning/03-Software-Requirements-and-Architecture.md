@@ -4,7 +4,7 @@ title: Software Requirements & Software Architecture
 
 # 3 Software Requirements & Software Architecture
 
-[[Index|← Back to Index]] · See also [[02-System-Requirements-and-Architecture]]
+[[Index|← Back to Index]] · See also [[02-System-Requirements]]
 
 ## 3.1 Functional Requirements
 
@@ -75,8 +75,3 @@ FR-106/FR-107 follow the OTT pattern used in the project owner's [BareMetalHollo
 - A test reports `OTT PASSED [<name>]` or `OTT FAILED [<name>]: <reason>` on the serial console — no debugger required to read the result.
 - Tests whose pass/fail cannot be determined by firmware alone (e.g. "does the display visibly show X") are still exposed as OTT commands, but require a human to confirm the outcome — see [[06-Verification-and-Validation]] for which tests fall into this category and how confirmation is signalled (typically: display the expected result, then wait for the user button as confirmation, failing on timeout).
 - An external Python script drives the automatable subset of these commands sequentially over the serial console and collects PASS/FAIL results, acting as a repeatable regression harness. Building this script is scoped to [[04-Implementation-Phases-and-Milestones|Board Bring-Up]], once the CLI itself exists on target; it is out of scope for Pre-Planning.
-
-## 3.8 Related Documents
-
-- Verification of these requirements: [[06-Verification-and-Validation]], cross-referenced in [[07-Traceability-Matrix]]
-- Design risks around the message bus and task timing: [[05-Risks-Assumptions-and-Dependencies]]
