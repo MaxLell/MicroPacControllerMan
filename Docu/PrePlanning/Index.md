@@ -30,10 +30,8 @@ This document set is the **source of truth** for the project going forward. The 
 | `R-0xx` | Risk (doc 5) |
 | `A-0xx` | Assumption (doc 5) |
 | `D-0xx` | Dependency (doc 5) |
-| `VT-HW-0xx` | Verification Test — hardware itself |
-| `VT-HELP-0xx` | Verification Test — helper / unit tests |
-| `VT-SMOKE-0xx` | Verification Test — smoke tests |
-| `VT-ACC-0xx` | Verification Test — acceptance tests |
+| `VT-UNIT-0xx` | Verification Test — unit test (small scope, host-side) |
+| `VT-INT-0xx` | Verification Test — integration test (large scope, target and/or host) |
 
 ## Status
 

@@ -30,15 +30,15 @@ This guide is a skeleton, seeded from known risks ([[05-Risks-Assumptions-and-De
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| Screen stays blank | DISP pin held low, or wrong SPI mode/pin mapping | Confirm DISP is driven high; re-verify SPI pin mapping per [[06-Verification-and-Validation\|VT-HW-002]]. |
+| Screen stays blank | DISP pin held low, or wrong SPI mode/pin mapping | Confirm DISP is driven high; re-verify SPI pin mapping per [[06-Verification-and-Validation\|VT-INT-003]]. |
 | Image looks inverted or "ghosted" | EXTCOMIN polarity-inversion signal not toggling at the required rate | Check EXTMODE/EXTCOMIN handling per the LS013B7DH03 datasheet. |
 
 ## 8.5 Touchpad Issues (Touchpad Click)
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| No I2C response from MTCH6102 | Wrong I2C address, or SDA/SCL pin mapping incorrect | Re-verify I2C pin mapping per [[06-Verification-and-Validation\|VT-HW-003]]. |
-| Gestures feel unreliable as a d-pad | Gesture-detection API mismatch with discrete-direction use case | Fall back to raw touch-position thresholding, see [[05-Risks-Assumptions-and-Dependencies\|R-003]]. |
+| No I2C response from MTCH6102 | Wrong I2C address, or SDA/SCL pin mapping incorrect | Re-verify I2C pin mapping per [[06-Verification-and-Validation\|VT-INT-004]]. |
+| Game-Control-Cross feels unreliable as a d-pad | Quadrant boundaries/dead-zone untuned for raw touch position | Tune quadrant boundaries empirically, see [[05-Risks-Assumptions-and-Dependencies\|R-003]]; fall back to the Touchpad Click's gesture-detection API if raw-position mapping proves unworkable. |
 
 ## 8.6 Related Documents
 

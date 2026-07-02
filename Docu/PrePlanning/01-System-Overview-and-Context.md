@@ -10,11 +10,9 @@ title: System Overview & Context
 
 MicroPacControllerMan is a standalone embedded Pacman game. A player controls Pacman via a capacitive touchpad; the game state is rendered on a monochrome display. The system boots into a loading screen, then a menu showing the persisted high score, and starts a new game when the on-board user button is pressed.
 
-## 1.2 Problem Statement
+Beyond delivering a playable game, the primary motivation for this project is to explore the capabilities and boundaries of AI-assisted software development: how far an AI coding agent can carry an embedded project like this — from requirements through firmware — and where its limits are.
 
-There is currently no software or hardware bring-up for this platform. The project starts from a bare STM32G431RB Nucleo board plus a MikroE Click Shield carrying a display and a touchpad; nothing has been validated yet — not the toolchain, not the hardware wiring, not the game itself.
-
-## 1.3 System Boundary
+## 1.2 System Boundary
 
 **In scope:**
 - Firmware running on the STM32G431RB Nucleo-64 board.
@@ -27,14 +25,7 @@ There is currently no software or hardware bring-up for this platform. The proje
 **Out of scope (for now):**
 - Multiple lives, ghosts AI variety, levels/mazes beyond a first playable version, sound, multiplayer, wireless connectivity, multiple high-score entries.
 
-## 1.4 Stakeholders
-
-| Stakeholder | Interest |
-|---|---|
-| Project owner / player (Max) | Wants a working, playable Pacman on the described hardware, developed in traceable phases. |
-| Future maintainer (Obsidian vault reader) | Needs cleanly cross-linked documentation to understand the system without re-deriving it from code. |
-
-## 1.5 External Interfaces
+## 1.3 External Interfaces
 
 | Interface | Direction | Description |
 |---|---|---|
@@ -44,7 +35,7 @@ There is currently no software or hardware bring-up for this platform. The proje
 | NVM (on-chip flash or equivalent) | Output/Input | Persists the single high-score entry across power cycles. |
 | STLINK V3 (on-board) | Output | Debugging (SWD) and serial console (log output) during development. |
 
-## 1.6 Context Diagram
+## 1.4 Context Diagram
 
 ```
                      +-----------------------------+
@@ -60,7 +51,7 @@ There is currently no software or hardware bring-up for this platform. The proje
                      +-----------------------------+
 ```
 
-## 1.7 Related Documents
+## 1.5 Related Documents
 
 - Requirements derived here are detailed in [[02-System-Requirements-and-Architecture]] and [[03-Software-Requirements-and-Architecture]].
 - Open items about the exact hardware wiring are tracked in [[05-Risks-Assumptions-and-Dependencies]].
