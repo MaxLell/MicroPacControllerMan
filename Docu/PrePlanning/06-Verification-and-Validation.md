@@ -17,6 +17,8 @@ Host-side, run under Ceedling/Unity, no target hardware required.
 | VT-UNIT-001 | Message Bus Publish/Subscribe | A published message reaches every subscriber of its topic and no subscriber of another topic; a full subscriber queue does not block the publisher. |
 | VT-UNIT-002 | Model Unit Tests | Model initialization and state-update accessor functions behave correctly. |
 | VT-UNIT-003 | Control Statelessness | Calling a Control function twice with identical Model + input produces identical output both times (no hidden internal state). |
+| VT-UNIT-004 | Maze & Movement Rules | Wall cells block movement (FR-010); pellet/power-pellet entry removes the item and increments the score (FR-011, FR-017); exiting a side tunnel wraps to the opposite opening on the same row (FR-012). |
+| VT-UNIT-005 | Ghost & Frightened Logic | Each ghost's targeting is deterministic for its behavior (FR-014) and alternates between chase and scatter phases (FR-015); consuming a power pellet activates frightened mode, eating a frightened ghost scores a bonus and returns it to the pen without costing a life (FR-018, FR-019), and frightened mode ends after its duration (FR-020). |
 
 ## 6.2 Integration Tests (large scope)
 
@@ -36,13 +38,14 @@ Each on-target test is exposed as its own OTT CLI command (FR-106/FR-107, see [[
 | VT-INT-007 | Touchpad Read & Confirm | Target | Manual, button-confirmed | The current X/Y touch coordinates from the Touchpad Click are shown live on the display. The display then prompts the user to press the user button to confirm the reading is correct; if the button isn't pressed within a timeout, the test fails. |
 | VT-INT-008 | Host Build Launch | Host | Automatic | The host-built Pacman binary launches, opens an SDL window, and renders at least one frame. |
 | VT-INT-009 | FreeRTOS Task Startup | Target | Automatic | OTT command dumps the FreeRTOS task list over the serial console; the harness parses it and confirms every task from [[03-Software-Requirements-and-Architecture]] is present and running/ready. |
-| VT-INT-010 | Game Logic Playthrough (E2E) | Host | Automatic | A scripted sequence of directional inputs is fed through the pub-sub bus into Control; the resulting Model state (position, score) matches the expected outcome after each move. |
+| VT-INT-010 | Game Logic Playthrough (E2E) | Host | Automatic | A scripted sequence of directional inputs is fed through the pub-sub bus into Control; the resulting Model state — Pacman position, pellet/power-pellet consumption, score, ghost positions, and frightened mode — matches the expected outcome after each move. |
 | VT-INT-011 | Boot Sequence | Target | Automatic | The harness parses serial-logged state-transition messages to confirm the loading screen (with logo, after the NFR-005 delay) is followed by the menu screen (with current high score) within NFR-001. |
 | VT-INT-012 | Game Start via Button | Target | Manual, button-confirmed | From the menu screen, the harness prompts the user to press the Nucleo user button; a new game starting is confirmed via the resulting serial log message within a timeout. |
 | VT-INT-013 | Directional Movement | Target | Manual, button-confirmed (latency: Automatic) | The user is prompted to touch each Game-Control-Cross quadrant (FR-004) in turn and confirm correct movement via the button; input-to-render latency (NFR-003) is measured automatically from serial-logged input/render timestamps. |
 | VT-INT-014 | Single-Life Game Over | Host | Automatic | A scripted input sequence causes Pacman to be caught once; the game ends immediately (no extra lives) and the Model returns to the menu state. |
 | VT-INT-015 | High Score Update & Persistence | Target | Automatic | An OTT command forces a score above the stored high score, triggers a reset, then reads the NVM value back over the CLI to confirm it persisted; a lower score is confirmed not to overwrite the stored value. |
 | VT-INT-016 | Rendering Smoothness | Target | Automatic | The harness parses serial-logged frame-render timestamps captured during a scripted gameplay run and confirms the achieved rate meets NFR-002. |
+| VT-INT-017 | Level Clear (E2E) | Host | Automatic | A scripted input sequence consumes every pellet and power pellet in the maze; the game then ends as won (FR-021) and the Model returns to the menu state, with the final score offered for high-score comparison. |
 
 ## 6.3 Test Harness (Python)
 

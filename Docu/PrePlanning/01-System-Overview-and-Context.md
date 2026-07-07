@@ -20,10 +20,11 @@ Beyond delivering a playable game, the primary motivation for this project is to
 - Reading directional input from the Touchpad Click.
 - Reading the Nucleo user button (game start).
 - Persisting a single high-score value in non-volatile memory (NVM).
+- Core Pacman gameplay: a single fixed maze, pellets and power pellets, four distinct ghosts, a frightened mode, tunnel wrap-around, and a level-clear win condition (see [[02-System-Requirements|FR-010..FR-021]]).
 - A host-computer build of the game logic (Model + Control) with an SDL-based View, for development and unit testing purposes ([[04-Implementation-Phases-and-Milestones|Milestone 3.4]]).
 
 **Out of scope (for now):**
-- Multiple lives, ghosts AI variety, levels/mazes beyond a first playable version, sound, multiplayer, wireless connectivity, multiple high-score entries.
+- Multiple lives, bonus fruit / bonus items, additional levels or mazes beyond the first playable maze, sound, multiplayer, wireless connectivity, multiple high-score entries.
 
 ## 1.3 External Interfaces
 
@@ -37,16 +38,11 @@ Beyond delivering a playable game, the primary motivation for this project is to
 
 ## 1.4 Context Diagram
 
-```
-                        +----------------------------------+
-      Touchpad Click -->|                                  |
-       (I2C, slot 2)    |                                  |
-                        |      STM32G431RB Nucleo-64       |  --> LCD Mono Click
-     Nucleo User Btn -->|         (+ Click Shield)         |      (SPI, slot 1)
-                        |                                  |
-           STLINK V3<-->|     Firmware: MVP + Pub-Sub      |
-     (debug/console)    |         + FreeRTOS tasks         |
-                        |                                  |
-                        |         NVM (high score)         |
-                        +----------------------------------+
+```mermaid
+flowchart LR
+    TP["Touchpad Click<br/>MTCH6102 · I2C · slot 2"] -->|touch position| MCU
+    BTN["Nucleo User Button"] -->|game start| MCU
+    MCU["<b>STM32G431RB Nucleo-64</b><br/>+ Click Shield<br/><br/>Firmware: MVP + Pub-Sub<br/>+ FreeRTOS tasks<br/>+ NVM (high score)"]
+    MCU -->|SPI · slot 1| LCD["LCD Mono Click<br/>Sharp LS013B7DH03"]
+    MCU <-->|SWD + serial console| STL["STLINK V3<br/>debug / console"]
 ```

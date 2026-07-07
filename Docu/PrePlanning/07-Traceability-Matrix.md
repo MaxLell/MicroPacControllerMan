@@ -23,6 +23,18 @@ Two requirements (CON-101, NFR-102) are structural/process constraints rather th
 | FR-007 | Game Over | VT-INT-014 |
 | FR-008 | High Score Update | VT-INT-015 |
 | FR-009 | High Score Persistence | VT-INT-015 |
+| FR-010 | Maze Confinement | VT-UNIT-004, VT-INT-010 |
+| FR-011 | Pellet Consumption | VT-UNIT-004, VT-INT-010 |
+| FR-012 | Tunnel Wrap-Around | VT-UNIT-004, VT-INT-010 |
+| FR-013 | Ghost Presence | VT-INT-010 |
+| FR-014 | Distinct Ghost Behaviors | VT-UNIT-005, VT-INT-010 |
+| FR-015 | Scatter / Chase Alternation | VT-UNIT-005, VT-INT-010 |
+| FR-016 | Ghost Collision | VT-UNIT-005, VT-INT-014 |
+| FR-017 | Power Pellet Consumption | VT-UNIT-004, VT-UNIT-005, VT-INT-010 |
+| FR-018 | Frightened Ghosts | VT-UNIT-005, VT-INT-010 |
+| FR-019 | Eating Frightened Ghosts | VT-UNIT-005, VT-INT-010 |
+| FR-020 | Frightened Timeout | VT-UNIT-005, VT-INT-010 |
+| FR-021 | Level Clear | VT-INT-017 |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-002 | Rendering Rate | VT-INT-016 |
 | NFR-003 | Input Latency | VT-INT-013 |
