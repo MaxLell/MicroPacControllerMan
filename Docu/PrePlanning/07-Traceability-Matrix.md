@@ -1,16 +1,12 @@
----
-title: Traceability Matrix
----
-
 # 7 Traceability Matrix
 
-[[Index|← Back to Index]]
+[← Back to Index](Index.md)
 
-Every requirement from [[02-System-Requirements]] and [[03-Software-Requirements-and-Architecture]] is listed below with the verification test(s) from [[06-Verification-and-Validation]] that verify it.
+Every requirement from [02 Requirements](02-Requirements.md) is listed below with the verification test(s) from [06 Verification & Validation](06-Verification-and-Validation.md) that verify it. The two tables group requirements only by ID band (`0xx` vs `1xx`); the numbering carries no system-vs-software meaning.
 
-Two requirements (CON-101, NFR-102) are structural/process constraints rather than runtime behaviour — they are verified by build tooling or code review rather than a dynamic `VT-*` test. This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
+Three items are structural/process requirements rather than runtime behaviour and are verified by build tooling or code review rather than a dynamic `VT-*` test: CON-101 (language, enforced by the compiler), NFR-102 (coding standard), and the non-observable aspects of FR-109 (run-to-completion, no shared state). This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
 
-## 7.1 System Requirements
+## 7.1 Product Requirements (FR-0xx / NFR-0xx / CON-0xx)
 
 | Requirement | Name | Verified by |
 |---|---|---|
@@ -46,21 +42,25 @@ Two requirements (CON-101, NFR-102) are structural/process constraints rather th
 | CON-004 | Carrier Hardware | VT-INT-003, VT-INT-004 |
 | CON-005 | Debug Interface | VT-INT-001, VT-INT-002 |
 
-## 7.2 Software Requirements
+## 7.2 Software & Test Requirements (FR-1xx / NFR-1xx / CON-1xx)
 
 | Requirement | Name | Verified by |
 |---|---|---|
 | FR-101 | MVP Separation | VT-UNIT-002, VT-UNIT-003 |
 | FR-102 | Stateless Control | VT-UNIT-003 |
-| FR-103 | Pub-Sub Communication | VT-UNIT-001 |
+| FR-103 | Message-Based Communication | VT-UNIT-001 |
 | FR-104 | Host Buildability | VT-INT-008 |
 | FR-105 | FreeRTOS Task Separation | VT-INT-009 |
 | FR-106 | On-Target Test (OTT) Framework | VT-INT-005, VT-INT-009, VT-INT-015 (each exercises an OTT command) |
 | FR-107 | OTT Result Reporting | VT-INT-005, VT-INT-009, VT-INT-015 |
+| FR-108 | Dedicated Message-Broker Task | VT-UNIT-001, VT-INT-009 |
+| FR-109 | Active-Object Modules | VT-INT-009 (task-per-module observable); run-to-completion / no-shared-state by code review — see gap note above |
+| FR-110 | Pacman Internal Message Bus | VT-UNIT-001, VT-INT-010 |
 | NFR-101 | Unit Testability | VT-UNIT-002 |
 | NFR-102 | Coding Standard Compliance | Code review against c-code-style (no automated `VT-*` test yet — see gap note above) |
 | NFR-103 | No Runtime Heap Allocation | VT-UNIT-001 |
 | NFR-104 | OTT Harness Compatibility | VT-INT-005, VT-INT-009, VT-INT-015 (harness successfully drives each Automatic test) |
+| NFR-105 | Message-Bus Backpressure | VT-UNIT-001 |
 | CON-101 | Language | Enforced by the C toolchain at build time (no dedicated `VT-*` test) |
 | CON-102 | Test Framework | VT-UNIT-002, VT-UNIT-003 |
 | CON-103 | Host View Library | VT-INT-008 |
@@ -68,6 +68,6 @@ Two requirements (CON-101, NFR-102) are structural/process constraints rather th
 
 ## 7.3 Coverage Check
 
-- Every `FR-*`/`NFR-*` requirement has at least one verifying test. No orphaned requirements found.
-- Every `VT-*` test in [[06-Verification-and-Validation]] traces back to at least one requirement above. No orphaned tests found.
-- Known gap: NFR-102 and CON-101 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
+- Every `FR-*` / `NFR-*` requirement has at least one verifying test. No orphaned requirements found.
+- Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
+- Known gap: CON-101, NFR-102, and the non-observable aspects of FR-109 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
