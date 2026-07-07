@@ -14,6 +14,8 @@ The game is built as Model-View-Control (FR-101), so the game logic is identical
   - Host: draws to an SDL window (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Implemented as pure, stateless functions (FR-102) so it is trivially unit-testable (NFR-101) and identical on host and target.
 
+> **Open design point:** how a full Pacman maze maps onto the 128×128 monochrome display (a classic 28×31-tile maze leaves only ~4 px per tile) is not yet decided — reduced display-fit maze, scaled classic maze, or scrolling viewport. See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
+
 ## 3.2 Message Broker (System Message Bus)
 
 All inter-module communication goes through a custom message broker (no external library, no runtime heap — NFR-103). The design is adapted from [MovyDesk_Prototype/lib/MessageBroker](https://github.com/MaxLell/MovyDesk_Prototype/tree/main/lib/MessageBroker), with one deliberate change: **modules register an output queue instead of a callback**. This decouples publishers from subscribers in both time and thread of execution and keeps delivery off the publisher's stack.
@@ -97,6 +99,8 @@ Every topic is a value in a single compile-time `enum msg_id_e`. Payloads are fi
 | `MSG_GAME_SCORE_UPDATED` | `{ score: u32 }` | GameLogicTask | PersistenceTask | Track the running score for the end-of-game high-score check. |
 | `MSG_GAME_OVER` | `{ final_score: u32, won: bool }` | GameLogicTask | SystemTask, PersistenceTask | End the game (FR-007 / FR-021); trigger high-score evaluation (FR-008). |
 | `MSG_PERSISTENCE_HIGHSCORE_LOADED` | `{ high_score: u32 }` | PersistenceTask | SystemTask | Provide the NVM high score at boot for the menu (FR-002, FR-009). |
+
+> **Open design point:** `MSG_GAME_STATE_CHANGED` conveys the full game frame, which is larger than the small fixed payload the broker copies by value. How the frame actually reaches `RenderTask` (e.g. a version + pointer to a double-buffered read-only snapshot, vs. enlarging the payload, vs. reading the Model directly) is not yet decided — see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
 ## 3.4 FreeRTOS Task Breakdown
 
