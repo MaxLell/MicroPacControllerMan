@@ -23,8 +23,12 @@ Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 - **M1 Toolchain Bring-Up — done & merged.** Register-level blinky (LD2/PA5) +
   the OTT CLI framework with the retained-RAM/reset flow; `ott blinky`
   (VT-INT-005) passes via the Python harness on real hardware.
-- **M2 Board Bring-Up — next.** Confirm the mikroBUS pin mapping (R-001), bring
-  up display + touchpad, add their OTT scenarios, build out the full harness.
+- **M2 Board Bring-Up — firmware complete, HW verification pending.** Derived the
+  mikroBUS pin map ([02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001),
+  R-001 still to confirm on hardware); added SPI/I2C/button/systick BSP,
+  display/gfx/touchpad drivers, and the `display` / `touchpad` / `touchdot` OTT
+  scenarios; `run_ott.py` gained an automatic suite. Builds clean; the on-target
+  verification checklist is in [`Firmware/README.md`](Firmware/README.md#m2-hardware-verification-checklist).
 
 ## Build · flash · test (all from `Firmware/`)
 

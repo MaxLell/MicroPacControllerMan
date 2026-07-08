@@ -16,9 +16,19 @@ add_executable(pacman.elf
     Bsp/led/led.c
     Bsp/uart/uart.c
     Bsp/retain_ram/retain_ram.c
+    Bsp/systick/systick.c
+    Bsp/spi/spi.c
+    Bsp/i2c/i2c.c
+    Bsp/button/button.c
+    Drivers/display/display.c
+    Drivers/gfx/gfx.c
+    Drivers/touchpad/touchpad.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_blinky.c
+    Test/Target/scripts/ott_touchpad.c
+    Test/Target/scripts/ott_display.c
+    Test/Target/scripts/ott_touchdot.c
     ThirdParty/EmbeddedCli/Cli.c
     ${CMSIS_DIR}/Device/ST/STM32G4xx/Source/Templates/system_stm32g4xx.c
     ThirdParty/STM32G431/startup_stm32g431xx.s)
@@ -32,6 +42,13 @@ target_include_directories(pacman.elf PRIVATE
     Bsp/led
     Bsp/uart
     Bsp/retain_ram
+    Bsp/systick
+    Bsp/spi
+    Bsp/i2c
+    Bsp/button
+    Drivers/display
+    Drivers/gfx
+    Drivers/touchpad
     Test/Target
     Test/Target/scripts
     ThirdParty/EmbeddedCli

@@ -1,42 +1,43 @@
 /*
- * MicroPacControllerMan — Milestone 1: Toolchain Bring-Up
+ * MicroPacControllerMan — firmware entry point.
  *
- * Proves the build/flash/run chain on the STM32G431RB Nucleo-64 and provides the
- * base On-Target Test (OTT) infrastructure:
- *   - blinks the on-board LED LD2 (PA5) at ~1 Hz (nominal behaviour)
- *   - serves an OTT CLI on the ST-LINK VCP (LPUART1, PA2/PA3, 115200 8N1):
- *       `ott blinky`  -> drives PA5 and reads the pin back  -> OTT PASSED/FAILED
- *       `ott list`    -> lists available tests
+ * Boots any pending On-Target Test (OTT), prints a boot banner (VT-INT-002),
+ * then runs the nominal super-loop: ~1 Hz LD2 blink + OTT CLI polling on the
+ * ST-LINK VCP (LPUART1, PA2/PA3, 115200 8N1).
  *
- * Register-level init (no HAL) against CMSIS. Default reset clock is HSI 16 MHz;
- * SystemInit() (system_stm32g4xx.c) runs from the startup file before main().
+ * M1 brought up the toolchain, blinky and the OTT reset framework. M2 (Board
+ * Bring-Up) adds the display/touchpad drivers and their OTT scenarios (`ott`
+ * lists them). Register-level init (no HAL) against CMSIS; default reset clock
+ * HSI 16 MHz.
  */
 #include "stm32g4xx.h"
 
 #include "led.h"
 #include "ott.h"
+#include "systick.h"
 #include "uart.h"
-
-#include <stdint.h>
-
-static volatile uint32_t g_ms;
-
-void SysTick_Handler(void) { g_ms++; }
 
 int main(void)
 {
-    SystemCoreClockUpdate();
-    SysTick_Config(SystemCoreClock / 1000U); /* 1 ms tick */
-    led_init();
+    systick_init();
     uart_init();
+
     ott_execute_pending(); /* if an `ott` command scheduled a test + reset, run it now */
-    ott_init();            /* set up the EmbeddedCli-based OTT console (prints its banner) */
+
+    /* led_init() runs AFTER the OTT path so nominal blink is restored even after a
+     * display/touchdot OTT reconfigured PA5 (shared LD2/SPI1-SCK) as an AF pin. */
+    led_init();
+
+    /* Boot banner — a known, readable line for the harness (VT-INT-002). */
+    uart_write("\r\nMicroPacControllerMan booted (M2 board bring-up). Type 'ott' for tests.\r\n");
+
+    ott_init(); /* set up the EmbeddedCli-based OTT console */
 
     uint32_t last_toggle = 0;
     for (;;) {
         /* nominal ~1 Hz blink, non-blocking */
-        if ((g_ms - last_toggle) >= 500U) {
-            last_toggle = g_ms;
+        if ((millis() - last_toggle) >= 500U) {
+            last_toggle = millis();
             led_toggle();
         }
         /* service the OTT command line */

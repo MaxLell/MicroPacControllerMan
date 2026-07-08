@@ -18,6 +18,40 @@ device headers, `system_stm32g4xx.c`, the startup file and the linker script —
 are vendored verbatim under `ThirdParty/STM32G431/` from ST's public repositories
 (`STM32CubeG4` / `cmsis_device_g4`).
 
+## Milestone 2 — Board Bring-Up
+
+Adds the mikroBUS peripherals on the Click Shield for Nucleo-64: the **LCD Mono
+Click** (Sharp LS013B7DH03, 128×128 mono, SPI1) in slot 1 and the **Touchpad
+Click** (MTCH6102, I2C1) in slot 2, plus the on-board user button (B1/PC13).
+New BSP transports (`Bsp/spi`, `Bsp/i2c`, `Bsp/button`, `Bsp/systick`), device
+drivers (`Drivers/display`, `Drivers/gfx`, `Drivers/touchpad`), and three OTT
+scenarios:
+
+```
+ott display     # geometric GFX demo (lines/rects/circles/triangles) — confirm on the LCD (VT-INT-006)
+ott touchpad    # live X/Y + touch-present streamed to the console — confirm it tracks your finger (VT-INT-007)
+ott touchdot    # a dot on the LCD follows your finger — confirms display + touchpad together
+```
+
+All three are **interactive**: they run until you press the USER button (B1),
+with a 120 s safety cap. The pin map is *derived from documentation* and recorded
+in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001);
+it is **pending hardware confirmation** (R-001). Key facts: LCD CS is **active-high**,
+DISP is on the mikroBUS MISO line (PA6), PA5 is shared by SPI1-SCK and LD2, the
+MTCH6102 is at I2C address **0x25** on PB8/PB9, and the LCD Mono Click's **EXTMODE
+jumper (JP1)** should select software VCOM (EXTMODE=low).
+
+### M2 hardware-verification checklist
+
+Run on the physical board to close M2 (R-001 / VT-INT-003/004/006/007):
+
+1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
+2. **Continuity check (VT-INT-003/004):** confirm the derived pins in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001) — especially SCL/SDA=PB8/PB9, the active-high CS lines, and DISP on MISO. Correct the driver pin macros if any differ, then rebuild.
+3. **Build & flash**, then `python3 Test/run_ott.py --suite` — expect PASS for enumeration, banner, blinky.
+4. **`python3 Test/run_ott.py display`** — watch the geometric patterns cycle on the LCD; press B1. If blank, see [doc 08 §8.4](../Docu/PrePlanning/08-Troubleshooting-Guide.md).
+5. **`python3 Test/run_ott.py touchpad`** — move your finger; the streamed x/y should track it; press B1. "not responding" → check the I2C map / RST.
+6. **`python3 Test/run_ott.py touchdot`** — the dot should follow your finger; press B1. If axes are swapped/mirrored, flip the mapping in `ott_touchdot.c`.
+
 ## Toolchain
 
 Install the cross toolchain, build system, and flasher (Debian/Ubuntu):
@@ -69,13 +103,13 @@ enumerated across the target reset, so the host harness reads the result on the
 same serial handle. This framework was brought forward from Milestone 2 so the
 display/touchpad OTTs added there only need a new scenario module.
 
-Run them automatically from the host with the harness (stdlib Python, no pyserial):
+Run them from the host with the harness (stdlib Python, no pyserial):
 
 ```
-python3 Test/run_ott.py blinky      # exit 0 = PASS, 1 = FAIL, 2 = timeout
+python3 Test/run_ott.py --suite     # automatic regression: enumeration + banner + blinky
+python3 Test/run_ott.py blinky      # one automatic test; exit 0 = PASS, 1 = FAIL, 2 = timeout
+python3 Test/run_ott.py display     # interactive: streams live, confirm on the board, press B1
 ```
-
-The display/touchpad OTT scenarios are added in Milestone 2.
 
 ## Layout
 
@@ -92,13 +126,17 @@ The tree follows the layered layout of the reference project
   (`uart_flush` drains the last byte before the OTT reset).
 - `Bsp/retain_ram/` — the `.noinit` retained-RAM object carrying the OTT request
   across the reset.
-- `Drivers/`, `Services/` — reserved layers (Readme only for now); populated in
-  Milestone 2+ (display/touchpad drivers, message broker, etc.).
+- `Bsp/systick/`, `Bsp/spi/`, `Bsp/i2c/`, `Bsp/button/` — M2 transports: 1 kHz
+  time base, SPI1 (slot 1), I2C1 (slot 2), user button (PC13).
+- `Drivers/display/`, `Drivers/gfx/`, `Drivers/touchpad/` — M2 device drivers:
+  LS013B7DH03 framebuffer, geometric primitives, MTCH6102 touch read.
+- `Services/` — reserved layer (Readme only for now); populated in
+  Milestone 3+ (message broker, Active-Object base, etc.).
 - `Test/Target/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
   boot-time `ott_execute_pending()` runner/reporter.
 - `Test/Target/ott_scenarios.c` — the OTT test registry; add a test by adding one row.
-- `Test/Target/scripts/ott_blinky.c` — the `blinky` scenario (VT-INT-005): drives
-  PA5 and reads the pin back. Individual OTT scripts live in `Test/Target/scripts/`.
+- `Test/Target/scripts/` — one module per OTT scenario: `ott_blinky` (VT-INT-005),
+  `ott_display` (VT-INT-006), `ott_touchpad` (VT-INT-007), `ott_touchdot` (combined).
 - `Test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
 - `ThirdParty/EmbeddedCli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
   (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries

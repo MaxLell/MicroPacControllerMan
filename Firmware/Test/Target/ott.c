@@ -108,6 +108,20 @@ static int ott_cmd(int argc, char* argv[], void* context)
     return CLI_OK_STATUS; /* not reached */
 }
 
+/* --- `reset` CLI command: reboot into nominal mode (re-emits the boot banner,
+ * used by the harness for VT-INT-002) --- */
+
+static int reset_cmd(int argc, char* argv[], void* context)
+{
+    (void)argc;
+    (void)argv;
+    (void)context;
+    cli_print("resetting...");
+    uart_flush();
+    NVIC_SystemReset();
+    return CLI_OK_STATUS; /* not reached */
+}
+
 /* --- console glue (EmbeddedCli) --- */
 
 static cli_cfg_t g_cli;
@@ -119,6 +133,8 @@ void ott_init(void)
     cli_init(&g_cli, cli_put);
     cli_binding_t ott_binding = {"ott", ott_cmd, NULL, "Schedule an on-target test: ott <name> ('ott' lists them)"};
     cli_register(&ott_binding);
+    cli_binding_t reset_binding = {"reset", reset_cmd, NULL, "Reboot the board into nominal mode"};
+    cli_register(&reset_binding);
 }
 
 void ott_poll(void)

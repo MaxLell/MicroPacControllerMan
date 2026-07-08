@@ -1,6 +1,9 @@
 #include "ott_scenarios.h"
 
 #include "ott_blinky.h"
+#include "ott_display.h"
+#include "ott_touchdot.h"
+#include "ott_touchpad.h"
 
 #include <string.h>
 
@@ -11,6 +14,9 @@
  */
 static const ott_scenario_t k_scenarios[] = {
     {"blinky", ott_blinky_setup, ott_blinky_run},
+    {"touchpad", ott_touchpad_setup, ott_touchpad_run},
+    {"display", ott_display_setup, ott_display_run},
+    {"touchdot", ott_touchdot_setup, ott_touchdot_run},
 };
 
 unsigned ott_scenarios_count(void)
