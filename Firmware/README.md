@@ -13,9 +13,10 @@ verify the blink mechanism automatically — target of
 [VT-INT-005](../Docu/PrePlanning/06-Verification-and-Validation.md).
 
 Init is register-level against CMSIS (see `App/main.c`); the default reset clock
-(HSI 16 MHz) is used. CMSIS core + STM32G4 device headers, `system_stm32g4xx.c` and
-the startup file are vendored under `cmsis/` and `startup/` from ST's public
-repositories (`STM32CubeG4` / `cmsis_device_g4`); the linker script is `linker/`.
+(HSI 16 MHz) is used. The ST/ARM-provided device files — CMSIS core + STM32G4
+device headers, `system_stm32g4xx.c`, the startup file and the linker script —
+are vendored verbatim under `ThirdParty/STM32G431/` from ST's public repositories
+(`STM32CubeG4` / `cmsis_device_g4`).
 
 ## Toolchain
 
@@ -47,7 +48,7 @@ Expected: **LD2 blinks at ~1 Hz**.
 ## On-Target Tests (OTT)
 
 The firmware serves an OTT CLI on the VCP (built on the vendored **EmbeddedCli**
-framework, `third_party/embedded_cli/`); each test prints a machine-parseable
+framework, `ThirdParty/EmbeddedCli/`); each test prints a machine-parseable
 result without a debugger (FR-106 / FR-107):
 
 ```
@@ -99,13 +100,13 @@ The tree follows the layered layout of the reference project
 - `Test/Target/scripts/ott_blinky.c` — the `blinky` scenario (VT-INT-005): drives
   PA5 and reads the pin back. Individual OTT scripts live in `Test/Target/scripts/`.
 - `Test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
-- `third_party/embedded_cli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
+- `ThirdParty/EmbeddedCli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
   (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries
   the memory-safety fixes from EmbeddedCli PR #2.
-- `cmsis/core/`, `cmsis/device/` — vendored CMSIS core + STM32G4 device (headers,
-  `system_stm32g4xx.c`).
-- `startup/startup_stm32g431xx.s` — vector table + reset handler.
-- `linker/STM32G431RBTx_FLASH.ld` — memory map (128 KB FLASH, 32 KB RAM) incl. a
-  `.noinit` region reserved for the later OTT retained-RAM mechanism.
+- `ThirdParty/STM32G431/` — ST/ARM-provided device support (not our code):
+  `CMSIS/` (core + STM32G4 device headers and `system_stm32g4xx.c`),
+  `startup_stm32g431xx.s` (vector table + reset handler), and
+  `STM32G431RBTx_FLASH.ld` (128 KB FLASH / 32 KB RAM memory map incl. the
+  `.noinit` region for the OTT retained-RAM mechanism). See its `Readme.md`.
 - `cmake/arm-none-eabi.toolchain.cmake`, `CMakeLists.txt` — build.
 - `openocd.cfg` — ST-LINK V3 + STM32G4 flash/debug.

@@ -7,7 +7,9 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Cortex-M4F architecture flags (shared by compile, assemble, link).
 set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/linker/STM32G431RBTx_FLASH.ld)
+# Vendor/device files live under ThirdParty/<MCU>/ (ST/ARM-provided, not ours).
+set(CMSIS_DIR ${CMAKE_SOURCE_DIR}/ThirdParty/STM32G431/CMSIS)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/ThirdParty/STM32G431/STM32G431RBTx_FLASH.ld)
 
 add_executable(pacman.elf
     App/main.c
@@ -17,9 +19,9 @@ add_executable(pacman.elf
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_blinky.c
-    third_party/embedded_cli/Cli.c
-    cmsis/device/system_stm32g4xx.c
-    startup/startup_stm32g431xx.s)
+    ThirdParty/EmbeddedCli/Cli.c
+    ${CMSIS_DIR}/Device/ST/STM32G4xx/Source/Templates/system_stm32g4xx.c
+    ThirdParty/STM32G431/startup_stm32g431xx.s)
 
 target_compile_definitions(pacman.elf PRIVATE STM32G431xx)
 
@@ -32,9 +34,9 @@ target_include_directories(pacman.elf PRIVATE
     Bsp/retain_ram
     Test/Target
     Test/Target/scripts
-    third_party/embedded_cli
-    cmsis/core
-    cmsis/device/include)
+    ThirdParty/EmbeddedCli
+    ${CMSIS_DIR}/Include
+    ${CMSIS_DIR}/Device/ST/STM32G4xx/Include)
 
 target_compile_options(pacman.elf PRIVATE
     ${MCU_FLAGS}
