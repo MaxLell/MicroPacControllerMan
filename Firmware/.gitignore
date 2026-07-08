@@ -1,0 +1,12 @@
+# Build output
+build/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# CubeMX cache / generation metadata
+.mxproject

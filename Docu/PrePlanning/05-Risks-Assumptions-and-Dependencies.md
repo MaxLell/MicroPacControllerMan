@@ -36,3 +36,4 @@
 | D-004 | Physical hardware: STM32G431RB Nucleo-64, Click Shield for Nucleo-64, LCD Mono Click, Touchpad Click, USB-C cable | Required from Board Bring-Up onward; lead time if not already on hand. |
 | D-005 | SDL2 library | Required for the host build's View (CON-103). |
 | D-006 | [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw) (reference project) | Source of the OTT (On-Target Test) CLI pattern adapted in [FR-106/FR-107](03-Architecture.md#37-on-target-test-ott-cli-framework); not a build dependency, only a design reference. See also [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md). |
+| D-007 | [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) | Serial CLI framework backing the OTT console (§3.7). Vendored into `Firmware/third_party/embedded_cli/`; two memory-safety fixes were contributed upstream (EmbeddedCli PR #2) and carried in the vendored copy. |

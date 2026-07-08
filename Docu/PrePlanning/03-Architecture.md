@@ -166,7 +166,7 @@ flowchart TB
 
 ## 3.7 On-Target Test (OTT) CLI Framework
 
-Each testable capability is exposed as its own command on the serial console: a **setup** step validates the command's arguments, and a **run** step performs the action and checks the result. On failure the reason is printed to the console, so **no debugger is needed to read the outcome** (FR-107), and an external Python harness can drive the automatable tests (NFR-104).
+Each testable capability is exposed as its own command on the serial console: a **setup** step validates the command's arguments, and a **run** step performs the action and checks the result. On failure the reason is printed to the console, so **no debugger is needed to read the outcome** (FR-107), and an external Python harness can drive the automatable tests (NFR-104). The console CLI itself is provided by the vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) framework ([D-007](05-Risks-Assumptions-and-Dependencies.md#53-dependencies)).
 
 Some tests need the hardware to start from a clean, known state, so a test request is preserved across a controlled **restart of the microcontroller** and executed on the next start-up. High-level flow:
 
@@ -195,3 +195,22 @@ One source tree builds three ways and shares the platform-independent Model / Co
 - **Unit tests** — run under **Ceedling / Unity** (CON-102 / NFR-101), exercising Model / Control / broker with no hardware and no FreeRTOS.
 
 The host/target split behind Input, Display, NVM and timing is realised as small platform ports. Their exact interfaces are defined during Board Bring-Up / Pacman Development, not here.
+
+## 3.9 Firmware Source Tree Layout
+
+The `Firmware/` tree follows the **layered layout of the reference project** ([BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw)): the code is split into architecture layers, and within a layer every module lives in its **own folder** named after the module, holding its `<module>.c` and `<module>.h`. Each layer carries a `Readme.md` stating its purpose and dependency rule. This is the required structure for the project — new code is placed by layer, not dumped into a flat `src/`.
+
+**Dependency direction (top may use below; never the reverse):** `App` → `Drivers` → `Services` → `Bsp` → CMSIS.
+
+| Layer (folder) | Purpose | What to create here |
+|---|---|---|
+| `App/` | Application layer: entry point and the game itself. | `App/main.c` (entry: run pending OTT, init layers, start app); one folder per application module (`App/<module>/`). The Pacman Model/View/Control modules land here (Milestone 3). |
+| `Bsp/` | Board Support Package: register-level access to the STM32G431 and board, thin C API upward. No application logic. | One folder per peripheral/facility (`Bsp/<module>/`): `led/` (LD2/PA5), `uart/` (LPUART1 VCP), `retain_ram/` (`.noinit` buffer for the OTT reset, doc 09); later the mikroBUS SPI/I2C access. |
+| `Drivers/` | Device drivers built on `Bsp/` transports (device-oriented API). | One folder per device (`Drivers/<device>/`): `display/` (LCD Mono Click over SPI), `touchpad/` (Touchpad Click over I2C) — added in Milestone 2. |
+| `Services/` | Hardware-independent, reusable, host-testable middleware. | One folder per service (`Services/<service>/`): e.g. the pub-sub message broker (§3.2), the Active-Object base (§3.5), software timers / FSM helpers. |
+| `Test/` | Verification code (mirrors the reference `Test/` layout). | `Test/Target/` — OTT core (`ott.c`, `ott_scenarios.c`); `Test/Target/scripts/` — one module per OTT scenario (`ott_<name>.c/.h`, e.g. `ott_blinky`); `Test/run_ott.py` — host harness; `Test/Host/` — Ceedling/Unity host unit tests (from Milestone 3); `Test/support/` — vendored Unity. |
+| `ThirdParty/` | Vendored third-party and ST/ARM-provided device code — **not our code**, kept out of the architecture layers. | One folder per dependency: `EmbeddedCli/` (the CLI framework); `STM32G431/` — the ST/ARM device bundle grouped by MCU, mirroring ST's package layout: `CMSIS/Include/` (core headers), `CMSIS/Device/ST/STM32G4xx/{Include,Source/Templates}/` (device headers + `system_stm32g4xx.c`), `startup_stm32g431xx.s`, and `STM32G431RBTx_FLASH.ld`. CMSIS/startup/linker are device-specific and therefore live here, not in `Bsp/`. |
+
+Toolchain/build files stay at the `Firmware/` root: `cmake/`, `CMakeLists.txt`, `openocd.cfg`. Because headers are included by bare name, `CMakeLists.txt` lists each module folder on the include path, grouped by layer.
+
+**Adding a module:** create `<Layer>/<module>/<module>.c`/`.h`, add the `.c` to the `add_executable` list and the folder to `target_include_directories` in `CMakeLists.txt`. **Adding an OTT test:** create `Test/Target/scripts/ott_<name>.c`/`.h` and add one row to `Test/Target/ott_scenarios.c` — no change to the OTT core or CLI.
