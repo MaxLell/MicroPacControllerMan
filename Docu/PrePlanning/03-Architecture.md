@@ -185,3 +185,13 @@ flowchart TD
 Two things make this robust: the stored request carries an integrity check, so an ordinary power-on is never mistaken for a test request; and the result is reported **before** returning to normal operation, not after. The detailed mechanism — exactly how the request survives a restart, and the verification of this sequence against the reference firmware — is documented separately in [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md).
 
 Tests whose outcome a human must confirm (e.g. "is the pattern visible on the display?") are still commands, but are **button-confirmed**: the firmware shows the expected result and waits for the user button, failing on timeout. See [06 Verification & Validation](06-Verification-and-Validation.md) for which tests are Automatic vs. Manual.
+
+## 3.8 Build & Toolchain
+
+One source tree builds three ways and shares the platform-independent Model / Control / game code and the message broker:
+
+- **Target firmware** — compiled with **arm-none-eabi-gcc**, orchestrated by **CMake**. **STM32CubeMX** is used only to generate the low-level initialisation / HAL code; the application, message broker and game are written on top of it. FreeRTOS is included as an STM32G4 port (CON-104).
+- **Host build** — the same Model / Control / broker code compiled with the host compiler via **CMake**, with **SDL** providing the View (CON-103 / FR-104).
+- **Unit tests** — run under **Ceedling / Unity** (CON-102 / NFR-101), exercising Model / Control / broker with no hardware and no FreeRTOS.
+
+The host/target split behind Input, Display, NVM and timing is realised as small platform ports. Their exact interfaces are defined during Board Bring-Up / Pacman Development, not here.

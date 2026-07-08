@@ -15,6 +15,7 @@ This document set is the **source of truth** for the project going forward. The 
 7. [07 Traceability Matrix](07-Traceability-Matrix.md) — Cross-reference between every requirement and the test(s) that verify it.
 8. [08 Troubleshooting Guide](08-Troubleshooting-Guide.md) — Known-issue playbook, seeded from the risks captured in doc 5 and grown during later phases.
 9. [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md) — How the OTT retained-RAM/reset mechanism actually works in the reference firmware, and the corrected flow this project should adopt.
+10. [10 Pacman Game Design](10-Pacman-Game-Design.md) — The concrete game rules for implementation: maze layout, movement/tick model, ghost behaviour, power pellets, scoring, and end conditions.
 
 ## ID Conventions
 

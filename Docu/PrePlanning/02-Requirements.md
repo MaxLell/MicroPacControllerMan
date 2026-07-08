@@ -65,7 +65,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-008 | High Score Update | If the final score of a completed game exceeds the stored high score, then the system shall store the new value as the high score in NVM. |
 | FR-009 | High Score Persistence | The system shall retain the high score value in NVM across power cycles. |
 
-The concrete gameplay tuning constants behind these rules — point values, the frightened-mode duration, and the scatter/chase phase timings — use classic-Pacman-inspired defaults that are not fixed at Pre-Planning level; see [A-006](05-Risks-Assumptions-and-Dependencies.md#52-assumptions). The exact maze layout and the precise ghost targeting algorithms (FR-014) likewise remain to be finalized during Pacman Development; see [A-005](05-Risks-Assumptions-and-Dependencies.md#52-assumptions).
+The concrete rules and values that realise these requirements — the maze layout, movement/tick model, ghost targeting algorithms, power-pellet/frightened behaviour, scoring and end conditions — are specified in [10 Pacman Game Design](10-Pacman-Game-Design.md). The numeric constants there remain tunable for game feel (see [A-006](05-Risks-Assumptions-and-Dependencies.md#52-assumptions)).
 
 ### 2.1.8 Software Structure & Messaging
 
