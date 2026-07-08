@@ -17,7 +17,18 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PORT="${PORT:-/dev/ttyACM0}"
+# Auto-detect the ST-LINK VCP so the ttyACM number doesn't matter (override with
+# PORT=/dev/ttyACMx). run_ott.py does its own detection; this is just for messages.
+detect_port() {
+    local p
+    for pat in '/dev/serial/by-id/'*STLINK*if02* '/dev/serial/by-id/'*STLINK* '/dev/ttyACM'*; do
+        for p in $pat; do
+            [ -e "$p" ] && { readlink -f "$p"; return; }
+        done
+    done
+    echo /dev/ttyACM0
+}
+PORT="${PORT:-$(detect_port)}"
 BUILD_DIR="build"
 ELF="$BUILD_DIR/pacman.elf"
 TOOLCHAIN="cmake/arm-none-eabi.toolchain.cmake"
@@ -39,8 +50,13 @@ do_flash() {
 }
 
 run_test() {
-    step "Run: ott $1  (port $PORT)"
-    python3 Test/run_ott.py "$1" --port "$PORT"
+    if [ "$1" = "suite" ]; then
+        step "Run: automatic suite  (port $PORT)"
+        python3 Test/run_ott.py --suite --port "$PORT"
+    else
+        step "Run: ott $1  (port $PORT)"
+        python3 Test/run_ott.py "$1" --port "$PORT"
+    fi
 }
 
 cmd="${1:-all}"

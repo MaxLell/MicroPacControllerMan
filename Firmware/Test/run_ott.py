@@ -22,6 +22,7 @@ they are excluded from --suite and streamed live instead.
 Stdlib only — no pyserial required. Exit 0 = all pass, 1 = fail, 2 = timeout.
 """
 import argparse
+import glob
 import os
 import select
 import subprocess
@@ -31,6 +32,22 @@ import time
 BANNER = "MicroPacControllerMan booted"
 INTERACTIVE = {"touchpad", "display", "touchdot"}
 SUITE_AUTOMATIC = ["blinky"]  # enumeration + banner are checked separately below
+
+
+def detect_port() -> str:
+    """Find the ST-LINK virtual COM port, so the tty number (ACM0/ACM1/…) and any
+    other USB serial devices don't matter. Falls back to the first ttyACM."""
+    # Stable name exposed by the ST-LINK VCP interface (…STLINK…-if02).
+    for pat in ("/dev/serial/by-id/*STLINK*if02*",
+                "/dev/serial/by-id/*STLINK*",
+                "/dev/serial/by-id/*STM*"):
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return os.path.realpath(hits[0])
+    acm = sorted(glob.glob("/dev/ttyACM*"))
+    if acm:
+        return acm[0]
+    return "/dev/ttyACM0"
 
 
 def configure_tty(port: str, baud: str) -> None:
@@ -145,16 +162,20 @@ def main() -> int:
     ap.add_argument("test", nargs="?", default=None,
                     help="test name (blinky/touchpad/display/touchdot); omit with --suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
-    ap.add_argument("--port", default="/dev/ttyACM0")
+    ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")
     ap.add_argument("--timeout", type=float, default=None,
                     help="override timeout (s); default 8 (auto) / 130 (interactive)")
     args = ap.parse_args()
 
+    port = args.port or detect_port()
+    if not args.port:
+        print(f"(auto-detected serial port: {port})")
+
     if args.suite:
-        return run_suite(args.port, args.baud)
+        return run_suite(port, args.baud)
     test = args.test or "blinky"
-    return run_single(args.port, args.baud, test, args.timeout)
+    return run_single(port, args.baud, test, args.timeout)
 
 
 if __name__ == "__main__":
