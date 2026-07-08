@@ -14,6 +14,7 @@ add_executable(pacman.elf
     src/led.c
     src/uart.c
     src/ott.c
+    third_party/embedded_cli/Cli.c
     cmsis/device/system_stm32g4xx.c
     startup/startup_stm32g431xx.s)
 
@@ -21,6 +22,7 @@ target_compile_definitions(pacman.elf PRIVATE STM32G431xx)
 
 target_include_directories(pacman.elf PRIVATE
     src
+    third_party/embedded_cli
     cmsis/core
     cmsis/device/include)
 

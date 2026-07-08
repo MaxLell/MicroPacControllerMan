@@ -46,11 +46,13 @@ Expected: **LD2 blinks at ~1 Hz**.
 
 ## On-Target Tests (OTT)
 
-The firmware serves an OTT CLI on the VCP; each test prints a machine-parseable
+The firmware serves an OTT CLI on the VCP (built on the vendored **EmbeddedCli**
+framework, `third_party/embedded_cli/`); each test prints a machine-parseable
 result without a debugger (FR-106 / FR-107):
 
 ```
-ott list        # list available tests
+help            # list CLI commands
+ott             # list available OTT tests
 ott blinky      # -> "OTT PASSED [blinky]" or "OTT FAILED [blinky]: <reason>"
 ```
 
@@ -67,7 +69,10 @@ display/touchpad OTTs are added in Milestone 2.
 
 - `src/main.c` — super-loop: nominal ~1 Hz blink + OTT CLI polling.
 - `src/led.c`, `src/uart.c` — LD2 (PA5) and LPUART1 VCP drivers.
-- `src/ott.c` — OTT CLI framework + test registry (the `blinky` test).
+- `src/ott.c` — OTT layer + test registry (the `blinky` test) on the EmbeddedCli CLI.
+- `third_party/embedded_cli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
+  (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries
+  the memory-safety fixes from EmbeddedCli PR #2.
 - `test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
 - `cmsis/core/`, `cmsis/device/` — vendored CMSIS core + STM32G4 device (headers,
   `system_stm32g4xx.c`).

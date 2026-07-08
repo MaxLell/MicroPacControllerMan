@@ -19,12 +19,18 @@ void uart_init(void)
     LPUART1->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
 }
 
+int uart_putc(char c)
+{
+    while (!(LPUART1->ISR & USART_ISR_TXE)) {
+    }
+    LPUART1->TDR = (uint8_t)c;
+    return 0;
+}
+
 void uart_write(const char *s)
 {
     while (*s) {
-        while (!(LPUART1->ISR & USART_ISR_TXE)) {
-        }
-        LPUART1->TDR = (uint8_t)*s++;
+        uart_putc(*s++);
     }
 }
 

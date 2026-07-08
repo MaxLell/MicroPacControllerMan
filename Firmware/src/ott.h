@@ -2,19 +2,20 @@
 #define OTT_H
 
 /*
- * On-Target Test (OTT) CLI framework (FR-106 / FR-107).
+ * On-Target Test (OTT) layer (FR-106 / FR-107), built on the EmbeddedCli
+ * framework (third_party/embedded_cli).
  *
- * A test is exposed as `ott <name>` on the serial console. The firmware runs it
- * and prints a machine-parseable result WITHOUT a debugger attached:
+ * Exposes `ott <name>` on the serial console; the firmware runs the named test
+ * and prints a machine-parseable result without a debugger:
  *     OTT PASSED [<name>]
  *     OTT FAILED [<name>]: <reason>
- * `ott list` prints the available tests.
+ * `ott` with no argument lists the available tests; `help` lists CLI commands.
  *
- * Call ott_cli_poll() repeatedly from the main loop; it drains the UART RX and
- * dispatches each complete command line. Tests that need a clean reset state
- * (retained-RAM/reset, doc 09) are added in a later milestone; the tests here
- * run in place.
+ * Tests that need a clean reset state (retained-RAM/reset, doc 09) are added in
+ * a later milestone; the tests here run in place.
  */
-void ott_cli_poll(void);
+
+void ott_init(void); /* set up the CLI and register the OTT command */
+void ott_poll(void); /* drain UART RX into the CLI; call from the main loop */
 
 #endif /* OTT_H */

@@ -32,6 +32,7 @@ def main() -> int:
 
     passed = f"OTT PASSED [{args.test}]"
     failed = f"OTT FAILED [{args.test}]"
+    error = f"OTT ERROR: unknown test '{args.test}'"
 
     fd = os.open(args.port, os.O_RDWR | os.O_NOCTTY)
     try:
@@ -51,6 +52,9 @@ def main() -> int:
                     if line.startswith(failed):
                         print(line)
                         break
+                return 1
+            if error in text:
+                print(error)
                 return 1
         sys.stderr.write(text)
         print(f"TIMEOUT: no result for '{args.test}' within {args.timeout}s")

@@ -29,9 +29,7 @@ int main(void)
     SysTick_Config(SystemCoreClock / 1000U); /* 1 ms tick */
     led_init();
     uart_init();
-
-    uart_write("\r\nMicroPacControllerMan M1 - toolchain bring-up OK\r\n");
-    uart_write("OTT CLI ready. Try: 'ott list' or 'ott blinky'.\r\n");
+    ott_init(); /* sets up the EmbeddedCli-based OTT console (prints its banner) */
 
     uint32_t last_toggle = 0;
     for (;;) {
@@ -41,6 +39,6 @@ int main(void)
             led_toggle();
         }
         /* service the OTT command line */
-        ott_cli_poll();
+        ott_poll();
     }
 }
