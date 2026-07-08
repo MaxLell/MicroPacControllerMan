@@ -12,7 +12,7 @@ the base **On-Target Test (OTT)** infrastructure. The board blinks the on-board 
 verify the blink mechanism automatically — target of
 [VT-INT-005](../Docu/PrePlanning/06-Verification-and-Validation.md).
 
-Init is register-level against CMSIS (see `src/main.c`); the default reset clock
+Init is register-level against CMSIS (see `App/main.c`); the default reset clock
 (HSI 16 MHz) is used. CMSIS core + STM32G4 device headers, `system_stm32g4xx.c` and
 the startup file are vendored under `cmsis/` and `startup/` from ST's public
 repositories (`STM32CubeG4` / `cmsis_device_g4`); the linker script is `linker/`.
@@ -78,12 +78,21 @@ The display/touchpad OTT scenarios are added in Milestone 2.
 
 ## Layout
 
-- `src/main.c` — runs any pending OTT (`ott_execute_pending`) on boot, then the
+The tree follows the layered layout of the reference project
+([BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw)) —
+`App` → `Drivers` → `Services` → `Bsp` → CMSIS, plus `Test`. Each layer has a
+`Readme.md`; each module lives in its own folder. The full layer rules and
+"what goes where" are the project's source of truth in
+[03 Architecture §3.9](../Docu/PrePlanning/03-Architecture.md#39-firmware-source-tree-layout).
+
+- `App/main.c` — runs any pending OTT (`ott_execute_pending`) on boot, then the
   super-loop: nominal ~1 Hz blink + OTT CLI polling.
-- `src/led.c`, `src/uart.c` — LD2 (PA5) and LPUART1 VCP drivers (`uart_flush`
-  drains the last byte before the OTT reset).
-- `src/retain_ram.c` — the `.noinit` retained-RAM object carrying the OTT request
-  across the reset (BSP-level infrastructure, kept out of `Test/`).
+- `Bsp/led/`, `Bsp/uart/` — register-level LD2 (PA5) and LPUART1 VCP drivers
+  (`uart_flush` drains the last byte before the OTT reset).
+- `Bsp/retain_ram/` — the `.noinit` retained-RAM object carrying the OTT request
+  across the reset.
+- `Drivers/`, `Services/` — reserved layers (Readme only for now); populated in
+  Milestone 2+ (display/touchpad drivers, message broker, etc.).
 - `Test/Target/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
   boot-time `ott_execute_pending()` runner/reporter.
 - `Test/Target/ott_scenarios.c` — the OTT test registry; add a test by adding one row.

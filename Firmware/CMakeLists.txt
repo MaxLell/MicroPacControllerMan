@@ -10,10 +10,10 @@ set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/linker/STM32G431RBTx_FLASH.ld)
 
 add_executable(pacman.elf
-    src/main.c
-    src/led.c
-    src/uart.c
-    src/retain_ram.c
+    App/main.c
+    Bsp/led/led.c
+    Bsp/uart/uart.c
+    Bsp/retain_ram/retain_ram.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_blinky.c
@@ -23,8 +23,13 @@ add_executable(pacman.elf
 
 target_compile_definitions(pacman.elf PRIVATE STM32G431xx)
 
+# One include dir per module folder (headers are included by bare name),
+# grouped by architecture layer — see the layer Readme.md files.
 target_include_directories(pacman.elf PRIVATE
-    src
+    App
+    Bsp/led
+    Bsp/uart
+    Bsp/retain_ram
     Test/Target
     Test/Target/scripts
     third_party/embedded_cli

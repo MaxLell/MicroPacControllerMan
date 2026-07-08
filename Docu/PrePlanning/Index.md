@@ -8,7 +8,7 @@ This document set is the **source of truth** for the project going forward. The 
 
 1. [01 System Overview & Context](01-System-Overview-and-Context.md) — What the system is, its boundary, external interfaces, and context.
 2. [02 Requirements](02-Requirements.md) — All requirements (Functional / Non-Functional / Constraints), grouped by feature.
-3. [03 Architecture](03-Architecture.md) — MVP architecture, the queue-based message broker, message definitions, the FreeRTOS task breakdown, the Active-Object module template, the Pacman sub-application, and the OTT test framework.
+3. [03 Architecture](03-Architecture.md) — MVP architecture, the queue-based message broker, message definitions, the FreeRTOS task breakdown, the Active-Object module template, the Pacman sub-application, the OTT test framework, and the layered firmware source-tree layout (§3.9).
 4. [04 Implementation Phases & Milestones](04-Implementation-Phases-and-Milestones.md) — The phased delivery plan, with entry/exit criteria per phase.
 5. [05 Risks, Assumptions & Dependencies](05-Risks-Assumptions-and-Dependencies.md) — Known risks, working assumptions, and external dependencies.
 6. [06 Verification & Validation](06-Verification-and-Validation.md) — The catalog of verification tests (Unit and Integration), each with a unique ID.
