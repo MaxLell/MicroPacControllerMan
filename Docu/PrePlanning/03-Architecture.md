@@ -12,7 +12,7 @@ The game is built as Model-View-Control (FR-101), so the game logic is identical
 - **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the LCD Mono Click; the host draws to an SDL window (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
-> **Open design point:** how a full Pacman maze maps onto the 128×128 monochrome display (a classic 28×31-tile maze leaves only ~4 px per tile) is not yet decided — reduced display-fit maze, scaled classic maze, or scrolling viewport. See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
+> **Decided (R-008):** the maze is a **reduced, display-fit maze** — a custom layout smaller than the classic 28×31 grid, sized so tiles, Pacman, four ghosts and pellets stay legible on 128×128. Exact dimensions are set during Pacman Development (FR-022). See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
 ## 3.2 Message Broker
 
@@ -24,7 +24,7 @@ Design rules:
   - a **system broker** connecting the firmware-level modules (§3.2.2);
   - a **Pacman broker** used only inside the game (§3.6).
 - **Content-agnostic.** The broker only reads a message's topic ID for routing; it treats the payload as opaque bytes and never interprets it.
-- **Fixed-size messages, copied by value.** A message is a topic ID plus a small fixed-size payload, moved by value so no module holds a pointer into another's memory (NFR-103).
+- **Fixed-size messages, copied by value.** A message is a topic ID plus a small fixed-size payload, moved by value so no module holds a pointer into another's memory (NFR-103). The one exception is the render frame: its message carries a *handle* to a statically-allocated, double-buffered read-only snapshot (§3.6, R-007) rather than the bulk data — still no heap.
 - **One input queue per broker.** Publishers hand a message to the broker via its API; the broker owns the input queue.
 - **One output queue per subscriber.** A module registers its output queue for the topics it cares about; the broker copies each message into every subscribed module's output queue.
 - **A dedicated worker moves the messages (FR-108).** One task per broker drains the input queue and fans each message out to the subscribed output queues; this is the only place messages cross between modules.
@@ -96,7 +96,7 @@ Every topic is a value in one compile-time `enum msg_id_e`; the payload is a sma
 | `MSG_GAME_OVER` | `{ final_score, won }` | Game | System, NVM | End the game (FR-007 / FR-021); trigger the high-score check (FR-008). |
 | `MSG_HIGHSCORE_LOADED` | `{ high_score }` | NVM | System | Provide the stored high score at start-up for the menu (FR-002, FR-009). |
 
-> **Open design point:** `MSG_RENDER_FRAME` conveys the whole game frame, which is larger than the small fixed payload the broker copies by value. How the frame reaches Render (a handle to a double-buffered read-only snapshot, an enlarged payload, or Render reading the game state directly) is not yet decided — see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
+> **Frame transfer (decided, R-007):** `MSG_RENDER_FRAME` carries a version + handle to a double-buffered, read-only game snapshot. The Game module owns two statically-allocated snapshot buffers and swaps them each tick; Render draws the last-published one. This keeps the queue tiny and uses no heap (NFR-103). See [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
 ## 3.4 FreeRTOS Task Breakdown
 
@@ -150,7 +150,7 @@ flowchart TB
     PBUS --> SCORE
 ```
 
-**Proposed module set** (built on the Active-Object template, §3.5) — this folds in the modules you listed and adds the ones needed to close the loop:
+**Module set** (each built on the Active-Object template, §3.5):
 
 | Module | Responsibility |
 |---|---|
@@ -160,9 +160,9 @@ flowchart TB
 | **Ghost Path-Planning** | A stateless *library* that, given a ghost, Pacman, and the playfield, returns the ghost's next step — the four distinct behaviors (FR-014) and scatter/chase (FR-015). |
 | **Playfield** | The maze: walls, pellets, power pellets, tunnels; answers "is this cell walkable", removes eaten pellets (FR-011/FR-017), detects an empty maze (FR-021). |
 | **Score** | The running score and the scoring rules (pellet / power-pellet / ghost-eaten values, A-006). |
-| **Agent** | *Interpretation pending — see the question below.* Placeholder for the module you named "Agent". |
+| **Agent (base)** | The shared base for movable entities: a position, a facing direction, and a step/move policy that respects the playfield (walls FR-010, tunnel wrap FR-012). **Pacman and each Ghost *are* Agents** and specialize it — Pacman follows the input direction, Ghosts follow Ghost Path-Planning. |
 
-**Rendering interface (your question — how the frame gets out):** each tick, the **Game** orchestrator assembles a **render frame** — a compact description of what to draw (Pacman, the four ghosts, remaining pellets, score, current mode) — and publishes it. The Game module forwards it onto the system broker as `MSG_RENDER_FRAME` (§3.3), where the firmware **Render** module draws it to the display. The frame is the single rendering output; the exact hand-off mechanism (copy vs. shared read-only snapshot) is the open [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks) decision.
+**Rendering interface (your question — how the frame gets out):** each tick, the **Game** orchestrator assembles a **render frame** — a compact description of what to draw (Pacman, the four ghosts, remaining pellets, score, current mode) — and publishes it. The Game module forwards it onto the system broker as `MSG_RENDER_FRAME` (§3.3), where the firmware **Render** module draws it to the display. The frame is the single rendering output, delivered as a version + handle to a double-buffered read-only snapshot (decided, [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks)).
 
 ## 3.7 On-Target Test (OTT) CLI Framework
 

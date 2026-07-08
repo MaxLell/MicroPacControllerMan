@@ -30,7 +30,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
 | FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a side tunnel opening, the system shall re-enter it through the opposite tunnel opening on the same row. |
-| FR-022 | Playfield Size | The maze shall have a fixed, defined grid size that fits within the 128×128 display at a legible tile size. *(exact dimensions to be set during Pacman Development — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
+| FR-022 | Playfield Size | The maze shall be a reduced, display-fit layout with a fixed grid size that fits within the 128×128 display at a legible tile size. *(reduced maze decided — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks); exact dimensions set during Pacman Development)* |
 
 ### 2.1.4 Ghosts
 
