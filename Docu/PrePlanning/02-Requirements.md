@@ -29,7 +29,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 |---|---|---|
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
-| FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a side tunnel opening, the system shall re-enter it through the opposite tunnel opening on the same row. |
+| FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a tunnel opening at a maze edge, the system shall re-enter it through the opposite tunnel opening on the same row (horizontal tunnel) or same column (vertical tunnel). |
 | FR-022 | Playfield Size | The maze shall be a reduced, display-fit layout with a fixed grid size that fits within the 128×128 display at a legible tile size. *(reduced maze decided — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks); exact dimensions set during Pacman Development)* |
 
 ### 2.1.4 Ghosts
@@ -57,6 +57,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-006 | Single Life | The system shall start each game with exactly one Pacman life. |
 | FR-007 | Game Over | When Pacman's remaining lives reach zero, the system shall end the game and return to the menu screen. |
 | FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last remaining pellet and power pellet in the maze, the system shall end the game as completed (won) and return to the menu screen, with the final score eligible for the high score per FR-008. |
+| FR-023 | Game-Over Score Screen | When a game ends (game over or level clear), the system shall display the final score on its own screen for 2 seconds before returning to the menu screen. *(2 s default — tunable)* |
 
 ### 2.1.7 High Score & Persistence
 

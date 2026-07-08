@@ -74,7 +74,7 @@ flowchart TB
 | Module | Responsibility |
 |---|---|
 | **Input** | Reads the touchpad and the user button; turns them into direction and button messages. |
-| **System** | Orchestrates the screen flow: loading → menu → game → game over → menu. |
+| **System** | Orchestrates the screen flow: loading → menu → game → score (2 s, FR-023) → menu. |
 | **Game** | Runs the Pacman application (§3.6); bridges the game to the rest of the firmware. |
 | **Render** | Draws the current screen to the display — the single rendering output (§3.6). |
 | **NVM** | Loads the high score at start-up and stores it back only when it changes (NFR-004). |
@@ -93,7 +93,7 @@ Every topic is a value in one compile-time `enum msg_id_e`; the payload is a sma
 | `MSG_SYSTEM_START_GAME` | *(none)* | System | Game | Start a new game (FR-003, FR-006). |
 | `MSG_RENDER_FRAME` | `{ frame handle }` | Game | Render | Draw the latest game frame (FR-005). Frame-transfer mechanics: see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks). |
 | `MSG_GAME_SCORE_UPDATED` | `{ score }` | Game | NVM | Track the running score for the end-of-game high-score check. |
-| `MSG_GAME_OVER` | `{ final_score, won }` | Game | System, NVM | End the game (FR-007 / FR-021); trigger the high-score check (FR-008). |
+| `MSG_GAME_OVER` | `{ final_score, won }` | Game | System, NVM | End the game (FR-007 / FR-021); show the score screen for 2 s (FR-023); trigger the high-score check (FR-008). |
 | `MSG_HIGHSCORE_LOADED` | `{ high_score }` | NVM | System | Provide the stored high score at start-up for the menu (FR-002, FR-009). |
 
 > **Frame transfer (decided, R-007):** `MSG_RENDER_FRAME` carries a version + handle to a double-buffered, read-only game snapshot. The Game module owns two statically-allocated snapshot buffers and swaps them each tick; Render draws the last-published one. This keeps the queue tiny and uses no heap (NFR-103). See [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).

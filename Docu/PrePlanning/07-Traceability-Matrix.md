@@ -32,6 +32,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-020 | Frightened Timeout | VT-UNIT-005, VT-INT-010 |
 | FR-021 | Level Clear | VT-INT-017 |
 | FR-022 | Playfield Size | VT-UNIT-004, VT-INT-010 |
+| FR-023 | Game-Over Score Screen | VT-INT-014 |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-002 | Rendering Rate | VT-INT-016 |
 | NFR-003 | Input Latency | VT-INT-013 |

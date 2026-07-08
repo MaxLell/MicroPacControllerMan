@@ -10,16 +10,16 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
 - **Game step.** The game advances in discrete **steps** at a fixed cadence of **150 ms** *(tunable)*. Everything below (input application, movement, eating, collisions, timers) happens once per step. Rendering runs independently at ≥ 30 FPS (NFR-002) and simply redraws the current Model — a step just changes what the next frames show.
 - **Pacman movement.** Pacman keeps a current direction and a *queued* direction. `MSG_INPUT_DIRECTION` sets the queued direction. Each step: if the queued direction is not blocked by a wall, it becomes the current direction; then Pacman moves one cell in the current direction if that cell is not a wall, otherwise he stays put (stopped against a wall until the direction changes).
 - **Ghost movement.** Each step a ghost moves one cell toward its target cell (§10.4). A ghost never reverses onto the cell it just came from, except at the instant its mode changes (scatter↔chase, or entering/leaving frightened). Frightened ghosts move once every **2 steps** (half speed) *(tunable)*.
-- **Tunnel.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth on the same row (FR-012).
+- **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth — on the same row for the horizontal tunnel, the same column for the vertical one (FR-012).
 
 ## 10.2 The Maze (Playfield)
 
-The reference maze is an **11 × 9** grid (11 columns, 9 rows), rendered at a tile size of **10 × 10 px** (≈ 110 × 90 px), centred, with the remaining space used for the HUD (score + high score). It is left-right symmetric, fully connected, with one horizontal tunnel and a central ghost pen. Exact pixel geometry is finalised during M3; the grid below is fixed (FR-010, FR-022).
+The reference maze is an **11 × 9** grid (11 columns, 9 rows), rendered at a tile size of **10 × 10 px** (≈ 110 × 90 px), centred, with the remaining space used for the HUD (score + high score). It is left-right symmetric, fully connected, with a horizontal tunnel, a vertical tunnel through Pacman's column, and a central ghost pen. Exact pixel geometry is finalised during M3; the grid below is fixed (FR-010, FR-022).
 
 Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` ghost start (pen) · space = open, no pellet (tunnel mouths).
 
 ```
-###########
+#####.#####
 #o..#.#..o#
 #.#.#.#.#.#
 #.........#
@@ -27,13 +27,13 @@ Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` gh
 #.........#
 #.#.#.#.#.#
 #o..#P#..o#
-###########
+#####.#####
 ```
 
-- **Pellets** occupy every open path cell except the pen cells, Pacman's start cell, and the two tunnel-mouth cells (row 5, far left/right).
+- **Pellets** occupy every open path cell except the pen cells, Pacman's start cell, and the tunnel-mouth cells.
 - **Power pellets** (`o`) sit in the four corners.
 - **Ghost pen** (`G`) is the three central cells; ghosts start here and return here when eaten. It is open above and below (no door in the reference layout).
-- **Tunnel**: the middle row's left and right edges are open and wrap to each other.
+- **Tunnels** (two): the **horizontal** tunnel opens the middle row's left and right edges, which wrap to each other; the **vertical** tunnel opens the top and bottom edges of Pacman's column, which wrap to each other — so Pacman's start pocket always has an escape rather than being a dead-end trap.
 - **Level clear (FR-021)** occurs when the last pellet and power pellet are eaten.
 
 ## 10.3 Entities
@@ -88,7 +88,7 @@ Resolved once per step, after movement:
 - **Eaten ghost:** a **frightened** ghost in the same situation is eaten (§10.5).
 - **Level clear (FR-021):** no pellets remain → the game ends as won and returns to the menu.
 
-In both end cases the final score is offered for the high-score check (FR-008).
+In both end cases the final score is shown on its own screen for **2 s** *(tunable)* before returning to the menu (FR-023), and is offered for the high-score check (FR-008).
 
 ## 10.8 Tunable Constants (defaults)
 
