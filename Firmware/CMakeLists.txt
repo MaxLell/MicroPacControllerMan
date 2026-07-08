@@ -14,6 +14,9 @@ add_executable(pacman.elf
     src/led.c
     src/uart.c
     src/ott.c
+    src/ott_scenarios.c
+    src/ott_blinky.c
+    src/retain_ram.c
     third_party/embedded_cli/Cli.c
     cmsis/device/system_stm32g4xx.c
     startup/startup_stm32g431xx.s)

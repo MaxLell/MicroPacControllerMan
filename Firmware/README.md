@@ -56,20 +56,39 @@ ott             # list available OTT tests
 ott blinky      # -> "OTT PASSED [blinky]" or "OTT FAILED [blinky]: <reason>"
 ```
 
+`ott <name>` uses the **retained-RAM/reset flow** from
+[doc 09](../Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md): the command's
+`setup` step writes a request (magic word + checksum + parameter blob) into a
+`.noinit` RAM region that survives a software reset, then triggers
+`NVIC_SystemReset()`. On the next boot `ott_execute_pending()` validates the
+request, invalidates it (so a mid-test crash can't loop-boot the same test), runs
+the scenario's `run` step, and prints the `OTT PASSED/FAILED [<name>]` result over
+the console before falling through into normal operation. The ST-LINK VCP stays
+enumerated across the target reset, so the host harness reads the result on the
+same serial handle. This framework was brought forward from Milestone 2 so the
+display/touchpad OTTs added there only need a new scenario module.
+
 Run them automatically from the host with the harness (stdlib Python, no pyserial):
 
 ```
 python3 test/run_ott.py blinky      # exit 0 = PASS, 1 = FAIL, 2 = timeout
 ```
 
-Tests that need a clean reset state (retained-RAM/reset, doc 09) and the
-display/touchpad OTTs are added in Milestone 2.
+The display/touchpad OTT scenarios are added in Milestone 2.
 
 ## Layout
 
-- `src/main.c` — super-loop: nominal ~1 Hz blink + OTT CLI polling.
-- `src/led.c`, `src/uart.c` — LD2 (PA5) and LPUART1 VCP drivers.
-- `src/ott.c` — OTT layer + test registry (the `blinky` test) on the EmbeddedCli CLI.
+- `src/main.c` — runs any pending OTT (`ott_execute_pending`) on boot, then the
+  super-loop: nominal ~1 Hz blink + OTT CLI polling.
+- `src/led.c`, `src/uart.c` — LD2 (PA5) and LPUART1 VCP drivers (`uart_flush`
+  drains the last byte before the OTT reset).
+- `src/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
+  boot-time `ott_execute_pending()` runner/reporter.
+- `src/ott_scenarios.c` — the OTT test registry; add a test by adding one row.
+- `src/ott_blinky.c` — the `blinky` scenario (VT-INT-005): drives PA5 and reads
+  the pin back.
+- `src/retain_ram.c` — the `.noinit` retained-RAM object carrying the OTT request
+  across the reset.
 - `third_party/embedded_cli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
   (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries
   the memory-safety fixes from EmbeddedCli PR #2.

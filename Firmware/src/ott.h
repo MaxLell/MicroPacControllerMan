@@ -2,20 +2,29 @@
 #define OTT_H
 
 /*
- * On-Target Test (OTT) layer (FR-106 / FR-107), built on the EmbeddedCli
- * framework (third_party/embedded_cli).
+ * On-Target Test (OTT) mechanism (FR-106 / FR-107), following the reference
+ * design (BareMetalHollowClockFw, doc 09), on top of the EmbeddedCli console:
  *
- * Exposes `ott <name>` on the serial console; the firmware runs the named test
- * and prints a machine-parseable result without a debugger:
- *     OTT PASSED [<name>]
- *     OTT FAILED [<name>]: <reason>
- * `ott` with no argument lists the available tests; `help` lists CLI commands.
+ *   1. `ott <name> [args]` on the CLI runs the scenario's setup step, writes the
+ *      request (with a magic word + checksum) into retained RAM, and resets.
+ *   2. On the next boot, ott_execute_pending() finds a valid request, runs the
+ *      scenario's run step, and prints "OTT PASSED/FAILED [name]" over the serial
+ *      console (no debugger needed), then clears the request and continues into
+ *      normal operation.
  *
- * Tests that need a clean reset state (retained-RAM/reset, doc 09) are added in
- * a later milestone; the tests here run in place.
+ * Tests live in their own ott_<name>.c modules and are listed in ott_scenarios.c
+ * — adding a test needs no change to this core or the CLI.
  */
 
-void ott_init(void); /* set up the CLI and register the OTT command */
-void ott_poll(void); /* drain UART RX into the CLI; call from the main loop */
+/* Run a pending OTT request left in retained RAM by a prior `ott` command.
+ * Call once early in main(), after the LED/UART are initialised and before the
+ * normal application starts. No-op on a normal (unscheduled) boot. */
+void ott_execute_pending(void);
+
+/* Register the `ott` CLI command (and set up the console). */
+void ott_init(void);
+
+/* Drain the UART RX into the CLI; call from the main loop. */
+void ott_poll(void);
 
 #endif /* OTT_H */

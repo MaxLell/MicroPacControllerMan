@@ -41,3 +41,9 @@ int uart_getc(void)
     }
     return -1;
 }
+
+void uart_flush(void)
+{
+    while (!(LPUART1->ISR & USART_ISR_TC)) {
+    }
+}

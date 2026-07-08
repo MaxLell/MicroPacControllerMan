@@ -29,7 +29,8 @@ int main(void)
     SysTick_Config(SystemCoreClock / 1000U); /* 1 ms tick */
     led_init();
     uart_init();
-    ott_init(); /* sets up the EmbeddedCli-based OTT console (prints its banner) */
+    ott_execute_pending(); /* if an `ott` command scheduled a test + reset, run it now */
+    ott_init();            /* set up the EmbeddedCli-based OTT console (prints its banner) */
 
     uint32_t last_toggle = 0;
     for (;;) {
