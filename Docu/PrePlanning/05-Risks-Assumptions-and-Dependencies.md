@@ -32,7 +32,7 @@
 |---|---|---|
 | D-001 | [c-code-style](https://github.com/MaxLell/c-code-style) coding standard repository | External repo; any fixes to the standard itself require a separate PR against that repo, with the project owner's prior approval before touching it. |
 | D-002 | Ceedling / Unity toolchain | Must be installed on the host development machine for [Milestone 3 unit tests](04-Implementation-Phases-and-Milestones.md). |
-| D-003 | arm-none-eabi-gcc + CMake for the target firmware; STM32CubeMX used only to generate initialisation/HAL code; a FreeRTOS port for the STM32G4 series | Target firmware build — see [03 Architecture §3.8](03-Architecture.md#38-build--toolchain). |
+| D-003 | arm-none-eabi-gcc + CMake for the target firmware; a FreeRTOS port for the STM32G4 series (from M4) | Target firmware build — see [03 Architecture §3.8](03-Architecture.md#38-build--toolchain). As built, initialisation is register-level CMSIS with **no CubeMX/HAL** ([DEC-001](11-Decisions-and-As-Built.md)). |
 | D-004 | Physical hardware: STM32G431RB Nucleo-64, Click Shield for Nucleo-64, LCD Mono Click, Touchpad Click, USB-C cable | Required from Board Bring-Up onward; lead time if not already on hand. |
 | D-005 | SDL2 library | Required for the host build's View (CON-103). |
 | D-006 | [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw) (reference project) | Source of the OTT (On-Target Test) CLI pattern adapted in [FR-106/FR-107](03-Architecture.md#37-on-target-test-ott-cli-framework); not a build dependency, only a design reference. See also [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md). |
