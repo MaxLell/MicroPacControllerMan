@@ -13,10 +13,10 @@ add_executable(pacman.elf
     src/main.c
     src/led.c
     src/uart.c
-    src/ott.c
-    src/ott_scenarios.c
-    src/ott_blinky.c
     src/retain_ram.c
+    Test/Target/ott.c
+    Test/Target/ott_scenarios.c
+    Test/Target/scripts/ott_blinky.c
     third_party/embedded_cli/Cli.c
     cmsis/device/system_stm32g4xx.c
     startup/startup_stm32g431xx.s)
@@ -25,6 +25,8 @@ target_compile_definitions(pacman.elf PRIVATE STM32G431xx)
 
 target_include_directories(pacman.elf PRIVATE
     src
+    Test/Target
+    Test/Target/scripts
     third_party/embedded_cli
     cmsis/core
     cmsis/device/include)

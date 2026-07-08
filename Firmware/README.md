@@ -71,7 +71,7 @@ display/touchpad OTTs added there only need a new scenario module.
 Run them automatically from the host with the harness (stdlib Python, no pyserial):
 
 ```
-python3 test/run_ott.py blinky      # exit 0 = PASS, 1 = FAIL, 2 = timeout
+python3 Test/run_ott.py blinky      # exit 0 = PASS, 1 = FAIL, 2 = timeout
 ```
 
 The display/touchpad OTT scenarios are added in Milestone 2.
@@ -82,17 +82,17 @@ The display/touchpad OTT scenarios are added in Milestone 2.
   super-loop: nominal ~1 Hz blink + OTT CLI polling.
 - `src/led.c`, `src/uart.c` — LD2 (PA5) and LPUART1 VCP drivers (`uart_flush`
   drains the last byte before the OTT reset).
-- `src/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
-  boot-time `ott_execute_pending()` runner/reporter.
-- `src/ott_scenarios.c` — the OTT test registry; add a test by adding one row.
-- `src/ott_blinky.c` — the `blinky` scenario (VT-INT-005): drives PA5 and reads
-  the pin back.
 - `src/retain_ram.c` — the `.noinit` retained-RAM object carrying the OTT request
-  across the reset.
+  across the reset (BSP-level infrastructure, kept out of `Test/`).
+- `Test/Target/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
+  boot-time `ott_execute_pending()` runner/reporter.
+- `Test/Target/ott_scenarios.c` — the OTT test registry; add a test by adding one row.
+- `Test/Target/scripts/ott_blinky.c` — the `blinky` scenario (VT-INT-005): drives
+  PA5 and reads the pin back. Individual OTT scripts live in `Test/Target/scripts/`.
+- `Test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
 - `third_party/embedded_cli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
   (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries
   the memory-safety fixes from EmbeddedCli PR #2.
-- `test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
 - `cmsis/core/`, `cmsis/device/` — vendored CMSIS core + STM32G4 device (headers,
   `system_stm32g4xx.c`).
 - `startup/startup_stm32g431xx.s` — vector table + reset handler.
