@@ -4,7 +4,7 @@
  * Proves the build/flash/run chain on the STM32G431RB Nucleo-64:
  *   - blinks the on-board LED LD2 (PA5) at ~1 Hz
  *   - prints a heartbeat banner on the ST-LINK virtual COM port
- *     (USART2, PA2=TX / PA3=RX, 115200 8N1)
+ *     (LPUART1, PA2=TX / PA3=RX, 115200 8N1) — the NUCLEO-G431RB VCP
  *
  * Register-level init (no HAL) against CMSIS. Default reset clock is HSI 16 MHz;
  * SystemInit() (system_stm32g4xx.c) runs from the startup file before main().
@@ -41,29 +41,29 @@ static void led_init(void)
     GPIOA->MODER |= (0x1U << GPIO_MODER_MODE5_Pos);
 }
 
-static void uart2_init(void)
+static void uart_init(void)
 {
     RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
-    RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN;
+    RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN;
 
     /* PA2/PA3 -> alternate function (MODER = 10) */
     GPIOA->MODER &= ~(GPIO_MODER_MODE2_Msk | GPIO_MODER_MODE3_Msk);
     GPIOA->MODER |= (0x2U << GPIO_MODER_MODE2_Pos) | (0x2U << GPIO_MODER_MODE3_Pos);
-    /* AF7 = USART2 on PA2/PA3 */
+    /* AF12 = LPUART1 on PA2/PA3 — the NUCLEO-G431RB ST-LINK virtual COM port */
     GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2_Msk | GPIO_AFRL_AFSEL3_Msk);
-    GPIOA->AFR[0] |= (7U << GPIO_AFRL_AFSEL2_Pos) | (7U << GPIO_AFRL_AFSEL3_Pos);
+    GPIOA->AFR[0] |= (12U << GPIO_AFRL_AFSEL2_Pos) | (12U << GPIO_AFRL_AFSEL3_Pos);
 
-    /* 115200 @ PCLK1 = 16 MHz (oversampling by 16): BRR = fck / baud */
-    USART2->BRR = (SystemCoreClock + 57600U) / 115200U;
-    USART2->CR1 = USART_CR1_TE | USART_CR1_UE;
+    /* LPUART baud: BRR = (256 * f_ck) / baud, f_ck = PCLK1 (HSI 16 MHz) */
+    LPUART1->BRR = (uint32_t)(((uint64_t)256U * SystemCoreClock) / 115200U);
+    LPUART1->CR1 = USART_CR1_TE | USART_CR1_UE;
 }
 
-static void uart2_write(const char *s)
+static void uart_write(const char *s)
 {
     while (*s) {
-        while (!(USART2->ISR & USART_ISR_TXE)) {
+        while (!(LPUART1->ISR & USART_ISR_TXE)) {
         }
-        USART2->TDR = (uint8_t)*s++;
+        LPUART1->TDR = (uint8_t)*s++;
     }
 }
 
@@ -72,9 +72,9 @@ int main(void)
     SystemCoreClockUpdate();
     clock_ms_tick_init();
     led_init();
-    uart2_init();
+    uart_init();
 
-    uart2_write("\r\nMicroPacControllerMan M1: toolchain bring-up OK\r\n");
+    uart_write("\r\nMicroPacControllerMan M1: toolchain bring-up OK\r\n");
 
     uint32_t beat = 0;
     char msg[48];
@@ -100,7 +100,7 @@ int main(void)
         *m++ = '\r';
         *m++ = '\n';
         *m = '\0';
-        uart2_write(msg);
+        uart_write(msg);
 
         delay_ms(500); /* ~1 Hz blink (toggle every 500 ms) */
     }

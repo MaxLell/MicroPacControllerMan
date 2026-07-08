@@ -7,7 +7,7 @@ STM32G431RB Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** against
 
 Goal: prove the whole toolchain end-to-end — build, flash, and see the board run —
 by blinking the on-board LED **LD2 (PA5)** and printing a heartbeat banner on the
-**ST-LINK virtual COM port** (USART2, PA2/PA3, 115200 8N1). Target of
+**ST-LINK virtual COM port** (LPUART1, PA2/PA3, 115200 8N1). Target of
 [VT-INT-005](../Docu/PrePlanning/06-Verification-and-Validation.md).
 
 Init is register-level against CMSIS (see `src/main.c`); the default reset clock
@@ -15,35 +15,25 @@ Init is register-level against CMSIS (see `src/main.c`); the default reset clock
 the startup file are vendored under `cmsis/` and `startup/` from ST's public
 repositories (`STM32CubeG4` / `cmsis_device_g4`); the linker script is `linker/`.
 
-## Toolchain (installed locally, no root)
+## Toolchain
 
-The embedded toolchain is installed under `~/.local/opt` (prebuilt xPack/Kitware
-binaries — no `sudo`), sourced via an env file:
-
-```
-# one-time install (versions as used here)
-mkdir -p ~/.local/opt
-curl -fL https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/download/v15.2.1-1.1/xpack-arm-none-eabi-gcc-15.2.1-1.1-linux-x64.tar.gz | tar xz -C ~/.local/opt
-curl -fL https://github.com/xpack-dev-tools/openocd-xpack/releases/download/v0.12.0-7/xpack-openocd-0.12.0-7-linux-x64.tar.gz | tar xz -C ~/.local/opt
-curl -fL https://github.com/Kitware/CMake/releases/download/v4.3.3/cmake-4.3.3-linux-x86_64.tar.gz | tar xz -C ~/.local/opt
-
-# put them on PATH (this session and future)
-source ~/.local/opt/pacman-toolchain-env.sh
-```
-
-**One-time udev rule** so OpenOCD can access the ST-LINK USB interface without root
-(the serial VCP works without it, SWD flashing does not):
+Install the cross toolchain, build system, and flasher (Debian/Ubuntu):
 
 ```
-sudo cp ~/.local/opt/xpack-openocd-0.12.0-7/openocd/contrib/60-openocd.rules /etc/udev/rules.d/60-openocd.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-# then unplug/replug the board once
+sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
 ```
+
+The `openocd` package also installs the ST-LINK udev rules; after installing,
+**unplug/replug the board once** so a non-root user can flash over SWD (the serial
+VCP already works without it).
+
+> Verified with gcc-arm-none-eabi 13.2.1, cmake 3.28, openocd 0.12.0. No vendor
+> IDE or STM32CubeMX is required. (A local, no-root install via xPack/Kitware
+> tarballs to `~/.local/opt` also works if apt is unavailable.)
 
 ## Build & flash
 
 ```
-source ~/.local/opt/pacman-toolchain-env.sh
 cmake -B build -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.toolchain.cmake
 cmake --build build -j
 openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
