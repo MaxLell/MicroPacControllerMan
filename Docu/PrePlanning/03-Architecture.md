@@ -190,7 +190,7 @@ Tests whose outcome a human must confirm (e.g. "is the pattern visible on the di
 
 One source tree builds three ways and shares the platform-independent Model / Control / game code and the message broker:
 
-- **Target firmware** — compiled with **arm-none-eabi-gcc**, orchestrated by **CMake**. **STM32CubeMX** is used only to generate the low-level initialisation / HAL code; the application, message broker and game are written on top of it. FreeRTOS is included as an STM32G4 port (CON-104).
+- **Target firmware** — compiled with **arm-none-eabi-gcc**, orchestrated by **CMake**. Initialisation is written **directly against CMSIS at register level** — no STM32CubeMX and no vendor HAL ([DEC-001](11-Decisions-and-As-Built.md)); the application, message broker and game are written on top. FreeRTOS (CON-104) is a target-state constraint, introduced during **M4 System Integration** ([DEC-002](11-Decisions-and-As-Built.md)); M1 runs a bare super-loop.
 - **Host build** — the same Model / Control / broker code compiled with the host compiler via **CMake**, with **SDL** providing the View (CON-103 / FR-104).
 - **Unit tests** — run under **Ceedling / Unity** (CON-102 / NFR-101), exercising Model / Control / broker with no hardware and no FreeRTOS.
 
