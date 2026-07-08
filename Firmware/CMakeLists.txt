@@ -11,12 +11,16 @@ set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/linker/STM32G431RBTx_FLASH.ld)
 
 add_executable(pacman.elf
     src/main.c
+    src/led.c
+    src/uart.c
+    src/ott.c
     cmsis/device/system_stm32g4xx.c
     startup/startup_stm32g431xx.s)
 
 target_compile_definitions(pacman.elf PRIVATE STM32G431xx)
 
 target_include_directories(pacman.elf PRIVATE
+    src
     cmsis/core
     cmsis/device/include)
 
