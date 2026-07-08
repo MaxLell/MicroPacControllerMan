@@ -30,7 +30,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
 | FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a tunnel opening at a maze edge, the system shall re-enter it through the opposite tunnel opening on the same row (horizontal tunnel) or same column (vertical tunnel). |
-| FR-022 | Playfield Size | The maze shall be a reduced, display-fit layout with a fixed grid size that fits within the 128×128 display at a legible tile size. *(reduced maze decided — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks); exact dimensions set during Pacman Development)* |
+| FR-022 | Playfield Size | Each level's maze shall be a reduced, display-fit layout with a fixed grid size that fits within the 128×128 display at a legible tile size. *(reduced maze decided — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks); exact dimensions set during Pacman Development)* |
 
 ### 2.1.4 Ghosts
 
@@ -50,14 +50,18 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-019 | Eating Frightened Ghosts | While frightened mode is active, when Pacman occupies the same maze cell as a frightened ghost, the system shall add a ghost-eaten bonus to the score and return that ghost to the ghost pen to regenerate, without reducing Pacman's lives. |
 | FR-020 | Frightened Timeout | While frightened mode is active, when its bounded duration elapses, the system shall end frightened mode and return all ghosts to their normal behavior. |
 
-### 2.1.6 Lives, Game Over & Level Clear
+### 2.1.6 Lives, Levels & End of Game
 
 | Unique-ID | Name | Description |
 |---|---|---|
-| FR-006 | Single Life | The system shall start each game with exactly one Pacman life. |
+| FR-006 | Starting Lives | The system shall start each game run with a fixed number of Pacman lives (default 3 — *tunable*). |
+| FR-024 | Life Lost & Respawn | When Pacman is caught and at least one life remains, the system shall decrement the lives, reset Pacman and the ghosts to their level start positions, and continue the current level. |
 | FR-007 | Game Over | When Pacman's remaining lives reach zero, the system shall end the game and return to the menu screen. |
-| FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last remaining pellet and power pellet in the maze, the system shall end the game as completed (won) and return to the menu screen, with the final score eligible for the high score per FR-008. |
-| FR-023 | Game-Over Score Screen | When a game ends (game over or level clear), the system shall display the final score on its own screen for 2 seconds before returning to the menu screen. *(2 s default — tunable)* |
+| FR-025 | Level Count & Mazes | The game shall consist of 5 levels, each with its own distinct maze. |
+| FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last pellet and power pellet of the current level's maze and it is not the final level, the system shall advance to the next level — loading the next maze and applying that level's higher difficulty — while keeping the accumulated score and remaining lives. |
+| FR-026 | Difficulty Scaling | Each successive level shall be harder than the previous one — faster ghosts, shorter frightened duration, and less scatter time — per the progression in [10 Pacman Game Design](10-Pacman-Game-Design.md). |
+| FR-027 | Game Completion | When Pacman clears the final (5th) level, the system shall end the game as fully completed (won). |
+| FR-023 | End-of-Game Score Screen | When a game run ends (all lives lost, or the final level cleared), the system shall display the final score on its own screen for 2 seconds before returning to the menu screen. *(2 s default — tunable)* |
 
 ### 2.1.7 High Score & Persistence
 

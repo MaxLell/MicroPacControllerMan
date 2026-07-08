@@ -8,7 +8,7 @@ This document describes *how* the firmware is structured, at a functional-specif
 
 The game is built as Model-View-Control (FR-101), so the game logic is identical on host and target and is unit-testable without hardware (NFR-101):
 
-- **Model** — owns the entire game state: maze layout, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
+- **Model** — owns the entire game state: the active maze, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, current level (1–5), and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
 - **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the LCD Mono Click; the host draws to an SDL window (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
@@ -74,7 +74,7 @@ flowchart TB
 | Module | Responsibility |
 |---|---|
 | **Input** | Reads the touchpad and the user button; turns them into direction and button messages. |
-| **System** | Orchestrates the screen flow: loading → menu → game → score (2 s, FR-023) → menu. |
+| **System** | Orchestrates the screen flow: loading → menu → game (levels 1–5) → score (2 s, FR-023) → menu. |
 | **Game** | Runs the Pacman application (§3.6); bridges the game to the rest of the firmware. |
 | **Render** | Draws the current screen to the display — the single rendering output (§3.6). |
 | **NVM** | Loads the high score at start-up and stores it back only when it changes (NFR-004). |

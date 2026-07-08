@@ -16,11 +16,11 @@ Beyond delivering a playable game, the primary motivation for this project is to
 - Reading directional input from the Touchpad Click.
 - Reading the Nucleo user button (game start).
 - Persisting a single high-score value in non-volatile memory (NVM).
-- Core Pacman gameplay: a single fixed maze, pellets and power pellets, four distinct ghosts, a frightened mode, tunnel wrap-around, and a level-clear win condition (see [FR-010..FR-021](02-Requirements.md)).
+- Core Pacman gameplay across **5 levels of increasing difficulty**, each with its own maze; pellets and power pellets; four distinct ghosts; a frightened mode; tunnel wrap-around; multiple lives; and a final win after the last level (see [FR-006..FR-027](02-Requirements.md)).
 - A host-computer build of the game logic (Model + Control) with an SDL-based View, for development and unit testing purposes ([Milestone 3.4](04-Implementation-Phases-and-Milestones.md)).
 
 **Out of scope (for now):**
-- Multiple lives, bonus fruit / bonus items, additional levels or mazes beyond the first playable maze, sound, multiplayer, wireless connectivity, multiple high-score entries.
+- Bonus fruit / bonus items, sound, multiplayer, wireless connectivity, multiple high-score entries, difficulty progression beyond the 5 defined levels.
 
 ## 1.3 External Interfaces
 

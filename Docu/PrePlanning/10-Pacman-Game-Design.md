@@ -7,14 +7,14 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
 ## 10.1 Movement & Tick Model
 
 - **Grid-based.** The maze is a grid of square cells (§10.2). Pacman and each ghost occupy exactly one cell and face one of four directions (North / East / South / West). There is no sub-cell/pixel position — movement is one whole cell at a time. This keeps the logic deterministic and unit-testable, and matches tile rendering on the monochrome display.
-- **Game step.** The game advances in discrete **steps** at a fixed cadence of **150 ms** *(tunable)*. Everything below (input application, movement, eating, collisions, timers) happens once per step. Rendering runs independently at ≥ 30 FPS (NFR-002) and simply redraws the current Model — a step just changes what the next frames show.
-- **Pacman movement.** Pacman keeps a current direction and a *queued* direction. `MSG_INPUT_DIRECTION` sets the queued direction. Each step: if the queued direction is not blocked by a wall, it becomes the current direction; then Pacman moves one cell in the current direction if that cell is not a wall, otherwise he stays put (stopped against a wall until the direction changes).
-- **Ghost movement.** Each step a ghost moves one cell toward its target cell (§10.4). A ghost never reverses onto the cell it just came from, except at the instant its mode changes (scatter↔chase, or entering/leaving frightened). Frightened ghosts move once every **2 steps** (half speed) *(tunable)*.
+- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 30 FPS (NFR-002) and simply redraws the current Model.
+- **Pacman movement.** Pacman moves one cell every **150 ms** *(tunable)*, constant across all levels. He keeps a current direction and a *queued* direction; `MSG_INPUT_DIRECTION` sets the queued one. When he is due to move: if the queued direction is not blocked by a wall it becomes current; then he moves one cell if that cell is open, otherwise he stays put (stopped against a wall until the direction changes).
+- **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period, which is **per level** (§10.9) — slower than Pacman on level 1, faster than him on level 5. A ghost never reverses onto the cell it just left, except when its mode changes (scatter↔chase, or entering/leaving frightened). Frightened ghosts move at half their current speed.
 - **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth — on the same row for the horizontal tunnel, the same column for the vertical one (FR-012).
 
-## 10.2 The Maze (Playfield)
+## 10.2 Mazes (Playfield)
 
-The reference maze is an **11 × 9** grid (11 columns, 9 rows), rendered at a tile size of **10 × 10 px** (≈ 110 × 90 px), centred, with the remaining space used for the HUD (score + high score). It is left-right symmetric, fully connected, with a horizontal tunnel, a vertical tunnel through Pacman's column, and a central ghost pen. Exact pixel geometry is finalised during M3; the grid below is fixed (FR-010, FR-022).
+The game has **five mazes, one per level** (FR-025), each a reduced, display-fit grid (FR-022) — left-right symmetric, fully connected, with at least one tunnel and a central ghost pen. **Level 1's maze** is the 11 × 9 reference below (tile ≈ 10 × 10 px → ≈ 110 × 90 px, centred, HUD in the remaining space). The mazes for **levels 2–5** are distinct layouts of increasing difficulty (more dead-ends, longer corridors, fewer safe corners, possibly fewer power pellets), authored to the same format and constraints during M3.
 
 Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` ghost start (pen) · space = open, no pellet (tunnel mouths).
 
@@ -34,7 +34,7 @@ Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` gh
 - **Power pellets** (`o`) sit in the four corners.
 - **Ghost pen** (`G`) is the three central cells; ghosts start here and return here when eaten. It is open above and below (no door in the reference layout).
 - **Tunnels** (two): the **horizontal** tunnel opens the middle row's left and right edges, which wrap to each other; the **vertical** tunnel opens the top and bottom edges of Pacman's column, which wrap to each other — so Pacman's start pocket always has an escape rather than being a dead-end trap.
-- **Level clear (FR-021)** occurs when the last pellet and power pellet are eaten.
+- **Level clear** occurs when the last pellet and power pellet of the current maze are eaten — see §10.7 / §10.9 for what happens next.
 
 ## 10.3 Entities
 
@@ -43,7 +43,7 @@ The Model (see [03 Architecture §3.1](03-Architecture.md#31-mvp-architecture-mo
 - **Maze**: the static walls plus a dynamic map of which pellets/power pellets remain.
 - **Pacman**: cell, current direction, queued direction, alive flag.
 - **Four ghosts**, each: cell, direction, personality (Blinky / Pinky / Inky / Clyde), mode (scatter / chase), frightened flag + which "eaten" state, and its scatter-corner.
-- **Score**, **lives** (always starts at 1, FR-006), **high score** (in-memory copy of NVM), the **frightened timer**, the **scatter/chase phase timer**, and **pellets remaining**.
+- **Score** (cumulative across levels), **lives** (starting count per FR-006, default 3), **current level** (1–5), **high score** (in-memory copy of NVM), the **frightened timer**, the **scatter/chase phase timer**, and **pellets remaining** in the current maze.
 
 Per [10.1] all entities are Agents (the movable-entity base, [03 Architecture §3.6](03-Architecture.md#36-pacman-sub-application-architecture)): Pacman and the ghosts share the "occupy a cell, face a direction, try to step" behaviour and specialise only how they choose their next direction.
 
@@ -66,7 +66,7 @@ At each move, a ghost looks at the non-wall neighbours of its cell (excluding th
 
 ## 10.5 Power Pellets & Frightened Mode (FR-017..FR-020)
 
-- Eating a power pellet puts all ghosts into **Frightened** mode for **6 s** *(tunable)*: they move at half speed (§10.1) and step *away* from Pacman (choose the valid non-reverse neighbour with the **largest** Manhattan distance to Pacman); they are drawn in a visibly frightened style (FR-018).
+- Eating a power pellet puts all ghosts into **Frightened** mode for a **per-level duration** (§10.9 — 6 s on level 1, shrinking to 0 s on level 5, where a power pellet then only scores points): they move at half speed (§10.1) and step *away* from Pacman (choose the valid non-reverse neighbour with the **largest** Manhattan distance to Pacman); they are drawn in a visibly frightened style (FR-018).
 - Pacman entering a frightened ghost's cell **eats** it: the ghost returns to the pen and resumes normal behaviour from there; Pacman scores the ghost bonus (§10.6). Eating a ghost does not cost a life.
 - Frightened mode ends when its timer expires (FR-020); the last ~1 s may blink as a warning *(optional)*. Eating another power pellet restarts the timer and resets the ghost-bonus chain.
 
@@ -82,13 +82,13 @@ No bonus fruit (out of scope, [01 §1.2](01-System-Overview-and-Context.md#12-sy
 
 ## 10.7 Collisions & End of Game
 
-Resolved once per step, after movement:
+Resolved each tick, after movement:
 
-- **Caught (FR-007):** a **non-frightened** ghost sharing Pacman's cell — or swapping cells with him in the same step (passing through each other) — catches Pacman. With a single life (FR-006) the game ends and returns to the menu.
+- **Caught:** a **non-frightened** ghost sharing Pacman's cell — or swapping cells with him in the same tick (passing through each other) — catches Pacman. This costs one life (FR-024). If lives remain, Pacman and the ghosts reset to their level start positions and the level continues; if lives reach zero, it is **game over** (FR-007).
 - **Eaten ghost:** a **frightened** ghost in the same situation is eaten (§10.5).
-- **Level clear (FR-021):** no pellets remain → the game ends as won and returns to the menu.
+- **Level clear:** no pellets remain in the current maze → if it is **not** the final level, advance to the next level — load its maze and difficulty (§10.9), reset entity positions, keep the accumulated score and remaining lives (FR-021); if it **is** the final (5th) level, the game is **won** (FR-027).
 
-In both end cases the final score is shown on its own screen for **2 s** *(tunable)* before returning to the menu (FR-023), and is offered for the high-score check (FR-008).
+When the run ends — either game over (FR-007) or the final level cleared (FR-027) — the final score is shown on its own screen for **2 s** *(tunable)* before returning to the menu (FR-023) and is offered for the high-score check (FR-008).
 
 ## 10.8 Tunable Constants (defaults)
 
@@ -96,10 +96,25 @@ Collected for convenience — these realise [A-006](05-Risks-Assumptions-and-Dep
 
 | Constant | Default |
 |---|---|
-| Game step period | 150 ms |
-| Frightened duration | 6 s |
-| Frightened ghost speed | 1 cell / 2 steps |
-| Scatter / Chase schedule | (Scatter 5 s, Chase 20 s) × 2, then Chase |
+| Pacman movement period | 150 ms (all levels) |
+| Starting lives | 3 |
+| Number of levels | 5 |
+| Ghost speed / frightened duration / scatter schedule | per level — see §10.9 |
+| Frightened ghost speed | half of the ghost's current speed |
 | Pellet / power-pellet points | 10 / 50 |
 | Ghost-eaten points | 200 / 400 / 800 / 1600 |
 | Render rate | ≥ 30 FPS (NFR-002) |
+
+## 10.9 Levels & Difficulty (FR-025 / FR-026)
+
+Five levels, each with its own maze (§10.2) and its own difficulty. Pacman's speed stays constant (150 ms/cell); the ghosts get faster, the frightened window shrinks, and scatter time falls away — so level 1 is comfortable and level 5 is almost unwinnable. Score is cumulative and lives (FR-006) carry across all levels; the run ends only on game over (all lives lost, FR-007) or after clearing level 5 (FR-027).
+
+| Level | Maze | Ghost move period | Frightened duration | Scatter / Chase |
+|---|---|---|---|---|
+| 1 | maze 1 | 200 ms (slower than Pacman) | 6 s | (Scatter 5 s, Chase 20 s) × 2, then Chase |
+| 2 | maze 2 | 170 ms | 5 s | (Scatter 4 s, Chase 20 s) × 2, then Chase |
+| 3 | maze 3 | 150 ms (= Pacman) | 4 s | (Scatter 3 s, Chase 20 s), then Chase |
+| 4 | maze 4 | 130 ms (faster) | 2 s | Scatter 2 s once, then Chase |
+| 5 | maze 5 | 110 ms (faster) | 0 s (no frightened) | Chase only (no scatter) |
+
+All values *(tunable)*. Clearing a level keeps the score and lives and loads the next row; clearing level 5 wins the game.

@@ -15,6 +15,7 @@ Host-side, run under Ceedling/Unity, no target hardware required.
 | VT-UNIT-003 | Control Statelessness | Calling a Control function twice with identical Model + input produces identical output both times (no hidden internal state). |
 | VT-UNIT-004 | Maze & Movement Rules | Wall cells block movement (FR-010); pellet/power-pellet entry removes the item and increments the score (FR-011, FR-017); exiting a side tunnel wraps to the opposite opening on the same row (FR-012). |
 | VT-UNIT-005 | Ghost & Frightened Logic | Each ghost's targeting is deterministic for its behavior (FR-014) and alternates between chase and scatter phases (FR-015); consuming a power pellet activates frightened mode, eating a frightened ghost scores a bonus and returns it to the pen without costing a life (FR-018, FR-019), and frightened mode ends after its duration (FR-020). |
+| VT-UNIT-006 | Level & Difficulty Progression | The per-level difficulty parameters follow the defined monotonic progression (ghosts faster, frightened shorter, scatter less — FR-026); clearing a level advances the level and applies the next level's parameters and maze while carrying over score and lives (FR-021, FR-025), and clearing the final level completes the game (FR-027). |
 
 ## 6.2 Integration Tests (large scope)
 
@@ -38,10 +39,10 @@ Each on-target test is exposed as its own OTT CLI command (FR-106/FR-107, see [O
 | VT-INT-011 | Boot Sequence | Target | Automatic | The harness parses serial-logged state-transition messages to confirm the loading screen (with logo, after the NFR-005 delay) is followed by the menu screen (with current high score) within NFR-001. |
 | VT-INT-012 | Game Start via Button | Target | Manual, button-confirmed | From the menu screen, the harness prompts the user to press the Nucleo user button; a new game starting is confirmed via the resulting serial log message within a timeout. |
 | VT-INT-013 | Directional Movement | Target | Manual, button-confirmed (latency: Automatic) | The user is prompted to touch each Game-Control-Cross quadrant (FR-004) in turn and confirm correct movement via the button; input-to-render latency (NFR-003) is measured automatically from serial-logged input/render timestamps. |
-| VT-INT-014 | Single-Life Game Over | Host | Automatic | A scripted input sequence causes Pacman to be caught once; the game ends immediately (no extra lives), the final score is shown (score screen, FR-023), and the Model returns to the menu state. |
+| VT-INT-014 | Game Over (Lives Exhausted) | Host | Automatic | A scripted input sequence causes Pacman to be caught repeatedly; each non-final catch decrements lives and respawns Pacman/ghosts to continue the level (FR-024); after the last life the game ends, the final score is shown (score screen, FR-023), and the Model returns to the menu state. |
 | VT-INT-015 | High Score Update & Persistence | Target | Automatic | An OTT command forces a score above the stored high score, triggers a reset, then reads the NVM value back over the CLI to confirm it persisted; a lower score is confirmed not to overwrite the stored value. |
 | VT-INT-016 | Rendering Smoothness | Target | Automatic | The harness parses serial-logged frame-render timestamps captured during a scripted gameplay run and confirms the achieved rate meets NFR-002. |
-| VT-INT-017 | Level Clear (E2E) | Host | Automatic | A scripted input sequence consumes every pellet and power pellet in the maze; the game then ends as won (FR-021) and the Model returns to the menu state, with the final score offered for high-score comparison. |
+| VT-INT-017 | Level Progression & Completion (E2E) | Host | Automatic | A scripted run clears each level's maze in turn: clearing a non-final level advances to the next maze and difficulty while carrying score and lives (FR-021, FR-025, FR-026); clearing the 5th level completes the game as won (FR-027), shows the score screen (FR-023), and returns to the menu. |
 
 ## 6.3 Test Harness (Python)
 

@@ -15,7 +15,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-003 | Game Start | VT-INT-012 |
 | FR-004 | Directional Control | VT-INT-007, VT-INT-013, VT-INT-010 |
 | FR-005 | Game Rendering | VT-INT-006, VT-INT-016 |
-| FR-006 | Single Life | VT-INT-014 |
+| FR-006 | Starting Lives | VT-INT-014 |
 | FR-007 | Game Over | VT-INT-014 |
 | FR-008 | High Score Update | VT-INT-015 |
 | FR-009 | High Score Persistence | VT-INT-015 |
@@ -32,7 +32,11 @@ A few items are structural/process requirements rather than automatically observ
 | FR-020 | Frightened Timeout | VT-UNIT-005, VT-INT-010 |
 | FR-021 | Level Clear | VT-INT-017 |
 | FR-022 | Playfield Size | VT-UNIT-004, VT-INT-010 |
-| FR-023 | Game-Over Score Screen | VT-INT-014 |
+| FR-023 | End-of-Game Score Screen | VT-INT-014 |
+| FR-024 | Life Lost & Respawn | VT-INT-014 |
+| FR-025 | Level Count & Mazes | VT-UNIT-006, VT-INT-017 |
+| FR-026 | Difficulty Scaling | VT-UNIT-006, VT-INT-017 |
+| FR-027 | Game Completion | VT-INT-017 |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-002 | Rendering Rate | VT-INT-016 |
 | NFR-003 | Input Latency | VT-INT-013 |
