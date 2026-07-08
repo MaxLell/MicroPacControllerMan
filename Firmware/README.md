@@ -43,6 +43,11 @@ jumper (JP1)** should select software VCOM (EXTMODE=low).
 
 ### M2 hardware-verification checklist
 
+Shortcut: **`./m2.sh all`** builds, flashes once, and walks through the three
+interactive tests in sequence (or `./m2.sh display|touchpad|touchdot|suite` for
+one). Set the port with `PORT=/dev/ttyACMx ./m2.sh …`. The manual steps below are
+the same thing spelled out.
+
 Run on the physical board to close M2 (R-001 / VT-INT-003/004/006/007):
 
 1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
