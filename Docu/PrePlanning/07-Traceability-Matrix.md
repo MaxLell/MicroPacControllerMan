@@ -4,7 +4,7 @@
 
 Every requirement from [02 Requirements](02-Requirements.md) is listed below with the verification test(s) from [06 Verification & Validation](06-Verification-and-Validation.md) that verify it. The two tables group requirements only by ID band (`0xx` vs `1xx`); the numbering carries no system-vs-software meaning.
 
-Three items are structural/process requirements rather than runtime behaviour and are verified by build tooling or code review rather than a dynamic `VT-*` test: CON-101 (language, enforced by the compiler), NFR-102 (coding standard), and the non-observable aspects of FR-109 (run-to-completion, no shared state). This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
+A few items are structural/process requirements rather than automatically observable runtime behaviour and are verified by build tooling, manual fault-injection, or code review rather than a dynamic `VT-*` test: CON-101 (language, enforced by the compiler), NFR-102 (coding standard), the non-observable aspects of FR-109 (run-to-completion, no shared state), and FR-111 (fatal-error halt). This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
 
 ## 7.1 Product Requirements (FR-0xx / NFR-0xx / CON-0xx)
 
@@ -31,6 +31,7 @@ Three items are structural/process requirements rather than runtime behaviour an
 | FR-019 | Eating Frightened Ghosts | VT-UNIT-005, VT-INT-010 |
 | FR-020 | Frightened Timeout | VT-UNIT-005, VT-INT-010 |
 | FR-021 | Level Clear | VT-INT-017 |
+| FR-022 | Playfield Size | VT-UNIT-004, VT-INT-010 |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-002 | Rendering Rate | VT-INT-016 |
 | NFR-003 | Input Latency | VT-INT-013 |
@@ -56,6 +57,7 @@ Three items are structural/process requirements rather than runtime behaviour an
 | FR-108 | Dedicated Message-Broker Task | VT-UNIT-001, VT-INT-009 |
 | FR-109 | Active-Object Modules | VT-INT-009 (task-per-module observable); run-to-completion / no-shared-state by code review — see gap note above |
 | FR-110 | Pacman Internal Message Bus | VT-UNIT-001, VT-INT-010 |
+| FR-111 | Fatal-Error Halt | Manual fault-injection / code review (no automated `VT-*` test — see gap note above) |
 | NFR-101 | Unit Testability | VT-UNIT-002 |
 | NFR-102 | Coding Standard Compliance | Code review against c-code-style (no automated `VT-*` test yet — see gap note above) |
 | NFR-103 | No Runtime Heap Allocation | VT-UNIT-001 |
@@ -70,4 +72,4 @@ Three items are structural/process requirements rather than runtime behaviour an
 
 - Every `FR-*` / `NFR-*` requirement has at least one verifying test. No orphaned requirements found.
 - Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
-- Known gap: CON-101, NFR-102, and the non-observable aspects of FR-109 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
+- Known gap: CON-101, NFR-102, the non-observable aspects of FR-109, and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.

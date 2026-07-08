@@ -2,225 +2,186 @@
 
 [← Back to Index](Index.md) · See also [02 Requirements](02-Requirements.md)
 
-This document describes *how* the firmware is structured. The behaviour it must deliver is specified in [02 Requirements](02-Requirements.md); relevant requirement IDs are referenced inline.
+This document describes *how* the firmware is structured, at a functional-specification level — enough to start implementation, without prescribing code-level detail. Requirement IDs from [02 Requirements](02-Requirements.md) are referenced inline.
 
 ## 3.1 MVP Architecture (Model / View / Control)
 
 The game is built as Model-View-Control (FR-101), so the game logic is identical on host and target and is unit-testable without hardware (NFR-101):
 
 - **Model** — owns the entire game state: maze layout, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
-- **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations:
-  - Target: draws to the LCD Mono Click over SPI.
-  - Host: draws to an SDL window (CON-103 / FR-104).
-- **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Implemented as pure, stateless functions (FR-102) so it is trivially unit-testable (NFR-101) and identical on host and target.
+- **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the LCD Mono Click; the host draws to an SDL window (CON-103 / FR-104).
+- **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
 > **Open design point:** how a full Pacman maze maps onto the 128×128 monochrome display (a classic 28×31-tile maze leaves only ~4 px per tile) is not yet decided — reduced display-fit maze, scaled classic maze, or scrolling viewport. See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
-## 3.2 Message Broker (System Message Bus)
+## 3.2 Message Broker
 
-All inter-module communication goes through a custom message broker (no external library, no runtime heap — NFR-103). The design is adapted from [MovyDesk_Prototype/lib/MessageBroker](https://github.com/MaxLell/MovyDesk_Prototype/tree/main/lib/MessageBroker), with one deliberate change: **modules register an output queue instead of a callback**. This decouples publishers from subscribers in both time and thread of execution and keeps delivery off the publisher's stack.
+All inter-module communication goes through a custom message broker (no external library, no runtime heap — NFR-103). The design is adapted from [MovyDesk_Prototype/lib/MessageBroker](https://github.com/MaxLell/MovyDesk_Prototype/tree/main/lib/MessageBroker), with two deliberate changes: modules register an **output queue** instead of a callback, and the broker is an **object** (its state is passed in explicitly), so several independent instances can coexist.
 
 Design rules:
 
-- **Fixed-size messages, copied by value.** A message is a self-contained value type — a topic ID plus a small fixed-size payload (a union of per-topic structs). The broker moves whole message objects through FreeRTOS queues and never dereferences or owns external payload pointers (NFR-103).
-- **One shared input queue.** Every publisher writes into the broker's single input queue via the broker API.
-- **One output queue per module.** Each module owns an output queue and subscribes it to the topics it cares about. An init-time subscription table maps each topic → the set of subscribed output queues. This table is the only place the broker inspects `msg_id`; it is otherwise agnostic to message content.
-- **A dedicated broker task does the fan-out (FR-108).** One FreeRTOS task blocks on the input queue and, for each message, copies it into every subscribed output queue.
-- **Backpressure (NFR-105).** A publisher can query the input queue's free capacity before publishing; a publish on a full queue returns a status (bounded, non-blocking) instead of blocking the publisher indefinitely.
-- **Output-queue-full policy.** During fan-out the broker uses a non-blocking send with a per-subscriber drop policy (a full output queue is counted/logged and the message dropped for that subscriber) so that one slow consumer cannot stall the broker task.
-- **Host parity.** On the host build the same API is backed by an in-process queue/dispatch loop (no FreeRTOS dependency), so Model/Control and any bus user compile and run unmodified on both platforms (FR-104).
+- **Object-oriented / instance state (self pointer).** Every broker API call takes the broker instance as its first argument (`self`); all of the broker's state lives inside that instance. Nothing is global, so multiple brokers run side by side without interfering. This project uses **two instances** (FR-110):
+  - a **system broker** connecting the firmware-level modules (§3.2.2);
+  - a **Pacman broker** used only inside the game (§3.6).
+- **Content-agnostic.** The broker only reads a message's topic ID for routing; it treats the payload as opaque bytes and never interprets it.
+- **Fixed-size messages, copied by value.** A message is a topic ID plus a small fixed-size payload, moved by value so no module holds a pointer into another's memory (NFR-103).
+- **One input queue per broker.** Publishers hand a message to the broker via its API; the broker owns the input queue.
+- **One output queue per subscriber.** A module registers its output queue for the topics it cares about; the broker copies each message into every subscribed module's output queue.
+- **A dedicated worker moves the messages (FR-108).** One task per broker drains the input queue and fans each message out to the subscribed output queues; this is the only place messages cross between modules.
+- **Backpressure (NFR-105).** A publisher can ask the broker how much room is left in the input queue; a publish onto a full queue returns a status instead of blocking the publisher.
+- **Slow-consumer isolation.** If a subscriber's output queue is full, that message is dropped for that subscriber (and counted) rather than stalling the broker or other subscribers.
+- **Host parity.** The same API runs on the host without an RTOS, so the game and any bus user build and run unmodified on both platforms (FR-104).
 
-### 3.2.1 Broker API (sketch)
+### 3.2.1 Broker interface (shape)
+
+The instance (`self`) is the first argument of every call:
 
 ```c
-#define MB_MAX_PAYLOAD_BYTES  32U   /* sized to the largest payload in §3.3 */
+typedef struct message_broker message_broker_t;   /* an instance ("self")  */
+typedef struct mb_subscriber  mb_subscriber_t;     /* a module's output queue */
 
-typedef struct {
-    msg_id_e msg_id;                        /* topic / routing key             */
-    u16      data_size;                      /* valid bytes in payload          */
-    u8       payload[MB_MAX_PAYLOAD_BYTES];  /* inline, no external pointers    */
-} msg_t;
-
-typedef struct mb_subscriber* mb_subscriber_t;   /* opaque; wraps a queue      */
-
-typedef enum { MB_OK = 0, MB_ERR_FULL, MB_ERR_TIMEOUT,
-               MB_ERR_INVALID_ARG, MB_ERR_NO_SPACE, MB_ERR_NOT_INIT } mb_status_e;
-
-/* lifecycle + the dedicated broker task (FR-108) */
-mb_status_e messagebroker_init(u16 input_queue_length);
-mb_status_e messagebroker_start(u16 task_stack_words, u16 task_priority);
-
-/* subscription: a module registers its output queue against topics */
-mb_status_e messagebroker_create_subscriber(u16 out_queue_length, mb_subscriber_t* out);
-mb_status_e messagebroker_subscribe(mb_subscriber_t sub, msg_id_e topic);
-mb_status_e messagebroker_receive(mb_subscriber_t sub, msg_t* out_msg, u32 timeout_ticks);
-
-/* publishing into the shared input queue */
-mb_status_e messagebroker_publish(const msg_t* msg, u32 timeout_ticks);
-
-/* backpressure (NFR-105) */
-u16  messagebroker_input_free_slots(void);
-bool messagebroker_input_has_space(u16 headroom);
+mb_status_e mb_init     (message_broker_t *self, /* queue sizing ... */);
+mb_status_e mb_start    (message_broker_t *self);              /* start the worker (FR-108) */
+mb_status_e mb_subscribe(message_broker_t *self, mb_subscriber_t *sub, msg_id_e topic);
+mb_status_e mb_publish  (message_broker_t *self, const msg_t *msg);          /* into input queue */
+bool        mb_input_has_space(message_broker_t *self, u16 headroom);        /* backpressure (NFR-105) */
+mb_status_e mb_receive  (mb_subscriber_t *sub, msg_t *out_msg);              /* a module reads its own queue */
 ```
 
-### 3.2.2 Fishbone View — Modules on the Bus
+The two instances are created the same way, e.g. a `g_system_broker` and a Pacman-internal broker owned by the Game module (§3.6).
 
-The broker is the **spine**; each module is a **bone** that hangs off it. A module never talks to another module directly (FR-103) — it only publishes into the broker's input queue and receives on its own output queue.
+### 3.2.2 Software Modules on the System Broker (sandwich view)
+
+The system broker sits in the middle; the firmware **software modules** sit above and below it (a "sandwich"). A module never calls another module directly (FR-103) — it only publishes to the broker and receives on its own output queue. These are *software modules*, not tasks; how modules map onto FreeRTOS tasks is a separate concern (§3.4).
 
 ```mermaid
-flowchart LR
-    IN[InputTask]
-    SY[SystemTask]
-    GL[GameLogicTask]
-    RE[RenderTask]
-    PE[PersistenceTask]
-    CO[ConsoleTask]
-    MB{{"MESSAGE BROKER — the spine<br/>single input queue → per-module output queues<br/>(dedicated broker task, FR-108)"}}
-    IN <--> MB
-    SY <--> MB
-    GL <--> MB
-    RE <--> MB
-    PE <--> MB
-    CO <--> MB
+flowchart TB
+    IN[Input]
+    SY[System]
+    GA["Game (Pacman application)"]
+    BROKER{{"System Message Broker"}}
+    RE[Render]
+    NV[NVM]
+    CO[Console]
+    IN --> BROKER
+    SY --> BROKER
+    GA --> BROKER
+    BROKER --> RE
+    BROKER --> NV
+    BROKER --> CO
 ```
+
+| Module | Responsibility |
+|---|---|
+| **Input** | Reads the touchpad and the user button; turns them into direction and button messages. |
+| **System** | Orchestrates the screen flow: loading → menu → game → game over → menu. |
+| **Game** | Runs the Pacman application (§3.6); bridges the game to the rest of the firmware. |
+| **Render** | Draws the current screen to the display — the single rendering output (§3.6). |
+| **NVM** | Loads the high score at start-up and stores it back only when it changes (NFR-004). |
+| **Console** | Serves the serial CLI: log output and OTT test commands (§3.7). |
 
 ## 3.3 Message Definitions
 
-Every topic is a value in a single compile-time `enum msg_id_e`. Payloads are fixed-size structs carried inline in `msg_t` (§3.2.1). A module handles each received message to completion inside its own task (run-to-completion, see §3.5).
+Every topic is a value in one compile-time `enum msg_id_e`; the payload is a small fixed-size struct. A module handles each received message to completion before taking the next (§3.5).
 
 | Topic (`msg_id_e`) | Payload | Published by | Consumed by | Handling |
 |---|---|---|---|---|
-| `MSG_INPUT_DIRECTION` | `{ direction: N/S/E/W }` | InputTask | GameLogicTask | Sets Pacman's next intended direction. |
-| `MSG_INPUT_BUTTON` | `{ event: pressed }` | InputTask | SystemTask | Starts a game from the menu (FR-003); confirms button-confirmed OTT tests. |
-| `MSG_SYSTEM_SHOW_LOADING` | *(none)* | SystemTask | RenderTask | Render the loading screen (FR-001). |
-| `MSG_SYSTEM_SHOW_MENU` | `{ high_score: u32 }` | SystemTask | RenderTask | Render the menu with the current high score (FR-002). |
-| `MSG_SYSTEM_START_GAME` | *(none)* | SystemTask | GameLogicTask | Initialize a new Model and begin play (FR-003, FR-006). |
-| `MSG_GAME_STATE_CHANGED` | `{ snapshot: game_state_t }` | GameLogicTask | RenderTask | Render the latest game frame (FR-005). |
-| `MSG_GAME_SCORE_UPDATED` | `{ score: u32 }` | GameLogicTask | PersistenceTask | Track the running score for the end-of-game high-score check. |
-| `MSG_GAME_OVER` | `{ final_score: u32, won: bool }` | GameLogicTask | SystemTask, PersistenceTask | End the game (FR-007 / FR-021); trigger high-score evaluation (FR-008). |
-| `MSG_PERSISTENCE_HIGHSCORE_LOADED` | `{ high_score: u32 }` | PersistenceTask | SystemTask | Provide the NVM high score at boot for the menu (FR-002, FR-009). |
+| `MSG_INPUT_DIRECTION` | `{ direction: N/S/E/W }` | Input | Game | Set Pacman's next intended direction. |
+| `MSG_INPUT_BUTTON` | `{ event: pressed }` | Input | System | Start a game from the menu (FR-003); confirm button-confirmed OTT tests. |
+| `MSG_SYSTEM_SHOW_LOADING` | *(none)* | System | Render | Show the loading screen (FR-001). |
+| `MSG_SYSTEM_SHOW_MENU` | `{ high_score }` | System | Render | Show the menu with the current high score (FR-002). |
+| `MSG_SYSTEM_START_GAME` | *(none)* | System | Game | Start a new game (FR-003, FR-006). |
+| `MSG_RENDER_FRAME` | `{ frame handle }` | Game | Render | Draw the latest game frame (FR-005). Frame-transfer mechanics: see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks). |
+| `MSG_GAME_SCORE_UPDATED` | `{ score }` | Game | NVM | Track the running score for the end-of-game high-score check. |
+| `MSG_GAME_OVER` | `{ final_score, won }` | Game | System, NVM | End the game (FR-007 / FR-021); trigger the high-score check (FR-008). |
+| `MSG_HIGHSCORE_LOADED` | `{ high_score }` | NVM | System | Provide the stored high score at start-up for the menu (FR-002, FR-009). |
 
-> **Open design point:** `MSG_GAME_STATE_CHANGED` conveys the full game frame, which is larger than the small fixed payload the broker copies by value. How the frame actually reaches `RenderTask` (e.g. a version + pointer to a double-buffered read-only snapshot, vs. enlarging the payload, vs. reading the Model directly) is not yet decided — see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
+> **Open design point:** `MSG_RENDER_FRAME` conveys the whole game frame, which is larger than the small fixed payload the broker copies by value. How the frame reaches Render (a handle to a double-buffered read-only snapshot, an enlarged payload, or Render reading the game state directly) is not yet decided — see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
 ## 3.4 FreeRTOS Task Breakdown
 
-Each module is one FreeRTOS task with one inbound queue (the active-object rule, §3.5 / FR-109). The `MessageBrokerTask` is the only task that touches more than one module's queues (FR-108).
+A *task* is a unit of execution; a *module* (§3.2.2) is a unit of code. They are usually 1:1, but several modules may share a task. This project runs the following tasks (FR-105); the message broker runs in its own task (FR-108).
 
-| Task | Responsibility | Subscribes to | Publishes |
-|---|---|---|---|
-| `MessageBrokerTask` | The broker fan-out worker (FR-108): drains the input queue and copies each message into every subscribed output queue. Owns no application state. | *(the broker input queue)* | *(all subscriber output queues)* |
-| `InputTask` | Polls/reacts to Touchpad Click (I2C) and the user button (GPIO/EXTI); debounces and classifies gestures. | — | `MSG_INPUT_DIRECTION`, `MSG_INPUT_BUTTON` |
-| `SystemTask` | Orchestrates boot sequence and screen state (loading → menu → game → game over → menu). | `MSG_INPUT_BUTTON`, `MSG_GAME_OVER`, `MSG_PERSISTENCE_HIGHSCORE_LOADED` | `MSG_SYSTEM_SHOW_LOADING`, `MSG_SYSTEM_SHOW_MENU`, `MSG_SYSTEM_START_GAME` |
-| `GameLogicTask` | Owns the Model; runs Control on each tick and on input events. Hosts the Pacman internal bus (§3.6 / FR-110). | `MSG_INPUT_DIRECTION`, `MSG_SYSTEM_START_GAME` | `MSG_GAME_STATE_CHANGED`, `MSG_GAME_OVER`, `MSG_GAME_SCORE_UPDATED` |
-| `RenderTask` | Draws the current screen (loading/menu/game) to the LCD Mono Click via the View. | `MSG_SYSTEM_SHOW_LOADING`, `MSG_SYSTEM_SHOW_MENU`, `MSG_GAME_STATE_CHANGED` | — |
-| `PersistenceTask` | Reads the high score from NVM at boot; writes it back only when it changes (NFR-004 / NFR-103). | `MSG_GAME_SCORE_UPDATED`, `MSG_GAME_OVER` | `MSG_PERSISTENCE_HIGHSCORE_LOADED` |
-| `ConsoleTask` | Serves the serial-console CLI: general log output plus OTT on-target test commands (FR-106 / FR-107). | — | *(varies — an OTT command may publish/inject any topic to drive the test it is checking)* |
+| Task | Runs module(s) | Responsibility |
+|---|---|---|
+| **Message Broker Task** | (broker worker) | Drains the broker input queue and fans messages out to subscribers (FR-108). Owns no application state. |
+| **Input Task** | Input | Reads the touchpad (I2C) and user button; debounces and classifies. |
+| **System Task** | System | Drives the screen-flow state machine. |
+| **Game Task** | Game (+ the Pacman application and its internal broker, §3.6) | Runs the game tick and game rules. |
+| **Render Task** | Render | Draws the current screen to the display. |
+| **NVM Task** | NVM | Loads/stores the high score (NFR-004). |
+| **Console Task** | Console | Serial CLI: logging and OTT commands (FR-106 / FR-107). |
 
-On the host build these same responsibilities run as plain functions/loops driven by the SDL event loop instead of FreeRTOS tasks — see [Milestone 3 (Pacman Development)](04-Implementation-Phases-and-Milestones.md).
+On the host build these responsibilities run as plain functions/loops driven by the SDL event loop instead of tasks — see [Milestone 3 (Pacman Development)](04-Implementation-Phases-and-Milestones.md).
 
 ## 3.5 Generic Software Module Template (Active Object)
 
-Every module follows the **Active Object** pattern (FR-109), as described by Miro Samek ([state-machine.com/active-object](https://www.state-machine.com/active-object)). An active object bundles four things behind one facade: private data, its own thread of control (one FreeRTOS task), a single inbound event/message queue (its only external input), and a state machine that processes messages.
+Every module follows the **Active Object** pattern (FR-109), per Miro Samek ([state-machine.com/active-object](https://www.state-machine.com/active-object)): a module bundles its private data, its own thread of control, a single inbound message queue (its only external input), and a small state machine that reacts to messages.
 
-Rules the pattern enforces:
+The pattern's rules:
 
-- **No shared data.** A module's state is private to its `.c` file and only ever touched from its own task — so there are no data races and no application-level mutexes.
-- **Asynchronous messaging only.** Modules interact solely by publishing messages (§3.2); a publisher never blocks waiting for a consumer.
-- **Run-to-completion (RTC).** A module processes exactly one message fully before taking the next, so handlers are ordinary single-threaded code.
-- **No blocking in handlers.** The only place a module blocks is its task waiting on its (empty) queue. Anything that would otherwise block is modelled as a future message (timer expiry, DMA-done, a reply topic).
+- **No shared data** — a module's state is private and only touched from its own task, so there are no data races and no application-level locks.
+- **Asynchronous messaging only** — modules interact solely by publishing messages; a publisher never waits for a consumer.
+- **Run-to-completion** — a module fully handles one message before taking the next, so handlers are ordinary sequential code.
+- **No blocking in handlers** — the only place a module waits is on its (empty) input queue; anything else that would block is modelled as a later message (a timer expiry, a done-notification, a reply).
 
-FreeRTOS mapping: one `xTaskCreate` + one `xQueueCreate` per module; the task body blocks on `xQueueReceive`, then dispatches.
-
-```c
-/* --- ao_module.h : the only things the outside world sees --- */
-typedef struct AoModule AoModule;          /* private definition lives in the .c */
-void AoModule_init(AoModule *me);          /* create queue + task, subscribe to topics */
-
-/* --- ao_module.c --- */
-typedef enum { ST_IDLE, ST_ACTIVE } ModuleState;
-
-struct AoModule {
-    TaskHandle_t    task;      /* this AO's thread of control      */
-    mb_subscriber_t sub;       /* this AO's output queue (§3.2)    */
-    ModuleState     state;     /* current-state variable           */
-    /* ...private data owned exclusively by this task...           */
-};
-
-static void AoModule_task(void *arg)
-{
-    AoModule *me = (AoModule *)arg;
-    msg_t m;
-    for (;;) {                                     /* block ONLY here             */
-        if (messagebroker_receive(me->sub, &m, portMAX_DELAY) == MB_OK) {
-            AoModule_dispatch(me, &m);             /* run-to-completion; no block  */
-        }
-    }
-}
-
-static void AoModule_dispatch(AoModule *me, const msg_t *m)
-{
-    switch (me->state) {
-        case ST_IDLE:   /* switch on m->msg_id, update private data, publish outputs */ break;
-        case ST_ACTIVE: /* ... */ break;
-    }
-}
-```
-
-The boilerplate (create queue, task loop, subscribe) can be factored into a tiny reusable base that each concrete module embeds as its first member, so a module only writes its own state enum, private data, and `dispatch()`.
+In shape, every module exposes only an `init` (create its queue, subscribe to its topics, start its task) and is otherwise reached only by sending it a message. The task body is always the same loop: wait for a message, dispatch it to the state machine, repeat. This boilerplate is factored into a reusable base each module builds on.
 
 ## 3.6 Pacman Sub-Application Architecture
 
-The Pacman application (Model/View/Control) runs inside `GameLogicTask` and uses its **own internal message-bus instance** (FR-110), separate from the system bus in §3.2. This keeps game-internal traffic (input → Control → Model → View-snapshot) off the system bus, and lets the whole application run unchanged on the host, where the internal bus is the in-process variant (FR-104).
+The Pacman application runs in the **Game Task** and uses its **own broker instance** — the Pacman broker (FR-110) — separate from the system broker. Only the **Game** module bridges the two: it injects inputs (`MSG_INPUT_DIRECTION`, `MSG_SYSTEM_START_GAME`) inward and forwards results (`MSG_RENDER_FRAME`, `MSG_GAME_SCORE_UPDATED`, `MSG_GAME_OVER`) outward. This keeps game-internal traffic off the system bus and lets the whole application run unchanged on the host (FR-104).
 
-The same fishbone shape applies one level down: the Pacman internal broker is the spine; Model, View and Control are the bones.
+The same sandwich applies one level down — the Pacman broker in the middle, the game modules above and below:
 
 ```mermaid
-flowchart LR
-    CTRL[Control<br/>pure game rules]
-    MODEL[Model<br/>owns game state]
-    VIEW[View<br/>SDL host / LCD target]
-    PBUS{{"PACMAN INTERNAL BUS — the spine<br/>(FR-110)"}}
-    CTRL <--> PBUS
-    MODEL <--> PBUS
-    VIEW <--> PBUS
-    PBUS -->|game-over / score / frame| SYS([system bus, bridged by GameLogicTask])
+flowchart TB
+    GAMEROOT["Game (orchestrator / rules + tick)"]
+    PAC["Pacman"]
+    GH[Ghosts]
+    PBUS{{"Pacman Message Broker"}}
+    PATH["Ghost Path-Planning (library)"]
+    FIELD[Playfield]
+    SCORE[Score]
+    GAMEROOT --> PBUS
+    PAC --> PBUS
+    GH --> PBUS
+    PBUS --> PATH
+    PBUS --> FIELD
+    PBUS --> SCORE
 ```
 
-Only `GameLogicTask` bridges the two buses: it forwards the outward-facing results (`MSG_GAME_STATE_CHANGED`, `MSG_GAME_SCORE_UPDATED`, `MSG_GAME_OVER`) onto the system bus and injects `MSG_INPUT_DIRECTION` / `MSG_SYSTEM_START_GAME` inward.
+**Proposed module set** (built on the Active-Object template, §3.5) — this folds in the modules you listed and adds the ones needed to close the loop:
+
+| Module | Responsibility |
+|---|---|
+| **Game (orchestrator)** | Advances the game tick; runs collision checks (Pacman vs. ghost → caught, or → eaten while frightened); applies power-pellet → frightened mode and its timeout; decides game-over (FR-007) and level-clear (FR-021); assembles the render frame. |
+| **Pacman** | The player character: consumes the current direction intent and moves Pacman along the playfield, eating pellets. |
+| **Ghosts** | The four ghosts: their positions and current mode (chase / scatter / frightened + timer). |
+| **Ghost Path-Planning** | A stateless *library* that, given a ghost, Pacman, and the playfield, returns the ghost's next step — the four distinct behaviors (FR-014) and scatter/chase (FR-015). |
+| **Playfield** | The maze: walls, pellets, power pellets, tunnels; answers "is this cell walkable", removes eaten pellets (FR-011/FR-017), detects an empty maze (FR-021). |
+| **Score** | The running score and the scoring rules (pellet / power-pellet / ghost-eaten values, A-006). |
+| **Agent** | *Interpretation pending — see the question below.* Placeholder for the module you named "Agent". |
+
+**Rendering interface (your question — how the frame gets out):** each tick, the **Game** orchestrator assembles a **render frame** — a compact description of what to draw (Pacman, the four ghosts, remaining pellets, score, current mode) — and publishes it. The Game module forwards it onto the system broker as `MSG_RENDER_FRAME` (§3.3), where the firmware **Render** module draws it to the display. The frame is the single rendering output; the exact hand-off mechanism (copy vs. shared read-only snapshot) is the open [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks) decision.
 
 ## 3.7 On-Target Test (OTT) CLI Framework
 
-FR-106 / FR-107 follow the OTT pattern from the project owner's [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw) (`Test/Target/ott.c`), adapted from that project's SEGGER RTT transport to this project's **STLINK V3 serial console**, and with two corrections applied after verifying the mechanism (see §3.7.2).
+Each testable capability is exposed as its own command on the serial console: a **setup** step validates the command's arguments, and a **run** step performs the action and checks the result. On failure the reason is printed to the console, so **no debugger is needed to read the outcome** (FR-107), and an external Python harness can drive the automatable tests (NFR-104).
 
-Each testable capability gets its own OTT command, `ott <name> <args...>`, implemented as a `<name>_setup()` (argument parsing/validation) and a `<name>_run()` (performs the action and asserts the outcome internally). Because some tests must survive a reset with the peripheral in a known state, the command to run is persisted across a software reset in **retained (`.noinit`) RAM**.
-
-### 3.7.1 Flow
+Some tests need the hardware to start from a clean, known state, so a test request is preserved across a controlled **restart of the microcontroller** and executed on the next start-up. High-level flow:
 
 ```mermaid
 flowchart TD
-    A["Host sends: ott command + args"] --> B["Resolve name to test_id;<br/>run setup_fn to fill params"]
-    B --> C["Write spec {magic, checksum,<br/>test_id, args} into .noinit RAM"]
-    C --> D["Print 'Scheduled [name]';<br/>NVIC_SystemReset()"]
-    D --> E([Reset])
-    E --> F["Startup: copy .data, zero .bss,<br/>LEAVE .noinit untouched"]
-    F --> G{"Spec valid?<br/>magic AND checksum<br/>AND test_id in range"}
-    G -->|no| H["Nominal boot:<br/>app_init, run the game"]
-    G -->|yes| I["Init serial console;<br/>INVALIDATE spec in .noinit"]
-    I --> J["Run run_fn(args)"]
-    J --> K{"Assertions pass?"}
-    K -->|yes| L["Print 'OTT PASSED [name]'"]
-    K -->|no| M["Print 'OTT FAILED [name]: reason'"]
-    L --> N["Return to nominal mode<br/>(optional reset)"]
-    M --> N
+    A["Host sends an OTT command over the serial console"] --> B["Firmware prepares the requested test + parameters"]
+    B --> C["Store the test request in memory that survives a restart"]
+    C --> D["Restart the microcontroller"]
+    D --> E{"A valid test request present after restart?"}
+    E -->|no| F["Start normally and run the game"]
+    E -->|yes| G["Clear the stored request, then run the test"]
+    G --> H["Report PASS or FAIL (with reason) on the serial console"]
+    H --> I["Return to normal operation"]
 ```
 
-### 3.7.2 Verification notes (corrections vs. the naive flow)
+Two things make this robust: the stored request carries an integrity check, so an ordinary power-on is never mistaken for a test request; and the result is reported **before** returning to normal operation, not after. The detailed mechanism — exactly how the request survives a restart, and the verification of this sequence against the reference firmware — is documented separately in [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md).
 
-The mechanism and the proposed reset sequence were verified against the reference firmware and the Cortex-M reset model — the full analysis (SRAM retention across a software reset, the `.noinit` `NOLOAD` linker section, startup handling, and the point-by-point check of the 7-step flow) is in [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md). Two corrections are baked into the flow above:
-
-- **Integrity guard (required).** After a cold/power-on boot, `.noinit` RAM holds garbage. Deciding "run a test" from the `test_id` range alone (as the reference does) can misfire, so this project stores a **magic word + checksum** with the spec and runs a test only if magic *and* checksum *and* range all check out. The spec is **invalidated before the test runs**, so a crash mid-test cannot loop-boot into the same test.
-- **Report over serial, before any reset.** The reference reports only via a debugger breakpoint on failure (success is silent). This project instead prints `OTT PASSED [name]` / `OTT FAILED [name]: reason` **over the STLINK serial console from within the run step** (FR-107), so the Python harness (NFR-104) can parse it with no debugger attached. The post-test reset is optional and only returns the board to nominal mode; it does **not** produce the report.
-
-### 3.7.3 Manual vs. automatic tests
-
-Tests whose pass/fail cannot be determined by firmware alone (e.g. "does the display visibly show X") are still exposed as OTT commands but require a human to confirm — see [06 Verification & Validation](06-Verification-and-Validation.md) for which tests are **Manual, button-confirmed** (display the expected result, then wait for the user button, failing on timeout) versus **Automatic**. An external Python script drives the Automatic subset sequentially over the serial console and collects PASS/FAIL results (NFR-104). Building that script is scoped to [Board Bring-Up](04-Implementation-Phases-and-Milestones.md); it is out of scope for Pre-Planning.
+Tests whose outcome a human must confirm (e.g. "is the pattern visible on the display?") are still commands, but are **button-confirmed**: the firmware shows the expected result and waits for the user button, failing on timeout. See [06 Verification & Validation](06-Verification-and-Validation.md) for which tests are Automatic vs. Manual.

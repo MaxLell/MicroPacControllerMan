@@ -32,13 +32,40 @@ Beyond delivering a playable game, the primary motivation for this project is to
 | NVM (on-chip flash or equivalent) | Output/Input | Persists the single high-score entry across power cycles. |
 | STLINK V3 (on-board) | Output | Debugging (SWD) and serial console (log output) during development. |
 
-## 1.4 Context Diagram
+## 1.4 Context Diagrams
+
+Two views: the physical hardware and the top-level software structure. Design choices such as the RTOS are intentionally left out here — see [03 Architecture](03-Architecture.md).
+
+### 1.4.1 Hardware Block Diagram
+
+Blocks are physical components; each arrow is labelled with the electrical interface.
 
 ```mermaid
 flowchart LR
-    TP["Touchpad Click<br/>MTCH6102 · I2C · slot 2"] -->|touch position| MCU
-    BTN["Nucleo User Button"] -->|game start| MCU
-    MCU["<b>STM32G431RB Nucleo-64</b><br/>+ Click Shield<br/><br/>Firmware: MVP + Pub-Sub<br/>+ FreeRTOS tasks<br/>+ NVM (high score)"]
-    MCU -->|SPI · slot 1| LCD["LCD Mono Click<br/>Sharp LS013B7DH03"]
-    MCU <-->|SWD + serial console| STL["STLINK V3<br/>debug / console"]
+    TP["Touchpad Click<br/>(MTCH6102)"] -->|I2C| MCU["STM32G431RB<br/>Nucleo-64 + Click Shield"]
+    BTN["User Button"] -->|Digital Input| MCU
+    MCU -->|SPI| LCD["LCD Mono Click<br/>(Sharp LS013B7DH03)"]
+    MCU -->|on-chip flash| NVM["NVM<br/>(high-score storage)"]
+    MCU <-->|SWD + Serial| STL["STLINK V3<br/>(debug + console)"]
+```
+
+### 1.4.2 Software Block Diagram
+
+Blocks are the top-level software modules; they communicate only through the message broker (never directly). See [03 Architecture §3.2](03-Architecture.md#32-message-broker) for detail.
+
+```mermaid
+flowchart TB
+    IN[Input]
+    SY[System]
+    GA["Game (Pacman)"]
+    BROKER{{"Message Broker"}}
+    RE[Render]
+    NV[NVM]
+    CO[Console]
+    IN --> BROKER
+    SY --> BROKER
+    GA --> BROKER
+    BROKER --> RE
+    BROKER --> NV
+    BROKER --> CO
 ```

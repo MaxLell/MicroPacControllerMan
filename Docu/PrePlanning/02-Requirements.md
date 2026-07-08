@@ -30,6 +30,7 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
 | FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a side tunnel opening, the system shall re-enter it through the opposite tunnel opening on the same row. |
+| FR-022 | Playfield Size | The maze shall have a fixed, defined grid size that fits within the 128×128 display at a legible tile size. *(exact dimensions to be set during Pacman Development — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
 
 ### 2.1.4 Ghosts
 
@@ -87,6 +88,12 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 |---|---|---|
 | FR-106 | On-Target Test (OTT) Framework | The firmware shall expose each on-target test named in [06 Verification & Validation](06-Verification-and-Validation.md) as an individual command over the serial console CLI, following an OTT pattern: a setup step that parses/validates the command's arguments, and a run step that performs the action and asserts the expected outcome internally. See the [OTT CLI Framework](03-Architecture.md#37-on-target-test-ott-cli-framework) for the mechanism. |
 | FR-107 | OTT Result Reporting | After executing an on-target test, the firmware shall report PASS or FAIL (with reason on failure) to the serial console, without requiring a debugger to be attached. |
+
+### 2.1.10 Error Handling
+
+| Unique-ID | Name | Description |
+|---|---|---|
+| FR-111 | Fatal-Error Halt | When the firmware detects a fatal, unrecoverable error, its error handler shall halt execution at a debugger breakpoint (`bkpt`) so the fault can be inspected. *(minimal handling for now; may be extended in later phases)* |
 
 ## 2.2 Non-Functional Requirements
 
