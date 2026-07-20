@@ -226,6 +226,22 @@ SECTIONS
   PROVIDE( __bss_start = __tbss_start );
   PROVIDE( __bss_size = __bss_end - __bss_start );
 
+  /* =========================================================================
+   * MicroPacControllerMan — retained RAM for the OTT reset flow (doc 09).
+   * NON-GENERATED: re-add this block after any STM32CubeMX code generation, as
+   * CubeMX overwrites this linker script. Placed right after .bss (which the
+   * startup zeroes) and marked NOLOAD, so the startup does NOT clear it and its
+   * contents survive a software reset (NVIC_SystemReset). Backs Bsp/retain_ram.
+   * ========================================================================= */
+  .noinit (NOLOAD) : ALIGN(4)
+  {
+    __noinit_start__ = .;
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
+    __noinit_end__ = .;
+  } >RAM
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack (NOLOAD) :
   {

@@ -1,9 +1,7 @@
 #include "ott_scenarios.h"
 
 #include "ott_blinky.h"
-#include "ott_display.h"
-#include "ott_touchdot.h"
-#include "ott_touchpad.h"
+#include "ott_button.h"
 
 #include <string.h>
 
@@ -11,12 +9,14 @@
  * The OTT test registry. To add a test: create ott_<name>.c/.h with a setup and
  * a run function, then add one row here (and the source to CMakeLists). Nothing
  * else in the OTT core or CLI changes.
+ *
+ * M2 HAL bring-up: `blinky` (LED) and `button` are wired up. The touchpad /
+ * display / touchdot scenarios return here as their drivers are ported onto the
+ * HAL, one commit at a time.
  */
 static const ott_scenario_t k_scenarios[] = {
     {"blinky", ott_blinky_setup, ott_blinky_run},
-    {"touchpad", ott_touchpad_setup, ott_touchpad_run},
-    {"display", ott_display_setup, ott_display_run},
-    {"touchdot", ott_touchdot_setup, ott_touchdot_run},
+    {"button", ott_button_setup, ott_button_run},
 };
 
 unsigned ott_scenarios_count(void)

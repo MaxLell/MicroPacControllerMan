@@ -2,21 +2,18 @@
 
 #include "systick.h"
 
-#include "stm32g4xx.h"
-
-#define BTN_PIN 13U /* PC13 = B1 */
+#include "main.h" /* USER_BUTTON_GPIO_Port / USER_BUTTON_Pin + HAL (CubeMX) */
 
 void button_init(void)
 {
-    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN;
-    GPIOC->MODER &= ~GPIO_MODER_MODE13_Msk; /* input */
-    GPIOC->PUPDR &= ~GPIO_PUPDR_PUPD13_Msk;
-    GPIOC->PUPDR |= (0x1U << GPIO_PUPDR_PUPD13_Pos); /* pull-up: idle high, pressed low */
+    /* PC13 (B1) is configured as an input with pull-up by MX_GPIO_Init(); nothing
+     * to do here. Kept for API symmetry with the other BSP modules. */
 }
 
 int button_pressed(void)
 {
-    return ((GPIOC->IDR >> BTN_PIN) & 1U) == 0U;
+    /* Active-low: idle high (pull-up), pressed pulls the line low. */
+    return (HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_RESET) ? 1 : 0;
 }
 
 int button_wait_press(unsigned timeout_ms)

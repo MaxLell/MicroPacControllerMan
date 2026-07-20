@@ -30,7 +30,7 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"touchpad", "display", "touchdot"}
+INTERACTIVE = {"touchpad", "display", "touchdot", "button"}
 SUITE_AUTOMATIC = ["blinky"]  # enumeration + banner are checked separately below
 
 
@@ -77,6 +77,23 @@ def read_until(fd: int, needles, timeout: float, echo: bool = False) -> "tuple[s
     return None, text
 
 
+def wait_until_idle(fd: int, quiet: float = 0.3, timeout: float = 3.0) -> None:
+    """Wait for the board to finish booting before sending a command.
+
+    The firmware polls the UART with a single-byte RX register and no buffer, so a
+    command sent while the boot banner is still being written (blocking UART TX)
+    overruns that register and characters are silently dropped. We drain and
+    discard boot output until the stream has been silent for `quiet` seconds — by
+    then the board is idle at its prompt and reads every byte we send. `timeout`
+    only caps the wait; an already-idle board returns after one quiet window."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        r, _, _ = select.select([fd], [], [], quiet)
+        if not r:
+            return  # `quiet` seconds elapsed with no bytes -> board is idle
+        os.read(fd, 256)
+
+
 def run_single(port: str, baud: str, test: str, timeout: float) -> int:
     interactive = test in INTERACTIVE
     if timeout is None:
@@ -92,6 +109,8 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
         if interactive:
             print(f"--- {test}: interactive; follow the prompts on the board, "
                   f"press the USER button (B1) to finish ---")
+        # Don't send until the board has finished booting — see wait_until_idle().
+        wait_until_idle(fd)
         os.write(fd, f"ott {test}\r\n".encode())
         match, text = read_until(fd, [passed, failed, unknown], timeout, echo=interactive)
         if match == passed:
