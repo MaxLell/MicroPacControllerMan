@@ -27,13 +27,11 @@ set(CUBE ${CMAKE_SOURCE_DIR}/ThirdParty/STM32_G431RB_HAL)
 add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 
-# --- our firmware: M2 board bring-up, skeleton on HAL (LED / UART / systick +
-# the OTT console with the blinky scenario). Driver modules (spi/i2c/button and
-# the display/gfx/touchpad drivers with their OTT scenarios) are ported to HAL
-# and re-added here one commit at a time. ---
+# --- our firmware: M2 board bring-up on HAL (UART + systick + the OTT console
+# with the button and touchpad scenarios). The display/gfx drivers and their OTT
+# scenarios are ported to HAL and added here next. ---
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
-    Bsp/led/led.c
     Bsp/uart/uart.c
     Bsp/systick/systick.c
     Bsp/button/button.c
@@ -42,7 +40,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Drivers/touchpad/touchpad.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
-    Test/Target/scripts/ott_blinky.c
     Test/Target/scripts/ott_button.c
     Test/Target/scripts/ott_touchpad.c
     ThirdParty/EmbeddedCli/Cli.c)
@@ -52,7 +49,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # (main.h, usart.h); the HAL/CMSIS headers arrive via the stm32cubemx lib below.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
-    Bsp/led
     Bsp/uart
     Bsp/systick
     Bsp/button

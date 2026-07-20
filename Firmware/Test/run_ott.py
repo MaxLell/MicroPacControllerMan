@@ -4,20 +4,19 @@ Drive the On-Target Tests (OTT) over the ST-LINK serial console.
 
 Two ways to use it:
 
-  ./run_ott.py --suite                 # run the AUTOMATIC regression suite
-  ./run_ott.py blinky                  # run one automatic test
+  ./run_ott.py                         # run the AUTOMATIC regression suite (default)
+  ./run_ott.py --suite                 # same, explicitly
   ./run_ott.py touchpad                # run one INTERACTIVE test (streams live,
   ./run_ott.py display                 #   long timeout, you confirm on the board
   ./run_ott.py touchdot                #   and press the USER button to finish)
 
-The automatic suite covers the Board-Bring-Up tests a machine can judge on its own:
+The automatic suite covers the Board-Bring-Up checks a machine can judge on its own:
   VT-INT-001  Power-On & Enumeration   (the VCP device node exists)
   VT-INT-002  Serial Console Output    (`reset` re-emits the known boot banner)
-  VT-INT-005  Blinky                   (`ott blinky` -> OTT PASSED)
 
-The display/touchpad tests (VT-INT-006/007) are interactive by design — the
-firmware renders/prints and waits for you to confirm with the USER button — so
-they are excluded from --suite and streamed live instead.
+The button/display/touchpad tests (VT-INT-006/007) are interactive by design —
+the firmware renders/prints and waits for you to confirm with the USER button —
+so they are excluded from --suite and streamed live instead.
 
 Stdlib only — no pyserial required. Exit 0 = all pass, 1 = fail, 2 = timeout.
 """
@@ -31,7 +30,7 @@ import time
 
 BANNER = "MicroPacControllerMan booted"
 INTERACTIVE = {"touchpad", "display", "touchdot", "button"}
-SUITE_AUTOMATIC = ["blinky"]  # enumeration + banner are checked separately below
+SUITE_AUTOMATIC = []  # no fully-automatic OTT yet; the suite checks enumeration + banner
 
 
 def detect_port() -> str:
@@ -179,7 +178,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (blinky/touchpad/display/touchdot); omit with --suite")
+                    help="test name (button/touchpad/display/touchdot); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")
@@ -191,10 +190,9 @@ def main() -> int:
     if not args.port:
         print(f"(auto-detected serial port: {port})")
 
-    if args.suite:
+    if args.suite or args.test is None:
         return run_suite(port, args.baud)
-    test = args.test or "blinky"
-    return run_single(port, args.baud, test, args.timeout)
+    return run_single(port, args.baud, args.test, args.timeout)
 
 
 if __name__ == "__main__":

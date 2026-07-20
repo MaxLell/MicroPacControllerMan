@@ -1,6 +1,5 @@
 #include "ott_scenarios.h"
 
-#include "ott_blinky.h"
 #include "ott_button.h"
 #include "ott_touchpad.h"
 
@@ -11,12 +10,11 @@
  * a run function, then add one row here (and the source to CMakeLists). Nothing
  * else in the OTT core or CLI changes.
  *
- * M2 HAL bring-up: `blinky` (LED), `button` and `touchpad` (I2C1) are wired up.
- * The display / touchdot scenarios return here once the SPI1 display driver is
- * ported onto the HAL.
+ * M2 HAL bring-up: `button` and `touchpad` (I2C1) are wired up. The display /
+ * touchdot scenarios return here once the SPI1 display driver is ported onto the
+ * HAL. (The blinky/LED test was retired — PA5 is needed as SPI1_SCK.)
  */
 static const ott_scenario_t k_scenarios[] = {
-    {"blinky", ott_blinky_setup, ott_blinky_run},
     {"button", ott_button_setup, ott_button_run},
     {"touchpad", ott_touchpad_setup, ott_touchpad_run},
 };
