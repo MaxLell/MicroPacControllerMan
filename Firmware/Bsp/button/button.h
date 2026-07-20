@@ -2,8 +2,10 @@
 #define BUTTON_H
 
 /*
- * On-board user button B1 = PC13 on the NUCLEO-G431RB (active-low; an internal
- * pull-up is enabled so the idle level is high). Used to confirm/terminate the
+ * On-board user button B1 = PC13 on the NUCLEO-G431RB. On this board B1 is wired
+ * ACTIVE-HIGH (pressing drives PC13 to VDD; measured 3.3 V pressed / ~2.4 V idle
+ * under CubeMX's pull-up), so button_init() reconfigures PC13 with a pull-DOWN
+ * and button_pressed() treats HIGH as pressed. Used to confirm/terminate the
  * manual, button-confirmed OTT scenarios (VT-INT-006/007-style).
  */
 

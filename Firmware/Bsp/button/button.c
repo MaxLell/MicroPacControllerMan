@@ -6,14 +6,22 @@
 
 void button_init(void)
 {
-    /* PC13 (B1) is configured as an input with pull-up by MX_GPIO_Init(); nothing
-     * to do here. Kept for API symmetry with the other BSP modules. */
+    /* On this NUCLEO-G431RB, B1 is wired ACTIVE-HIGH: pressing drives PC13 to
+     * VDD (measured 3.3 V pressed / ~2.4 V idle). CubeMX configures PC13 with a
+     * pull-UP, which — fighting the board's external pull-down — biases the idle
+     * level to ~2.4 V (already above V_IH), so a press cannot be distinguished.
+     * Re-init PC13 with a pull-DOWN here so idle sits cleanly low. */
+    GPIO_InitTypeDef init = {0};
+    init.Pin = USER_BUTTON_Pin;
+    init.Mode = GPIO_MODE_INPUT;
+    init.Pull = GPIO_PULLDOWN;
+    HAL_GPIO_Init(USER_BUTTON_GPIO_Port, &init);
 }
 
 int button_pressed(void)
 {
-    /* Active-low: idle high (pull-up), pressed pulls the line low. */
-    return (HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_RESET) ? 1 : 0;
+    /* Active-high: idle low (pull-down), pressed pulls the line up to VDD. */
+    return (HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_SET) ? 1 : 0;
 }
 
 int button_wait_press(unsigned timeout_ms)
