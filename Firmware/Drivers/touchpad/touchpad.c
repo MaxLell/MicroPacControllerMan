@@ -1,11 +1,9 @@
 #include "touchpad.h"
 
-#include "i2c.h"
+#include "bsp_i2c.h"
 #include "systick.h"
 
-#include "stm32g4xx.h"
-
-#define RST_PIN 4U /* PA4 */
+#include "main.h" /* TOUCH_RST_GPIO_Port / TOUCH_RST_Pin + HAL (from the CubeMX export) */
 
 /* MTCH6102 register map (DS40001750): the touch block auto-increments. */
 #define REG_FW_MAJOR  0x00U
@@ -15,15 +13,12 @@
 
 void touchpad_init(void)
 {
-    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
-
-    /* RST (PA4) as output, driven high to release the controller from reset. */
-    GPIOA->MODER &= ~GPIO_MODER_MODE4_Msk;
-    GPIOA->MODER |= (0x1U << GPIO_MODER_MODE4_Pos);
-    GPIOA->BSRR = (1U << (RST_PIN + 16U)); /* assert reset (low) */
+    /* RST (PA4) is a GPIO output configured by MX_GPIO_Init(). Pulse it low to
+     * assert reset, then release high and let the controller boot. */
+    HAL_GPIO_WritePin(TOUCH_RST_GPIO_Port, TOUCH_RST_Pin, GPIO_PIN_RESET);
     delay_ms(5);
-    GPIOA->BSRR = (1U << RST_PIN); /* release */
-    delay_ms(50);                  /* controller boot time */
+    HAL_GPIO_WritePin(TOUCH_RST_GPIO_Port, TOUCH_RST_Pin, GPIO_PIN_SET);
+    delay_ms(50); /* controller boot time */
 
     i2c_init();
 }

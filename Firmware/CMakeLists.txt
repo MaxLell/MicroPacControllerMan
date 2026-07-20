@@ -37,11 +37,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/uart/uart.c
     Bsp/systick/systick.c
     Bsp/button/button.c
+    Bsp/i2c/bsp_i2c.c
     Bsp/retain_ram/retain_ram.c
+    Drivers/touchpad/touchpad.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_blinky.c
     Test/Target/scripts/ott_button.c
+    Test/Target/scripts/ott_touchpad.c
     ThirdParty/EmbeddedCli/Cli.c)
 
 # One include dir per module folder (headers are included by bare name).
@@ -53,7 +56,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/uart
     Bsp/systick
     Bsp/button
+    Bsp/i2c
     Bsp/retain_ram
+    Drivers/touchpad
     Test/Target
     Test/Target/scripts
     ThirdParty/EmbeddedCli
