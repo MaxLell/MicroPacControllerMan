@@ -20,6 +20,7 @@
 #include "main.h"
 #include "i2c.h"
 #include "usart.h"
+#include "spi.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -90,6 +91,7 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_LPUART1_UART_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   app_main(); /* MicroPacControllerMan firmware entry point; never returns */
   /* USER CODE END 2 */

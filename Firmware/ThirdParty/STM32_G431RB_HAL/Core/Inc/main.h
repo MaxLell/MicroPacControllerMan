@@ -61,8 +61,6 @@ void Error_Handler(void);
 #define USER_BUTTON_GPIO_Port GPIOC
 #define TOUCH_RST_Pin GPIO_PIN_4
 #define TOUCH_RST_GPIO_Port GPIOA
-#define LED_Pin GPIO_PIN_5
-#define LED_GPIO_Port GPIOA
 #define DISPLAY_DISP_Pin GPIO_PIN_6
 #define DISPLAY_DISP_GPIO_Port GPIOA
 #define DISPLAY_EXTCOMIN_Pin GPIO_PIN_10

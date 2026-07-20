@@ -53,9 +53,6 @@ void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, TOUCH_RST_Pin|DISPLAY_DISP_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, DISPLAY_EXTCOMIN_Pin|DISPLAY_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_BUTTON_Pin */
@@ -64,8 +61,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : TOUCH_RST_Pin LED_Pin DISPLAY_DISP_Pin */
-  GPIO_InitStruct.Pin = TOUCH_RST_Pin|LED_Pin|DISPLAY_DISP_Pin;
+  /*Configure GPIO pins : TOUCH_RST_Pin DISPLAY_DISP_Pin */
+  GPIO_InitStruct.Pin = TOUCH_RST_Pin|DISPLAY_DISP_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
