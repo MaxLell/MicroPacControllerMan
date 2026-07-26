@@ -7,12 +7,16 @@
 #include <string.h>
 
 /* mikroBUS slot-1 control pins, configured as GPIO outputs by MX_GPIO_Init.
- * Verified against the LCD Mono Click schematic v100 (R-001):
- *   CS       = PB6  (mikroBUS CS,   DISPLAY_CS)       SCS, active HIGH
- *   DISP     = PA6  (mikroBUS MISO, DISPLAY_DISP)     panel on/off, HIGH = on.
+ * The MikroE Click Shield for Nucleo-64 (MIKROE-5193) mates with the ST-Morpho
+ * headers, NOT the Arduino header — so slot 1 lands on these pins (verified with
+ * a logic analyzer on hardware, R-001 CLOSED):
+ *   CS       = PB12 (mikroBUS CS1,  DISPLAY_CS)       SCS, active HIGH
+ *   DISP     = PB4  (mikroBUS MISO, DISPLAY_DISP)     panel on/off, HIGH = on.
  *                    The LS013B7DH03 is write-only, so the Click reuses the idle
- *                    MISO line for DISP; PA6 is a plain GPIO output, not SPI MISO.
- *   EXTCOMIN = PB10 (mikroBUS PWM,  DISPLAY_EXTCOMIN) external VCOM clock.
+ *                    MISO line for DISP; PB4 is a plain GPIO output, not SPI MISO.
+ *   EXTCOMIN = PC8  (mikroBUS PWM1, DISPLAY_EXTCOMIN) external VCOM clock.
+ * (SPI1 itself is SCK=PB3 / MOSI=PB5, see spi.c. The 3.3V LCD Mono Click needs
+ *  the shield's VLS1 level-select switch set to 3V3.)
  *
  * COM inversion is selected by the Click's JP1 (MODE SEL) jumper; the default
  * (LEFT / EXTMODE=0) = software inversion via the M1 (CMD_VCOM) bit, which this

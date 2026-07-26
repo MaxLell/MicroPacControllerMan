@@ -49,11 +49,15 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, TOUCH_RST_Pin|DISPLAY_DISP_Pin, GPIO_PIN_SET);
+  /*Configure GPIO pin Output Level : TOUCH_RST (PA4) high = release controller */
+  HAL_GPIO_WritePin(TOUCH_RST_GPIO_Port, TOUCH_RST_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, DISPLAY_EXTCOMIN_Pin|DISPLAY_CS_Pin, GPIO_PIN_RESET);
+  /*Configure GPIO pin Output Level : DISPLAY_DISP (PB4) high = panel on */
+  HAL_GPIO_WritePin(DISPLAY_DISP_GPIO_Port, DISPLAY_DISP_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level : DISPLAY_CS (PB12) + EXTCOMIN (PC8) low */
+  HAL_GPIO_WritePin(DISPLAY_CS_GPIO_Port, DISPLAY_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DISPLAY_EXTCOMIN_GPIO_Port, DISPLAY_EXTCOMIN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_BUTTON_Pin */
   GPIO_InitStruct.Pin = USER_BUTTON_Pin;
@@ -61,19 +65,26 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_BUTTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : TOUCH_RST_Pin DISPLAY_DISP_Pin */
-  GPIO_InitStruct.Pin = TOUCH_RST_Pin|DISPLAY_DISP_Pin;
+  /*Configure GPIO pin : TOUCH_RST_Pin (PA4) */
+  GPIO_InitStruct.Pin = TOUCH_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(TOUCH_RST_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : DISPLAY_EXTCOMIN_Pin DISPLAY_CS_Pin */
-  GPIO_InitStruct.Pin = DISPLAY_EXTCOMIN_Pin|DISPLAY_CS_Pin;
+  /*Configure GPIO pins : DISPLAY_DISP_Pin DISPLAY_CS_Pin (PB4, PB12) */
+  GPIO_InitStruct.Pin = DISPLAY_DISP_Pin|DISPLAY_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : DISPLAY_EXTCOMIN_Pin (PC8) */
+  GPIO_InitStruct.Pin = DISPLAY_EXTCOMIN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 }
 

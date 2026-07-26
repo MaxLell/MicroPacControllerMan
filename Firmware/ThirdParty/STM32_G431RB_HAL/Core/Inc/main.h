@@ -61,11 +61,15 @@ void Error_Handler(void);
 #define USER_BUTTON_GPIO_Port GPIOC
 #define TOUCH_RST_Pin GPIO_PIN_4
 #define TOUCH_RST_GPIO_Port GPIOA
-#define DISPLAY_DISP_Pin GPIO_PIN_6
-#define DISPLAY_DISP_GPIO_Port GPIOA
-#define DISPLAY_EXTCOMIN_Pin GPIO_PIN_10
-#define DISPLAY_EXTCOMIN_GPIO_Port GPIOB
-#define DISPLAY_CS_Pin GPIO_PIN_6
+/* Slot-1 control pins for the MikroE Click Shield for Nucleo-64 (MIKROE-5193),
+ * which mates with the ST-Morpho headers — NOT the Arduino header. Slot-1 SPI is
+ * SCK=PB3 / MOSI=PB5 / MISO=PB4 (see spi.c), CS1=PB12, PWM1=PC8. Verified against
+ * the shield schematic v1.01 + UM2505 and confirmed on hardware (R-001 closed). */
+#define DISPLAY_DISP_Pin GPIO_PIN_4      /* PB4 = mikroBUS MISO line = panel DISP */
+#define DISPLAY_DISP_GPIO_Port GPIOB
+#define DISPLAY_EXTCOMIN_Pin GPIO_PIN_8  /* PC8 = mikroBUS PWM1 = EXTCOMIN         */
+#define DISPLAY_EXTCOMIN_GPIO_Port GPIOC
+#define DISPLAY_CS_Pin GPIO_PIN_12       /* PB12 = mikroBUS CS1, active HIGH       */
 #define DISPLAY_CS_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */

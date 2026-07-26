@@ -8,11 +8,12 @@
  * (Bsp/spi). Write-only panel with a RAM framebuffer here; nothing appears until
  * display_flush(). Protocol: mode 0, LSB-first, active-HIGH CS, ~1 MHz.
  *
- * Control lines (LCD Mono Click, mikroBUS slot 1 — R-001, to confirm on hardware):
- *   CS       = PB6  (GPIO, active HIGH)
- *   DISP     = PA6  (GPIO, high = panel on) — the Click routes DISP onto the
- *                    mikroBUS MISO line, so PA6 is used as GPIO, not SPI MISO
- *   EXTCOMIN = PB10 (GPIO, mikroBUS PWM) — external VCOM clock
+ * Control lines (LCD Mono Click, mikroBUS slot 1 via the Click Shield for
+ * Nucleo-64 / ST-Morpho — verified on hardware, R-001 closed):
+ *   CS       = PB12 (GPIO, active HIGH)
+ *   DISP     = PB4  (GPIO, high = panel on) — the Click routes DISP onto the
+ *                    mikroBUS MISO line, so PB4 is used as GPIO, not SPI MISO
+ *   EXTCOMIN = PC8  (GPIO, mikroBUS PWM) — external VCOM clock
  *
  * VCOM/polarity inversion: this driver drives the software VCOM bit on every
  * flush AND toggles the EXTCOMIN pin on display_vcom_tick(), so it works whether
