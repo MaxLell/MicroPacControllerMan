@@ -29,7 +29,7 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"touchpad", "display", "touchdot", "button"}
+INTERACTIVE = {"touchpad", "display", "touchdot", "button", "dispdiag", "lacheck"}
 SUITE_AUTOMATIC = []  # no fully-automatic OTT yet; the suite checks enumeration + banner
 
 
