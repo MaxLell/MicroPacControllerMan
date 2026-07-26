@@ -10,3 +10,7 @@ build/
 
 # CubeMX cache / generation metadata
 .mxproject
+
+# Python harness cache
+__pycache__/
+*.pyc

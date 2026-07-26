@@ -23,13 +23,21 @@ Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 - **M1 Toolchain Bring-Up — done & merged.** Register-level blinky (LD2/PA5) +
   the OTT CLI framework with the retained-RAM/reset flow; `ott blinky`
   (VT-INT-005) passes via the Python harness on real hardware.
-- **M2 Board Bring-Up — next.** Confirm the mikroBUS pin mapping (R-001), bring
-  up display + touchpad, add their OTT scenarios, build out the full harness.
+- **M2 Board Bring-Up — display + touchpad verified on hardware; R-001 closed.**
+  The mikroBUS pin map ([02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001))
+  is HW-confirmed with a logic analyzer: the Click Shield for Nucleo-64 routes
+  slot 1 via the **ST-Morpho** headers, so SPI1 is **SCK=PB3 / MOSI=PB5 /
+  DISP=PB4 / CS=PB12 / EXTCOMIN=PC8** — not the Arduino-header PA5/PA6/PA7, whose
+  mismatch was the blank-display root cause. SPI/I2C/button/systick BSP +
+  display/gfx/touchpad drivers on HAL; `display`, `touchpad`, `button` and the
+  `lacheck` / `dispdiag` diagnostics pass; `run_ott.py` has an automatic suite.
+  Remaining: the `touchdot` (display+touchpad) scenario. On-target checklist in
+  [`Firmware/README.md`](Firmware/README.md#m2-hardware-verification-checklist).
 
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
-# Build (arm-none-eabi-gcc + CMake, vendored CMSIS, no vendor HAL)
+# Build (arm-none-eabi-gcc + CMake; STM32CubeMX + STM32 HAL under ThirdParty — see 11 DEC-012)
 cmake -B build -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.toolchain.cmake
 cmake --build build -j                                   # -> build/pacman.elf, expect LD2 ~1 Hz
 
@@ -51,7 +59,10 @@ After installing openocd, **unplug/replug the board once** so a non-root user ca
   The VCP is on the ST-LINK side, so it **stays enumerated across a target reset** —
   that is what makes the OTT reset flow work on one serial handle.
 - LCD Mono Click (Sharp LS013B7DH03, SPI) in slot 1; Touchpad Click (MTCH6102, I2C)
-  in slot 2 — exact GPIO↔mikroBUS mapping is **still open (R-001)**, first M2 task.
+  in slot 2. The Click Shield for Nucleo-64 mates with the **ST-Morpho** headers,
+  so slot-1 SPI1 = **SCK PB3 / MOSI PB5 / DISP PB4 / CS PB12 / EXTCOMIN PC8**, slot-2
+  I2C1 = **PB8/PB9** (HW-confirmed, R-001 closed — see [02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001)).
+  Set the shield's **VLS switch to 3V3**.
 
 ## Conventions
 

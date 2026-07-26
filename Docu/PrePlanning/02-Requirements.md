@@ -141,8 +141,49 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | CON-001 | Target Hardware | The system shall run on the STM32G431RB Nucleo-64 board. |
 | CON-002 | Display Hardware | The system shall use the LCD Mono Click (Sharp LS013B7DH03, 128×128 monochrome memory LCD) as its display. |
 | CON-003 | Input Hardware | The system shall use the Touchpad Click (Microchip MTCH6102 capacitive touch controller) as its directional input device. |
-| CON-004 | Carrier Hardware | The system shall use the MikroE Click Shield for Nucleo-64 to connect the display (mikroBUS slot 1) and touchpad (mikroBUS slot 2) to the Nucleo board. *(exact pin mapping pending — see [R-001](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
+| CON-004 | Carrier Hardware | The system shall use the MikroE Click Shield for Nucleo-64 to connect the display (mikroBUS slot 1) and touchpad (mikroBUS slot 2) to the Nucleo board. *(pin mapping derived in M2 — see §2.3.3 and [R-001](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
 | CON-005 | Debug Interface | The system shall use the on-board STLINK V3 for debugging (SWD) and serial console output. |
+
+### 2.3.3 mikroBUS ↔ STM32G431 pin mapping (CON-004 / R-001)
+
+**Status: confirmed on hardware (M2, logic analyzer) — [R-001](05-Risks-Assumptions-and-Dependencies.md#51-risks) closed.**
+Originally derived from the Click Shield / Nucleo / Click schematics and the
+LS013B7DH03 / MTCH6102 datasheets, then verified with a Saleae logic analyzer
+(slot 1) and the touchpad running (slot-1 I2C). **Key as-built correction:** the
+MikroE Click Shield for Nucleo-64 (MIKROE-5193) mates with the **ST-Morpho headers
+(CN7/CN10)**, *not* the Arduino header — so slot-1 SPI is on **PB3/PB4/PB5**, not
+the Arduino-SPI PA5/PA6/PA7 that was assumed until the M2 bring-up. The SPI
+(SCK/MISO/MOSI) and I2C (SCL/SDA) buses are shared between both slots; only
+CS / AN / RST / PWM / INT are per-slot. Set the shield's **VLS1/VLS2 level-select
+switch to 3V3** for the 3.3 V Clicks.
+
+**Slot 1 — LCD Mono Click (SPI):**
+
+| Function | mikroBUS | STM32G431 | Peripheral / AF | Notes |
+|---|---|---|---|---|
+| SCK | SCK | PB3 | SPI1_SCK, AF5 | also SWO/TRACESWO (trace unused) |
+| MOSI | MOSI | PB5 | SPI1_MOSI, AF5 | display data (SI) |
+| CS | CS | PB12 | GPIO | **active-HIGH** (Sharp SCS) |
+| DISP | MISO | PB4 | GPIO out | Click routes DISP onto the MISO line; high = panel on |
+| EXTCOMIN | PWM | PC8 | GPIO out | VCOM inversion clock; EXTMODE set by shield jumper |
+
+**Slot 2 — Touchpad Click (I2C):**
+
+| Function | mikroBUS | STM32G431 | Peripheral / AF | Notes |
+|---|---|---|---|---|
+| SCL | SCL | PB8 | I2C1_SCL, AF4 | 100 kHz standard mode |
+| SDA | SDA | PB9 | I2C1_SDA, AF4 | MTCH6102 at 7-bit address 0x25 |
+| RST | RST | PA4 | GPIO out | drive high to release the controller |
+| INT | INT | PB3 | GPIO in | unused — position is polled |
+
+**User button** B1 = **PC13** (active-low), used to confirm the manual OTT scenarios.
+
+Confirmed on hardware (logic analyzer, M2): slot-1 SCK/MOSI/DISP/CS/EXTCOMIN on
+PB3/PB5/PB4/PB12/PC8, the LCD's active-HIGH CS, and DISP on the MISO line; the
+display renders correctly. Slot-2 I2C (PB8/PB9) is confirmed by the touchpad
+running. **Open minor item:** the shield routes slot-2 RST to **PD2**, while the
+firmware currently drives PA4 — the MTCH6102 runs without an explicit reset, so
+this is cosmetic; re-check when convenient.
 
 ### 2.3.2 Software & Toolchain
 

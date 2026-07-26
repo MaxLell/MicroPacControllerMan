@@ -1,29 +1,21 @@
 #include "uart.h"
 
-#include "stm32g4xx.h"
+#include "usart.h" /* hlpuart1 + HAL (from the CubeMX export) */
 
 void uart_init(void)
 {
-    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
-    RCC->APB1ENR2 |= RCC_APB1ENR2_LPUART1EN;
-
-    /* PA2/PA3 -> alternate function (MODER = 10) */
-    GPIOA->MODER &= ~(GPIO_MODER_MODE2_Msk | GPIO_MODER_MODE3_Msk);
-    GPIOA->MODER |= (0x2U << GPIO_MODER_MODE2_Pos) | (0x2U << GPIO_MODER_MODE3_Pos);
-    /* AF12 = LPUART1 on PA2/PA3 (the NUCLEO-G431RB ST-LINK VCP) */
-    GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2_Msk | GPIO_AFRL_AFSEL3_Msk);
-    GPIOA->AFR[0] |= (12U << GPIO_AFRL_AFSEL2_Pos) | (12U << GPIO_AFRL_AFSEL3_Pos);
-
-    /* LPUART baud: BRR = (256 * f_ck) / baud, f_ck = PCLK1 (HSI 16 MHz) */
-    LPUART1->BRR = (uint32_t)(((uint64_t)256U * SystemCoreClock) / 115200U);
-    LPUART1->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
+    /* CubeMX's MX_LPUART1_UART_Init() already brought up PA2/PA3 + LPUART1. The
+     * VCP console contract is fixed at 115200 8N1 (run_ott.py / console.py), so
+     * pin the baud rate here regardless of the .ioc value and re-init. This is
+     * the single source of truth for the console rate and survives a CubeMX
+     * re-generation. */
+    hlpuart1.Init.BaudRate = 115200;
+    HAL_UART_Init(&hlpuart1);
 }
 
 int uart_putc(char c)
 {
-    while (!(LPUART1->ISR & USART_ISR_TXE)) {
-    }
-    LPUART1->TDR = (uint8_t)c;
+    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)&c, 1U, HAL_MAX_DELAY);
     return 0;
 }
 
@@ -36,14 +28,17 @@ void uart_write(const char *s)
 
 int uart_getc(void)
 {
-    if (LPUART1->ISR & USART_ISR_RXNE) {
-        return (int)(LPUART1->RDR & 0xFFU);
+    /* Non-blocking: the FIFO is disabled (CubeMX), so RXNE marks one ready byte.
+     * Reading RDR clears the flag. */
+    if (__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_RXNE)) {
+        return (int)(hlpuart1.Instance->RDR & 0xFFU);
     }
     return -1;
 }
 
 void uart_flush(void)
 {
-    while (!(LPUART1->ISR & USART_ISR_TC)) {
+    /* Block until the last byte has fully left the shift register. */
+    while (!__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_TC)) {
     }
 }
