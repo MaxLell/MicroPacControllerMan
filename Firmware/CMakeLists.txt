@@ -46,6 +46,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/scripts/ott_button.c
     Test/Target/scripts/ott_touchpad.c
     Test/Target/scripts/ott_display.c
+    Test/Target/scripts/ott_touchdot.c
     Test/Target/scripts/ott_dispdiag.c
     Test/Target/scripts/ott_lacheck.c
     ThirdParty/EmbeddedCli/Cli.c)

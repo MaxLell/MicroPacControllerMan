@@ -15,6 +15,13 @@
 #define TOUCHDOT_MAX_MS (120000U)
 #define FRAME_PERIOD_MS (40U)
 
+/* Touchpad-to-panel orientation (confirmed on hardware): the pad is mirrored on
+ * both axes relative to the panel, so invert X and Y. Flip these if the dot ever
+ * tracks the wrong way — SWAP_XY exchanges the axes, INVERT_* mirror one. */
+#define TD_SWAP_XY  0
+#define TD_INVERT_X 1
+#define TD_INVERT_Y 1
+
 int ott_touchdot_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size)
 {
     (void)argc;
@@ -73,6 +80,19 @@ int ott_touchdot_run(const uint8_t* data, uint32_t data_size, char* reason, unsi
              * flip once confirmed on hardware (noted in the M2 docs). */
             int sx = (int)((uint32_t)x * (W - 1) / TOUCHPAD_X_MAX);
             int sy = (int)((uint32_t)y * (H - 1) / TOUCHPAD_Y_MAX);
+#if TD_SWAP_XY
+            {
+                int t = sx;
+                sx = sy;
+                sy = t;
+            }
+#endif
+#if TD_INVERT_X
+            sx = (W - 1) - sx;
+#endif
+#if TD_INVERT_Y
+            sy = (H - 1) - sy;
+#endif
             gfx_fill_circle(sx, sy, DOT_R, DISPLAY_BLACK);
             gfx_hline(0, sy, W, DISPLAY_BLACK);
             gfx_vline(sx, 0, H, DISPLAY_BLACK);

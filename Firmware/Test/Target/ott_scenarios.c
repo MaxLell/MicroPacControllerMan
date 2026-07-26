@@ -4,6 +4,7 @@
 #include "ott_dispdiag.h"
 #include "ott_display.h"
 #include "ott_lacheck.h"
+#include "ott_touchdot.h"
 #include "ott_touchpad.h"
 
 #include <string.h>
@@ -13,14 +14,15 @@
  * a run function, then add one row here (and the source to CMakeLists). Nothing
  * else in the OTT core or CLI changes.
  *
- * M2 HAL bring-up: `button`, `touchpad` (I2C1) and `display` (SPI1) are wired up.
- * `touchdot` (combined touchpad + display) returns here next. (The blinky/LED
- * test was retired — PA5 is now SPI1_SCK.)
+ * M2 HAL bring-up: `button`, `touchpad` (I2C1), `display` (SPI1) and `touchdot`
+ * (combined touchpad + display) are wired up, plus the `lacheck`/`dispdiag`
+ * logic-analyzer diagnostics. (The blinky/LED test was retired — SPI1_SCK is PB3.)
  */
 static const ott_scenario_t k_scenarios[] = {
     {"button", ott_button_setup, ott_button_run},
     {"touchpad", ott_touchpad_setup, ott_touchpad_run},
     {"display", ott_display_setup, ott_display_run},
+    {"touchdot", ott_touchdot_setup, ott_touchdot_run},
     {"dispdiag", ott_dispdiag_setup, ott_dispdiag_run},
     {"lacheck", ott_lacheck_setup, ott_lacheck_run},
 };

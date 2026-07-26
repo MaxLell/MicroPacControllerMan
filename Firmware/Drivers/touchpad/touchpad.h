@@ -8,8 +8,10 @@
  * (Bsp/i2c), mikroBUS slot 2. The controller boots in Full mode with the default
  * 9x6 channel map, so raw X/Y position is available with no configuration writes.
  *
- * Pins (R-001, derived; to confirm on hardware): SCL=PB8, SDA=PB9, RST=PA4
- * (GPIO, driven high to release reset). INT=PB3 is left unused (position is polled).
+ * Pins (Click Shield for Nucleo-64 / ST-Morpho, HW-confirmed): SCL=PB8, SDA=PB9.
+ * RST is driven high on PA4; the shield actually routes slot-2 RST to PD2, but the
+ * MTCH6102 boots without an explicit reset so this is cosmetic. INT (shield PC9)
+ * is left unused — position is polled. (Do NOT confuse with PB3, now SPI1_SCK.)
  *
  * Coordinates are the controller's raw decoded position: X in 0..TOUCHPAD_X_MAX,
  * Y in 0..TOUCHPAD_Y_MAX. This is what FR-004's 4-quadrant control maps from.
