@@ -37,7 +37,7 @@ Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
-# Build (arm-none-eabi-gcc + CMake, vendored CMSIS, no vendor HAL)
+# Build (arm-none-eabi-gcc + CMake; STM32CubeMX + STM32 HAL under ThirdParty — see 11 DEC-012)
 cmake -B build -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.toolchain.cmake
 cmake --build build -j                                   # -> build/pacman.elf, expect LD2 ~1 Hz
 
