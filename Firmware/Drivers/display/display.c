@@ -1,15 +1,24 @@
 #include "display.h"
 
-#include "spi.h"
+#include "bsp_spi.h"
 
-#include "stm32g4xx.h"
+#include "main.h" /* DISPLAY_CS/DISP/EXTCOMIN pin macros + HAL (from the CubeMX export) */
 
 #include <string.h>
 
-/* mikroBUS slot-1 control pins (see display.h / R-001). */
-#define CS_PIN       6U  /* PB6  */
-#define DISP_PIN     6U  /* PA6  */
-#define EXTCOMIN_PIN 10U /* PB10 */
+/* mikroBUS slot-1 control pins, configured as GPIO outputs by MX_GPIO_Init.
+ * Verified against the LCD Mono Click schematic v100 (R-001):
+ *   CS       = PB6  (mikroBUS CS,   DISPLAY_CS)       SCS, active HIGH
+ *   DISP     = PA6  (mikroBUS MISO, DISPLAY_DISP)     panel on/off, HIGH = on.
+ *                    The LS013B7DH03 is write-only, so the Click reuses the idle
+ *                    MISO line for DISP; PA6 is a plain GPIO output, not SPI MISO.
+ *   EXTCOMIN = PB10 (mikroBUS PWM,  DISPLAY_EXTCOMIN) external VCOM clock.
+ *
+ * COM inversion is selected by the Click's JP1 (MODE SEL) jumper; the default
+ * (LEFT / EXTMODE=0) = software inversion via the M1 (CMD_VCOM) bit, which this
+ * driver sets on every flush. EXTCOMIN is a don't-care in that mode; we also
+ * toggle it in display_vcom_tick() so a JP1=RIGHT (external VCOM) board works too.
+ */
 
 /* LS013B7DH03 mode-byte bits, in LSB-first wire order (matches the SPI setup). */
 #define CMD_WRITE 0x01U /* M0: data update / write line(s) */
@@ -23,11 +32,7 @@ static uint8_t g_vcom; /* toggles each flush/tick to keep COM inversion alive */
 
 static void prv_cs(int high)
 {
-    if (high) {
-        GPIOB->BSRR = (1U << CS_PIN);
-    } else {
-        GPIOB->BSRR = (1U << (CS_PIN + 16U));
-    }
+    HAL_GPIO_WritePin(DISPLAY_CS_GPIO_Port, DISPLAY_CS_Pin, high ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 /* A few microseconds of settle around CS (LS013B7DH03 tsSCS/thSCS >= ~6/2 us). */
@@ -39,27 +44,17 @@ static void prv_cs_settle(void)
 
 void display_on(int on)
 {
-    if (on) {
-        GPIOA->BSRR = (1U << DISP_PIN);
-    } else {
-        GPIOA->BSRR = (1U << (DISP_PIN + 16U));
-    }
+    HAL_GPIO_WritePin(DISPLAY_DISP_GPIO_Port, DISPLAY_DISP_Pin, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 void display_init(void)
 {
     spi_init();
 
-    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN | RCC_AHB2ENR_GPIOBEN;
-
-    /* CS (PB6) and EXTCOMIN (PB10) as outputs, start low. */
-    GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk | GPIO_MODER_MODE10_Msk);
-    GPIOB->MODER |= (0x1U << GPIO_MODER_MODE6_Pos) | (0x1U << GPIO_MODER_MODE10_Pos);
-    GPIOB->BSRR = (1U << (CS_PIN + 16U)) | (1U << (EXTCOMIN_PIN + 16U));
-
-    /* DISP (PA6) as output, start high (panel on). */
-    GPIOA->MODER &= ~GPIO_MODER_MODE6_Msk;
-    GPIOA->MODER |= (0x1U << GPIO_MODER_MODE6_Pos);
+    /* CS/DISP/EXTCOMIN are already GPIO outputs (MX_GPIO_Init); just set the
+     * working start state: CS + EXTCOMIN low, DISP high (panel on). */
+    prv_cs(0);
+    HAL_GPIO_WritePin(DISPLAY_EXTCOMIN_GPIO_Port, DISPLAY_EXTCOMIN_Pin, GPIO_PIN_RESET);
     display_on(1);
 
     g_vcom = 0;
@@ -133,5 +128,5 @@ void display_vcom_tick(void)
     prv_cs(0);
 
     /* External VCOM: also pulse EXTCOMIN, so either EXTMODE jumper setting works. */
-    GPIOB->ODR ^= (1U << EXTCOMIN_PIN);
+    HAL_GPIO_TogglePin(DISPLAY_EXTCOMIN_GPIO_Port, DISPLAY_EXTCOMIN_Pin);
 }
