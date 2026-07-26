@@ -34,12 +34,12 @@ ott touchdot    # a dot on the LCD follows your finger — confirms display + to
 ```
 
 All three are **interactive**: they run until you press the USER button (B1),
-with a 120 s safety cap. The pin map is *derived from documentation* and recorded
-in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001);
-it is **pending hardware confirmation** (R-001). Key facts: LCD CS is **active-high**,
-DISP is on the mikroBUS MISO line (PA6), PA5 is shared by SPI1-SCK and LD2, the
-MTCH6102 is at I2C address **0x25** on PB8/PB9, and the LCD Mono Click's **EXTMODE
-jumper (JP1)** should select software VCOM (EXTMODE=low).
+with a 120 s safety cap. The pin map is **HW-confirmed** (logic analyzer, R-001
+closed) and recorded in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
+Key facts: the Click Shield for Nucleo-64 mates with the **ST-Morpho** headers, so
+slot-1 SPI1 = **SCK PB3 / MOSI PB5 / DISP PB4 (MISO line) / CS PB12 (active-high) /
+EXTCOMIN PC8**; the MTCH6102 is at I2C address **0x25** on PB8/PB9; set the shield's
+**VLS switch to 3V3**; the LCD's EXTMODE selects software VCOM (EXTMODE=low).
 
 ### M2 hardware-verification checklist
 
@@ -51,7 +51,7 @@ the same thing spelled out.
 Run on the physical board to close M2 (R-001 / VT-INT-003/004/006/007):
 
 1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
-2. **Continuity check (VT-INT-003/004):** confirm the derived pins in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001) — especially SCL/SDA=PB8/PB9, the active-high CS lines, and DISP on MISO. Correct the driver pin macros if any differ, then rebuild.
+2. **Pin map (VT-INT-003/004): DONE** — confirmed on hardware with a logic analyzer (R-001 closed). Slot-1 SPI1 = PB3/PB5/PB4/PB12/PC8, slot-2 I2C1 = PB8/PB9; see [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001). The `lacheck` OTT re-verifies wiring via per-pin fingerprints if you ever need to re-check.
 3. **Build & flash**, then `python3 Test/run_ott.py --suite` — expect PASS for enumeration, banner, blinky.
 4. **`python3 Test/run_ott.py display`** — watch the geometric patterns cycle on the LCD; press B1. If blank, see [doc 08 §8.4](../Docu/PrePlanning/08-Troubleshooting-Guide.md).
 5. **`python3 Test/run_ott.py touchpad`** — move your finger; the streamed x/y should track it; press B1. "not responding" → check the I2C map / RST.
