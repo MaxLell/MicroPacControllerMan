@@ -279,8 +279,9 @@ void test_pacman_travels_through_a_tunnel(void)
 
 void test_pacman_escapes_his_start_pocket(void)
 {
-    /* §10.2 promises the start pocket is not a trap. In the reference maze the only exit
-     * is the vertical tunnel, so this also exercises FR-012 from a real position. */
+    /* §10.2 promises the start pocket is not a trap. In the reference maze it opens both
+     * north and south, the southern one being the vertical tunnel — so this also
+     * exercises FR-012 from a real position. */
     pacman_set_intent(&g_pacman, DIRECTION_SOUTH);
 
     TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
