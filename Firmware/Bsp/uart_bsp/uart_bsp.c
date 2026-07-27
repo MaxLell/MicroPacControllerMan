@@ -1,44 +1,79 @@
-#include "uart.h"
+#include "uart_bsp.h"
 
-#include "usart.h" /* hlpuart1 + HAL (from the CubeMX export) */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-void uart_init(void)
+#include "custom_assert.h"
+#include "usart.h"
+
+/* ==========================================================================
+ * uart_bsp - private
+ * ========================================================================= */
+
+/* The console instance. LPUART1 (PA2/PA3) is the NUCLEO-G431RB ST-LINK virtual
+ * COM port; the handle itself is brought up by the CubeMX MX_LPUART1_UART_Init().
+ * Point this at another handle to move the console. */
+#define UART_BSP_HANDLE (hlpuart1)
+
+/* The console contract the host tools rely on (Test/run_ott.py, Test/console.py)
+ * is 115200 8N1. Pinning the rate here rather than in the .ioc makes this the
+ * single source of truth and survives a CubeMX re-generation. */
+#define UART_BSP_BAUD_RATE (115200U)
+
+#define UART_BSP_TRANSFER_SIZE_ONE_CHARACTER (1U)
+#define UART_BSP_RECEIVED_DATA_MASK (0xFFU)
+
+/* ==========================================================================
+ * uart_bsp - public
+ * ========================================================================= */
+
+void uart_bsp_init(void)
 {
-    /* CubeMX's MX_LPUART1_UART_Init() already brought up PA2/PA3 + LPUART1. The
-     * VCP console contract is fixed at 115200 8N1 (run_ott.py / console.py), so
-     * pin the baud rate here regardless of the .ioc value and re-init. This is
-     * the single source of truth for the console rate and survives a CubeMX
-     * re-generation. */
-    hlpuart1.Init.BaudRate = 115200;
-    HAL_UART_Init(&hlpuart1);
+    HAL_StatusTypeDef status;
+
+    UART_BSP_HANDLE.Init.BaudRate = UART_BSP_BAUD_RATE;
+
+    status = HAL_UART_Init(&UART_BSP_HANDLE);
+
+    ASSERT(status == HAL_OK);
 }
 
-int uart_putc(char c)
+void uart_bsp_write_character(char in_character)
 {
-    HAL_UART_Transmit(&hlpuart1, (const uint8_t *)&c, 1U, HAL_MAX_DELAY);
-    return 0;
+    (void)HAL_UART_Transmit(&UART_BSP_HANDLE, (const uint8_t*)&in_character,
+                            UART_BSP_TRANSFER_SIZE_ONE_CHARACTER, HAL_MAX_DELAY);
 }
 
-void uart_write(const char *s)
+void uart_bsp_write_string(const char* const in_string)
 {
-    while (*s) {
-        uart_putc(*s++);
+    ASSERT(in_string != NULL);
+
+    for (size_t index = 0U; in_string[index] != '\0'; ++index)
+    {
+        uart_bsp_write_character(in_string[index]);
     }
 }
 
-int uart_getc(void)
+bool uart_bsp_read_character(char* out_character)
 {
-    /* Non-blocking: the FIFO is disabled (CubeMX), so RXNE marks one ready byte.
-     * Reading RDR clears the flag. */
-    if (__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_RXNE)) {
-        return (int)(hlpuart1.Instance->RDR & 0xFFU);
+    ASSERT(out_character != NULL);
+
+    /* The RX FIFO is disabled, so RXNE marks exactly one ready character and
+     * reading RDR clears the flag. The HAL has no non-blocking single-character
+     * read, so this is the one place where a peripheral register is touched
+     * directly — HAL_UART_Receive() would block or leave an error state behind. */
+    if (!__HAL_UART_GET_FLAG(&UART_BSP_HANDLE, UART_FLAG_RXNE))
+    {
+        return false;
     }
-    return -1;
+
+    *out_character = (char)(UART_BSP_HANDLE.Instance->RDR & UART_BSP_RECEIVED_DATA_MASK);
+
+    return true;
 }
 
-void uart_flush(void)
+void uart_bsp_flush(void)
 {
-    /* Block until the last byte has fully left the shift register. */
-    while (!__HAL_UART_GET_FLAG(&hlpuart1, UART_FLAG_TC)) {
-    }
+    while (!__HAL_UART_GET_FLAG(&UART_BSP_HANDLE, UART_FLAG_TC)) {}
 }

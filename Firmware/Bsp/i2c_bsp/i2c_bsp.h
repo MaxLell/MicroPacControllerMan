@@ -1,35 +1,82 @@
-#ifndef BSP_I2C_H
-#define BSP_I2C_H
+/*
+ * i2c_bsp.h
+ *
+ * Blocking I2C master transport. Device-agnostic: callers pass a 7-bit device
+ * address, every call has a bounded timeout, and a missing or miswired device
+ * reports an error instead of hanging. The I2C instance is a single #define in
+ * i2c_bsp.c.
+ */
+
+#ifndef I2C_BSP_H
+#define I2C_BSP_H
 
 #include <stddef.h>
 #include <stdint.h>
 
-/*
- * I2C1 transport for mikroBUS slot 2 (Touchpad Click, MTCH6102).
+/* ==========================================================================
+ * i2c_bsp - public types
+ * ========================================================================= */
+
+/*! \brief Width of a device's internal memory-address pointer, in bytes. */
+#define I2C_BSP_MEMORY_ADDRESS_WIDTH_8_BIT (1U)
+#define I2C_BSP_MEMORY_ADDRESS_WIDTH_16_BIT (2U)
+
+typedef enum
+{
+    I2C_BSP_STATUS_OK = 0,                      /*!< Transfer completed                       */
+    I2C_BSP_STATUS_ERROR_NOT_ACKNOWLEDGED,      /*!< Device did not acknowledge (absent?)     */
+    I2C_BSP_STATUS_ERROR_TIMEOUT,               /*!< Bus did not complete within the timeout  */
+    I2C_BSP_STATUS_ERROR_UNSUPPORTED_WIDTH      /*!< Memory-address width is not supported    */
+} i2c_bsp_status_e;
+
+/* ==========================================================================
+ * i2c_bsp - public API
+ * ========================================================================= */
+
+/*! \brief Initialize the I2C transport.
  *
- * Thin wrapper over the STM32 HAL I2C1 instance (hi2c1, brought up by the CubeMX
- * MX_I2C1_Init on PB8=SCL / PB9=SDA). Named bsp_i2c to avoid a clash with the
- * CubeMX-generated Core/Inc/i2c.h on the include path.
- *
- * All calls take a 7-bit address, are blocking with a bounded timeout, and return
- * 0 on success or a negative code on NACK/timeout — so a missing/miswired device
- * fails cleanly instead of hanging (important for the OTT reports).
+ * The peripheral itself is brought up by the CubeMX MX_I2C1_Init() before
+ * app_main(), so this only resets the module state.
  */
+void i2c_bsp_init(void);
 
-#define I2C_OK        (0)
-#define I2C_ERR_NACK  (-1)
-#define I2C_ERR_TIMEOUT (-2)
+/*! \brief Write a byte sequence to a device.
+ *
+ * \param[in]       in_device_address: 7-bit device address
+ * \param[in]       in_data: bytes to send, must not be `NULL`
+ * \param[in]       in_length: number of bytes in `in_data`, at least `1`
+ * \return          \ref I2C_BSP_STATUS_OK on success, member of
+ *                      \ref i2c_bsp_status_e otherwise
+ */
+i2c_bsp_status_e i2c_bsp_write(uint8_t in_device_address, const uint8_t* const in_data,
+                               size_t in_length);
 
-void i2c_init(void);
+/*! \brief Read a byte sequence from a device.
+ *
+ * \param[in]       in_device_address: 7-bit device address
+ * \param[out]      out_data: receives the bytes, must not be `NULL`
+ * \param[in]       in_length: number of bytes to read, at least `1`
+ * \return          \ref I2C_BSP_STATUS_OK on success, member of
+ *                      \ref i2c_bsp_status_e otherwise
+ */
+i2c_bsp_status_e i2c_bsp_read(uint8_t in_device_address, uint8_t* const out_data, size_t in_length);
 
-/* Write len bytes to addr7. */
-int i2c_write(uint8_t addr7, const uint8_t* data, size_t len);
+/*! \brief Read from a device's internal memory.
+ *
+ * Writes the memory address, then reads `in_length` bytes after a repeated START
+ * — the usual register-read sequence of an I2C peripheral chip.
+ *
+ * \param[in]       in_device_address: 7-bit device address
+ * \param[in]       in_memory_address: address inside the device to read from
+ * \param[in]       in_memory_address_width: \ref I2C_BSP_MEMORY_ADDRESS_WIDTH_8_BIT
+ *                      or \ref I2C_BSP_MEMORY_ADDRESS_WIDTH_16_BIT
+ * \param[out]      out_data: receives the bytes, must not be `NULL`
+ * \param[in]       in_length: number of bytes to read, at least `1`
+ * \return          \ref I2C_BSP_STATUS_OK on success, member of
+ *                      \ref i2c_bsp_status_e otherwise
+ */
+i2c_bsp_status_e i2c_bsp_read_memory(uint8_t in_device_address, uint16_t in_memory_address,
+                                     size_t in_memory_address_width, uint8_t* const out_data,
+                                     size_t in_length);
 
-/* Read len bytes from addr7. */
-int i2c_read(uint8_t addr7, uint8_t* data, size_t len);
-
-/* Write wlen bytes (a 1- or 2-byte register pointer) then repeated-START read
- * rlen bytes. */
-int i2c_write_read(uint8_t addr7, const uint8_t* wr, size_t wlen, uint8_t* rd, size_t rlen);
-
-#endif /* BSP_I2C_H */
+#endif /* I2C_BSP_H */

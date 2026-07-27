@@ -1,25 +1,54 @@
-#include "systick.h"
+#include "systick_bsp.h"
 
-#include "main.h" /* HAL_GetTick / HAL_Delay (from the CubeMX export) */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-/*
- * Thin shim over the HAL time base. HAL owns the 1 kHz SysTick: it is started by
- * HAL_Init() and re-based by SystemClock_Config(), and its SysTick_Handler (which
- * calls HAL_IncTick()) lives in the generated stm32g4xx_it.c — so this module
- * must NOT define its own handler or counter.
- */
+#include "custom_assert.h"
+#include "main.h"
 
-void systick_init(void)
+/* ==========================================================================
+ * systick_bsp - private
+ * ========================================================================= */
+
+static systick_bsp_tick_callback_fn volatile g_tick_callback_fn = NULL;
+static bool g_is_initialized = false;
+
+/* ==========================================================================
+ * systick_bsp - public
+ * ========================================================================= */
+
+void systick_bsp_init(void)
 {
-    /* SysTick is configured by HAL_Init() / SystemClock_Config(); nothing to do. */
+    ASSERT(false == g_is_initialized);
+
+    g_tick_callback_fn = NULL;
+    g_is_initialized = true;
 }
 
-uint32_t millis(void)
+uint32_t systick_bsp_get_tick(void)
 {
     return HAL_GetTick();
 }
 
-void delay_ms(uint32_t ms)
+void systick_bsp_register_tick_callback(systick_bsp_tick_callback_fn in_callback_fn)
 {
-    HAL_Delay(ms);
+    ASSERT(g_is_initialized);
+    ASSERT(in_callback_fn != NULL);
+    ASSERT(g_tick_callback_fn == NULL);
+
+    g_tick_callback_fn = in_callback_fn;
+}
+
+/* Strong override of the HAL's __weak HAL_IncTick(), the documented extension
+ * point for the 1 ms tick. Hooking in here keeps the CubeMX-generated
+ * stm32g4xx_it.c untouched, so a re-generation cannot silently drop the hook. */
+void HAL_IncTick(void)
+{
+    uwTick += uwTickFreq;
+
+    if (g_tick_callback_fn != NULL)
+    {
+        g_tick_callback_fn();
+    }
 }

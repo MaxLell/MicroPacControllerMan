@@ -1,22 +1,49 @@
-#include "bsp_spi.h"
+#include "spi_bsp.h"
 
-#include "main.h" /* HAL types (from the CubeMX export) */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-/* Defined in the CubeMX-generated spi.c (same name as our BSP header, so we
- * reference the handle by extern rather than including the generated spi.h). */
-extern SPI_HandleTypeDef hspi1;
+#include "custom_assert.h"
+#include "spi.h"
 
-/* Generous vs. a 128-byte line at ~0.66 MHz (~1.6 ms), but bounded so a stuck
- * bus is reported rather than hanging. */
-#define SPI_TIMEOUT_MS (100U)
+/* ==========================================================================
+ * spi_bsp - private
+ * ========================================================================= */
 
-void spi_init(void)
+/* The bus instance. SPI1 serves mikroBUS slot 1 as SCK=PB3 / MOSI=PB5 (AF5),
+ * transmit-only master, mode 0, 8-bit, LSB-first, ~0.66 MHz. The handle is
+ * brought up by the CubeMX MX_SPI1_Init(). MISO is deliberately absent: the LCD
+ * Mono Click repurposes that mikroBUS line as the panel's DISP control, which is
+ * a plain digital output (see dio_bsp). */
+#define SPI_BSP_HANDLE (hspi1)
+
+/* Generous for a 128-byte display line at ~0.66 MHz (~1.6 ms), but bounded so a
+ * stuck bus is reported rather than hanging a test. */
+#define SPI_BSP_TIMEOUT_MS (100U)
+
+#define SPI_BSP_LENGTH_MAX (UINT16_MAX)
+
+static bool g_is_initialized = false;
+
+/* ==========================================================================
+ * spi_bsp - public
+ * ========================================================================= */
+
+void spi_bsp_init(void)
 {
-    /* SPI1 (PA5=SCK / PA7=MOSI) is brought up by MX_SPI1_Init(); nothing to do. */
+    ASSERT(false == g_is_initialized);
+
+    g_is_initialized = true;
 }
 
-void spi_write(const uint8_t* data, size_t len)
+void spi_bsp_write(const uint8_t* const in_data, size_t in_length)
 {
-    /* Blocking, transmit-only; HAL waits for the transfer (and BSY) to finish. */
-    HAL_SPI_Transmit(&hspi1, (uint8_t*)data, (uint16_t)len, SPI_TIMEOUT_MS);
+    ASSERT(g_is_initialized);
+    ASSERT(in_data != NULL);
+    ASSERT(in_length > 0U);
+    ASSERT(in_length <= SPI_BSP_LENGTH_MAX);
+
+    (void)HAL_SPI_Transmit(&SPI_BSP_HANDLE, (uint8_t*)in_data, (uint16_t)in_length,
+                           SPI_BSP_TIMEOUT_MS);
 }

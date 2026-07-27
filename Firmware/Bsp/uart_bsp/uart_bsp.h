@@ -1,11 +1,47 @@
-#ifndef UART_H
-#define UART_H
+/*
+ * uart_bsp.h
+ *
+ * Blocking serial console transport. The UART instance and the line settings are
+ * a single #define in uart_bsp.c, so the module moves to another project by
+ * changing that one line.
+ */
 
-/* Serial console on LPUART1 (PA2/PA3, AF12) = NUCLEO-G431RB ST-LINK VCP, 115200 8N1. */
-void uart_init(void);
-void uart_write(const char *s);
-int  uart_putc(char c); /* write one byte (blocking); returns 0 */
-int  uart_getc(void);   /* next received byte, or -1 if none available (non-blocking) */
-void uart_flush(void);  /* block until the last byte has left the shift register */
+#ifndef UART_BSP_H
+#define UART_BSP_H
 
-#endif /* UART_H */
+#include <stdbool.h>
+
+/* ==========================================================================
+ * uart_bsp - public API
+ * ========================================================================= */
+
+/*! \brief Bring the console UART up at the fixed console line rate. */
+void uart_bsp_init(void);
+
+/*! \brief Write one character, blocking until the UART has accepted it.
+ *
+ * \param[in]       in_character: character to send
+ */
+void uart_bsp_write_character(char in_character);
+
+/*! \brief Write a NUL-terminated string, blocking until the last character has
+ *         been accepted by the UART.
+ *
+ * \param[in]       in_string: string to send, must not be `NULL`
+ */
+void uart_bsp_write_string(const char* const in_string);
+
+/*! \brief Read one received character without blocking.
+ *
+ * \param[out]      out_character: receives the character when one was available
+ * \return          `true` when a character was read, `false` when none was ready
+ */
+bool uart_bsp_read_character(char* out_character);
+
+/*! \brief Block until the last character has fully left the shift register.
+ *
+ * Needed before a deliberate reset, so a final message is not truncated.
+ */
+void uart_bsp_flush(void);
+
+#endif /* UART_BSP_H */
