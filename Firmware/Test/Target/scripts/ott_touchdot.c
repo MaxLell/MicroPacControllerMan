@@ -1,110 +1,173 @@
 #include "ott_touchdot.h"
 
-#include "button.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+
 #include "display.h"
 #include "gfx.h"
-#include "systick.h"
+#include "sw_timer.h"
 #include "touchpad.h"
-#include "uart.h"
+#include "uart_bsp.h"
+#include "user_button.h"
 
-#include <string.h>
+/* ==========================================================================
+ * ott_touchdot - private
+ * ========================================================================= */
 
-#define W DISPLAY_WIDTH
-#define H DISPLAY_HEIGHT
-#define DOT_R 5
-#define TOUCHDOT_MAX_MS (120000U)
-#define FRAME_PERIOD_MS (40U)
+#define OTT_TOUCHDOT_DOT_RADIUS (5)
+#define OTT_TOUCHDOT_FRAME_PERIOD_MS (40U)
 
-/* Touchpad-to-panel orientation (confirmed on hardware): the pad is mirrored on
- * both axes relative to the panel, so invert X and Y. Flip these if the dot ever
- * tracks the wrong way — SWAP_XY exchanges the axes, INVERT_* mirror one. */
-#define TD_SWAP_XY  0
-#define TD_INVERT_X 1
-#define TD_INVERT_Y 1
+/* Safety cap, so the board returns to nominal mode even if the operator walks
+ * away without confirming. */
+#define OTT_TOUCHDOT_TIMEOUT_MS (120000U)
 
-int ott_touchdot_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size)
+/* Pad-to-panel orientation, confirmed on hardware: the pad is mirrored on both
+ * axes relative to the panel. Flip these if the dot ever tracks the wrong way —
+ * SWAP exchanges the axes, the INVERT flags mirror one axis each. */
+#define OTT_TOUCHDOT_SWAP_AXES (false)
+#define OTT_TOUCHDOT_INVERT_X (true)
+#define OTT_TOUCHDOT_INVERT_Y (true)
+
+static sw_timer_t g_timeout_timer;
+static sw_timer_t g_frame_timer;
+static sw_timer_t g_vcom_timer;
+static i2c_bsp_status_e g_frame_status;
+
+static void prv_on_timeout(void)
 {
-    (void)argc;
-    (void)argv;
-    (void)out_data;
-    *out_data_size = 0;
-    return 1;
+    /* Nothing to do: the run loop watches sw_timer_is_active(). */
 }
 
-int ott_touchdot_run(const uint8_t* data, uint32_t data_size, char* reason, unsigned reason_size)
+static void prv_on_vcom_due(void)
 {
-    (void)data;
-    (void)data_size;
+    display_service_vcom();
 
-    button_init();
+    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
+}
+
+/* Scale a raw pad coordinate onto a panel axis, applying the orientation flags. */
+static int16_t prv_scale_to_panel(uint16_t in_raw, uint16_t in_raw_max, int16_t in_panel_size,
+                                  bool in_is_inverted)
+{
+    const int16_t panel_max = (int16_t)(in_panel_size - 1);
+    int16_t scaled = (int16_t)(((uint32_t)in_raw * (uint32_t)panel_max) / in_raw_max);
+
+    if (in_is_inverted)
+    {
+        scaled = (int16_t)(panel_max - scaled);
+    }
+
+    return scaled;
+}
+
+static void prv_on_frame_due(void)
+{
+    touchpad_reading_t reading;
+    int16_t dot_x;
+    int16_t dot_y;
+
+    g_frame_status = touchpad_read(&reading);
+
+    if (g_frame_status != I2C_BSP_STATUS_OK)
+    {
+        return;
+    }
+
+    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_rectangle(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_COLOR_BLACK);
+
+    if (reading.is_touched)
+    {
+        if (OTT_TOUCHDOT_SWAP_AXES)
+        {
+            dot_x = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, DISPLAY_WIDTH,
+                                       OTT_TOUCHDOT_INVERT_X);
+            dot_y = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, DISPLAY_HEIGHT,
+                                       OTT_TOUCHDOT_INVERT_Y);
+        }
+        else
+        {
+            dot_x = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, DISPLAY_WIDTH,
+                                       OTT_TOUCHDOT_INVERT_X);
+            dot_y = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, DISPLAY_HEIGHT,
+                                       OTT_TOUCHDOT_INVERT_Y);
+        }
+
+        gfx_filled_circle(dot_x, dot_y, OTT_TOUCHDOT_DOT_RADIUS, DISPLAY_COLOR_BLACK);
+        gfx_horizontal_line(0, dot_y, DISPLAY_WIDTH, DISPLAY_COLOR_BLACK);
+        gfx_vertical_line(dot_x, 0, DISPLAY_HEIGHT, DISPLAY_COLOR_BLACK);
+    }
+
+    display_flush();
+
+    sw_timer_start(&g_frame_timer, OTT_TOUCHDOT_FRAME_PERIOD_MS, prv_on_frame_due);
+}
+
+/* ==========================================================================
+ * ott_touchdot - public
+ * ========================================================================= */
+
+bool ott_touchdot_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
+                        uint32_t* out_parameter_size)
+{
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)out_parameter;
+
+    *out_parameter_size = 0U;
+
+    return true;
+}
+
+bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                      size_t in_reason_size)
+{
+    (void)in_parameter;
+    (void)in_parameter_size;
+
     display_init();
     touchpad_init();
 
-    if (touchpad_probe() != 0) {
-        strncpy(reason, "MTCH6102 not responding on I2C (check slot 2 / SDA-SCL map)", reason_size);
-        return 0;
+    if (touchpad_probe() != I2C_BSP_STATUS_OK)
+    {
+        (void)snprintf(out_reason, in_reason_size,
+                       "touch controller not responding on I2C (check slot 2 / SDA-SCL map)");
+
+        return false;
     }
 
-    uart_write("Touch-dot test: the dot on the LCD follows your finger on the pad.\r\n");
-    uart_write("Press USER button (B1) to finish.\r\n");
+    g_frame_status = I2C_BSP_STATUS_OK;
 
-    uint32_t start = millis();
-    uint32_t last_vcom = start;
-    int armed = 0;
+    sw_timer_create(&g_timeout_timer);
+    sw_timer_create(&g_frame_timer);
+    sw_timer_create(&g_vcom_timer);
 
-    for (;;) {
-        if (!armed && !button_pressed()) {
-            armed = 1;
-        }
-        if (armed && button_pressed()) {
-            delay_ms(20);
-            if (button_pressed()) {
-                break;
-            }
-        }
-        if ((millis() - start) >= TOUCHDOT_MAX_MS) {
-            break;
-        }
+    uart_bsp_write_string("Touch-dot test: the dot on the LCD follows your finger on the pad.\r\n");
+    uart_bsp_write_string("Press the USER button (B1) to finish.\r\n");
 
-        uint16_t x = 0, y = 0;
-        int touched = 0;
-        if (touchpad_read(&x, &y, &touched) != 0) {
-            strncpy(reason, "I2C read failed during tracking", reason_size);
-            return 0;
-        }
+    sw_timer_start(&g_timeout_timer, OTT_TOUCHDOT_TIMEOUT_MS, prv_on_timeout);
+    sw_timer_start(&g_frame_timer, OTT_TOUCHDOT_FRAME_PERIOD_MS, prv_on_frame_due);
+    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
 
-        gfx_fill(DISPLAY_WHITE);
-        gfx_rect(0, 0, W, H, DISPLAY_BLACK);
-        if (touched) {
-            /* Map raw touch range to the 128x128 panel. Orientation may need a
-             * flip once confirmed on hardware (noted in the M2 docs). */
-            int sx = (int)((uint32_t)x * (W - 1) / TOUCHPAD_X_MAX);
-            int sy = (int)((uint32_t)y * (H - 1) / TOUCHPAD_Y_MAX);
-#if TD_SWAP_XY
-            {
-                int t = sx;
-                sx = sy;
-                sy = t;
-            }
-#endif
-#if TD_INVERT_X
-            sx = (W - 1) - sx;
-#endif
-#if TD_INVERT_Y
-            sy = (H - 1) - sy;
-#endif
-            gfx_fill_circle(sx, sy, DOT_R, DISPLAY_BLACK);
-            gfx_hline(0, sy, W, DISPLAY_BLACK);
-            gfx_vline(sx, 0, H, DISPLAY_BLACK);
-        }
-        display_flush();
-
-        if ((millis() - last_vcom) >= 1000U) {
-            last_vcom = millis();
-            display_vcom_tick();
-        }
-        delay_ms(FRAME_PERIOD_MS);
+    while (sw_timer_is_active(&g_timeout_timer) && (g_frame_status == I2C_BSP_STATUS_OK)
+           && !user_button_take_press())
+    {
+        sw_timer_process();
     }
 
-    return 1;
+    sw_timer_stop(&g_timeout_timer);
+    sw_timer_stop(&g_frame_timer);
+    sw_timer_stop(&g_vcom_timer);
+
+    if (g_frame_status != I2C_BSP_STATUS_OK)
+    {
+        (void)snprintf(out_reason, in_reason_size, "I2C read failed during tracking (status %d)",
+                       (int)g_frame_status);
+
+        return false;
+    }
+
+    return true;
 }

@@ -9,12 +9,13 @@ Two ways to use it:
   ./run_ott.py touchpad                # run one INTERACTIVE test (streams live,
   ./run_ott.py display                 #   long timeout, you confirm on the board
   ./run_ott.py touchdot                #   and press the USER button to finish)
+  ./run_ott.py user_button             #   same, for the on-board button
 
 The automatic suite covers the Board-Bring-Up checks a machine can judge on its own:
   VT-INT-001  Power-On & Enumeration   (the VCP device node exists)
   VT-INT-002  Serial Console Output    (`reset` re-emits the known boot banner)
 
-The button/display/touchpad tests (VT-INT-006/007) are interactive by design —
+The user_button/display/touchpad tests (VT-INT-006/007) are interactive by design —
 the firmware renders/prints and waits for you to confirm with the USER button —
 so they are excluded from --suite and streamed live instead.
 
@@ -29,7 +30,7 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"touchpad", "display", "touchdot", "button", "dispdiag", "lacheck"}
+INTERACTIVE = {"touchpad", "display", "touchdot", "user_button"}
 SUITE_AUTOMATIC = []  # no fully-automatic OTT yet; the suite checks enumeration + banner
 
 
@@ -178,7 +179,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (button/touchpad/display/touchdot); omit to run the suite")
+                    help="test name (user_button/touchpad/display/touchdot); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")

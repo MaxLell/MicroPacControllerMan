@@ -1,12 +1,26 @@
+/*
+ * ott_touchpad.h
+ *
+ * touchpad OTT (VT-INT-007): prints the live touch state (position and
+ * touch-present) over the console so the operator can confirm the reading follows
+ * their finger. Ends on a user-button press, with a safety cap.
+ */
+
 #ifndef OTT_TOUCHPAD_H
 #define OTT_TOUCHPAD_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-/* touchpad OTT (VT-INT-007): continuously prints the live MTCH6102 touch state
- * (x, y, touch-present) over the serial console so the operator can confirm the
- * reading follows their finger. Ends on a USER-button press. */
-int ott_touchpad_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size);
-int ott_touchpad_run(const uint8_t* data, uint32_t data_size, char* reason, unsigned reason_size);
+/* ==========================================================================
+ * ott_touchpad - public API
+ * ========================================================================= */
+
+bool ott_touchpad_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
+                        uint32_t* out_parameter_size);
+
+bool ott_touchpad_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                      size_t in_reason_size);
 
 #endif /* OTT_TOUCHPAD_H */

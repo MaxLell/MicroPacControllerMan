@@ -1,13 +1,27 @@
+/*
+ * ott_display.h
+ *
+ * display OTT (VT-INT-006): renders a sequence of geometric test patterns (lines,
+ * rectangles, circles, triangles) on the panel so the operator can confirm it
+ * works. Cycles the scenes, then holds a composite until the user button is
+ * pressed.
+ */
+
 #ifndef OTT_DISPLAY_H
 #define OTT_DISPLAY_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-/* display OTT (VT-INT-006): renders a sequence of geometric test patterns
- * (lines, rectangles, circles, triangles — Adafruit-GFX style, no logo) on the
- * LCD Mono Click so the operator can confirm the panel works. Cycles the scenes,
- * then holds a composite until the USER button is pressed. */
-int ott_display_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size);
-int ott_display_run(const uint8_t* data, uint32_t data_size, char* reason, unsigned reason_size);
+/* ==========================================================================
+ * ott_display - public API
+ * ========================================================================= */
+
+bool ott_display_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
+                       uint32_t* out_parameter_size);
+
+bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                     size_t in_reason_size);
 
 #endif /* OTT_DISPLAY_H */

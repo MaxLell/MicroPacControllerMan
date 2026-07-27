@@ -1,30 +1,44 @@
+/*
+ * ott.h
+ *
+ * On-Target Test mechanism. A test is requested on the serial console, survives
+ * the reset that follows, and reports its verdict over the same console — so a
+ * test runs on real hardware with no debugger attached:
+ *
+ *   1. `ott <name> [args]` runs the scenario's setup step, stores the request in
+ *      retained RAM, and resets the board.
+ *   2. On the next boot ott_execute_pending() finds the request, runs the
+ *      scenario, prints "OTT PASSED/FAILED [name]", drops the request and
+ *      continues into normal operation.
+ *
+ * This module owns the layout of the retained request; retain_ram only owns the
+ * memory it lives in.
+ */
+
 #ifndef OTT_H
 #define OTT_H
 
-/*
- * On-Target Test (OTT) mechanism (FR-106 / FR-107), following the reference
- * design (BareMetalHollowClockFw, doc 09), on top of the EmbeddedCli console:
- *
- *   1. `ott <name> [args]` on the CLI runs the scenario's setup step, writes the
- *      request (with a magic word + checksum) into retained RAM, and resets.
- *   2. On the next boot, ott_execute_pending() finds a valid request, runs the
- *      scenario's run step, and prints "OTT PASSED/FAILED [name]" over the serial
- *      console (no debugger needed), then clears the request and continues into
- *      normal operation.
- *
- * Tests live in their own ott_<name>.c modules and are listed in ott_scenarios.c
- * — adding a test needs no change to this core or the CLI.
- */
+/* ==========================================================================
+ * ott - public API
+ * ========================================================================= */
 
-/* Run a pending OTT request left in retained RAM by a prior `ott` command.
- * Call once early in main(), after the LED/UART are initialised and before the
- * normal application starts. No-op on a normal (unscheduled) boot. */
+/*! \brief Largest parameter blob a scenario may carry across the reset, in bytes. */
+#define OTT_PARAMETER_MAX_SIZE (32U)
+
+/*! \brief Run a test request left in retained RAM by a previous `ott` command.
+ *
+ * Call once early in start-up, after the console is up and before the application
+ * starts. Does nothing on a normal, unscheduled boot.
+ */
 void ott_execute_pending(void);
 
-/* Register the `ott` CLI command (and set up the console). */
+/*! \brief Register the console commands. */
 void ott_init(void);
 
-/* Drain the UART RX into the CLI; call from the main loop. */
+/*! \brief Feed received console characters to the command line.
+ *
+ * Call regularly from the main loop.
+ */
 void ott_poll(void);
 
 #endif /* OTT_H */

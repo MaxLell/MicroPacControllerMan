@@ -1,146 +1,257 @@
 #include "ott.h"
 
-#include "Cli.h"
-#include "ott_scenarios.h"
-#include "retain_ram.h"
-#include "uart.h"
-
-#include "stm32g4xx.h" /* NVIC_SystemReset */
-
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
-#define OTT_MAGIC (0xB007A5A5U)
+#include "Cli.h"
+#include "custom_assert.h"
+#include "ott_scenarios.h"
+#include "retain_ram.h"
+#include "stm32g4xx.h"
+#include "uart_bsp.h"
 
-/* Checksum over the meaningful spec fields (everything except magic/checksum). */
-static uint32_t prv_checksum(const ott_spec_t* s)
+/* ==========================================================================
+ * ott - private
+ * ========================================================================= */
+
+/* Recognises a deliberately stored request in memory that a power-on reset leaves
+ * filled with garbage. */
+#define OTT_MAGIC_WORD (0xB007A5A5U)
+
+/* Test ids are 1-based, so an all-zero retained buffer means "no request". */
+#define OTT_TEST_ID_NONE (0U)
+#define OTT_TEST_ID_FIRST (1U)
+
+/* Plain multiplicative hash — enough to catch a partially written or decayed
+ * buffer, not a security measure. */
+#define OTT_CHECKSUM_SEED (0x1234ABCDU)
+#define OTT_CHECKSUM_MULTIPLIER (31U)
+
+#define OTT_REASON_MAX_SIZE (64U)
+
+/* Index of the test name within the argument vector handed to a setup step. */
+#define OTT_ARGUMENT_INDEX_NAME (1)
+#define OTT_ARGUMENT_COUNT_WITH_NAME (2)
+
+typedef struct
 {
-    uint32_t c = 0x1234ABCDU;
-    c = c * 31U + s->test_id;
-    c = c * 31U + s->data_size;
-    for (uint32_t i = 0; i < s->data_size && i < OTT_ARG_MAX; i++) {
-        c = c * 31U + s->data[i];
+    uint32_t magic_word;
+    uint32_t checksum;
+    uint32_t test_id;
+    uint32_t parameter_size;
+    uint8_t parameter[OTT_PARAMETER_MAX_SIZE];
+} ott_spec_t;
+
+_Static_assert(sizeof(ott_spec_t) <= RETAIN_RAM_BUFFER_SIZE,
+               "the OTT request must fit into the retained RAM buffer");
+
+static cli_cfg_t g_cli;
+
+/* Covers everything but the magic word and the checksum itself. */
+static uint32_t prv_calculate_checksum(const ott_spec_t* const in_spec)
+{
+    uint32_t checksum = OTT_CHECKSUM_SEED;
+
+    ASSERT(in_spec != NULL);
+
+    checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->test_id;
+    checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->parameter_size;
+
+    for (uint32_t index = 0U; (index < in_spec->parameter_size) && (index < OTT_PARAMETER_MAX_SIZE);
+         ++index)
+    {
+        checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->parameter[index];
     }
-    return c;
+
+    return checksum;
 }
 
-static int prv_spec_is_valid(const ott_spec_t* s)
+static bool prv_is_spec_valid(const ott_spec_t* const in_spec)
 {
-    return (s->magic == OTT_MAGIC) && (s->test_id >= 1U) &&
-           (s->test_id <= ott_scenarios_count()) && (s->data_size <= OTT_ARG_MAX) &&
-           (s->checksum == prv_checksum(s));
+    ASSERT(in_spec != NULL);
+
+    return (in_spec->magic_word == OTT_MAGIC_WORD) && (in_spec->test_id >= OTT_TEST_ID_FIRST)
+           && (in_spec->test_id <= ott_scenarios_get_count())
+           && (in_spec->parameter_size <= OTT_PARAMETER_MAX_SIZE)
+           && (in_spec->checksum == prv_calculate_checksum(in_spec));
 }
 
-void ott_execute_pending(void)
+static void prv_read_spec(ott_spec_t* out_spec)
 {
-    ott_spec_t* s = retain_ott_spec();
+    uint8_t buffer[RETAIN_RAM_BUFFER_SIZE];
 
-    if (!prv_spec_is_valid(s)) {
-        return; /* normal boot: no (valid) request pending */
-    }
+    ASSERT(out_spec != NULL);
 
-    const ott_scenario_t* sc = ott_scenarios_get((unsigned)(s->test_id - 1U));
-
-    /* Invalidate the request BEFORE running, so a crash mid-test cannot loop-boot
-     * into the same test. */
-    uint32_t data_size = s->data_size;
-    uint8_t data[OTT_ARG_MAX];
-    memcpy(data, s->data, sizeof(data));
-    s->magic = 0U;
-
-    char reason[64];
-    reason[0] = '\0';
-    int pass = sc->run(data, data_size, reason, sizeof(reason));
-
-    /* Report over the serial console, before returning to normal operation. */
-    uart_write("OTT ");
-    uart_write(pass ? "PASSED [" : "FAILED [");
-    uart_write(sc->name);
-    if (pass) {
-        uart_write("]\r\n");
-    } else {
-        uart_write("]: ");
-        uart_write(reason);
-        uart_write("\r\n");
-    }
+    retained_ram_read(buffer, sizeof(buffer));
+    memcpy(out_spec, buffer, sizeof(*out_spec));
 }
 
-/* --- `ott <name> [args]` CLI command: schedule a test, then reset --- */
-
-static int ott_cmd(int argc, char* argv[], void* context)
+static void prv_write_spec(const ott_spec_t* const in_spec)
 {
-    (void)context;
+    uint8_t buffer[RETAIN_RAM_BUFFER_SIZE] = {0};
 
-    if (argc < 2) {
+    ASSERT(in_spec != NULL);
+
+    memcpy(buffer, in_spec, sizeof(*in_spec));
+    retained_ram_write(buffer, sizeof(buffer));
+}
+
+static void prv_invalidate_spec(void)
+{
+    const uint8_t buffer[RETAIN_RAM_BUFFER_SIZE] = {0};
+
+    retained_ram_write(buffer, sizeof(buffer));
+}
+
+static void prv_report(const ott_scenario_t* const in_scenario, bool in_has_passed,
+                       const char* const in_reason)
+{
+    uart_bsp_write_string("OTT ");
+    uart_bsp_write_string(in_has_passed ? "PASSED [" : "FAILED [");
+    uart_bsp_write_string(in_scenario->name);
+
+    if (in_has_passed)
+    {
+        uart_bsp_write_string("]\r\n");
+
+        return;
+    }
+
+    uart_bsp_write_string("]: ");
+    uart_bsp_write_string(in_reason);
+    uart_bsp_write_string("\r\n");
+}
+
+/* --- `ott <name> [args]`: schedule a test, then reset ---------------------- */
+
+static int prv_ott_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    const ott_scenario_t* scenario;
+    ott_spec_t spec = {0};
+    size_t index;
+
+    (void)in_context;
+
+    if (in_argument_count < OTT_ARGUMENT_COUNT_WITH_NAME)
+    {
         cli_print("OTT tests:");
-        for (unsigned i = 0; i < ott_scenarios_count(); i++) {
-            cli_print("  %s", ott_scenarios_get(i)->name);
+
+        for (size_t position = 0U; position < ott_scenarios_get_count(); ++position)
+        {
+            cli_print("  %s", ott_scenarios_get(position)->name);
         }
+
         return CLI_OK_STATUS;
     }
 
-    int idx = ott_scenarios_find(argv[1]);
-    if (idx < 0) {
-        cli_print("OTT ERROR: unknown test '%s'", argv[1]);
+    if (!ott_scenarios_find(in_arguments[OTT_ARGUMENT_INDEX_NAME], &index))
+    {
+        cli_print("OTT ERROR: unknown test '%s'", in_arguments[OTT_ARGUMENT_INDEX_NAME]);
+
         return CLI_FAIL_STATUS;
     }
 
-    const ott_scenario_t* sc = ott_scenarios_get((unsigned)idx);
-    ott_spec_t* s = retain_ott_spec();
-    s->data_size = 0;
-    memset(s->data, 0, sizeof(s->data));
+    scenario = ott_scenarios_get(index);
 
-    /* setup runs the CLI-side argument parsing/validation */
-    if (sc->setup != 0) {
-        if (!sc->setup(argc - 1, &argv[1], s->data, &s->data_size)) {
-            cli_print("OTT ERROR: setup failed for '%s'", sc->name);
+    if (scenario->setup_fn != NULL)
+    {
+        if (!scenario->setup_fn(in_argument_count - OTT_ARGUMENT_INDEX_NAME,
+                                &in_arguments[OTT_ARGUMENT_INDEX_NAME], spec.parameter,
+                                &spec.parameter_size))
+        {
+            cli_print("OTT ERROR: setup failed for '%s'", scenario->name);
+
             return CLI_FAIL_STATUS;
         }
     }
 
-    s->test_id = (uint32_t)idx + 1U;
-    s->magic = OTT_MAGIC;
-    s->checksum = prv_checksum(s);
+    spec.test_id = (uint32_t)index + OTT_TEST_ID_FIRST;
+    spec.magic_word = OTT_MAGIC_WORD;
+    spec.checksum = prv_calculate_checksum(&spec);
 
-    cli_print("OTT scheduled [%s], resetting...", sc->name);
-    uart_flush(); /* make sure the message is fully sent before we reset */
+    prv_write_spec(&spec);
+
+    cli_print("OTT scheduled [%s], resetting...", scenario->name);
+    uart_bsp_flush();
+
     NVIC_SystemReset();
 
     return CLI_OK_STATUS; /* not reached */
 }
 
-/* --- `reset` CLI command: reboot into nominal mode (re-emits the boot banner,
- * used by the harness for VT-INT-002) --- */
+/* --- `reset`: reboot into nominal mode, re-emitting the boot banner -------- */
 
-static int reset_cmd(int argc, char* argv[], void* context)
+static int prv_reset_command(int in_argument_count, char* in_arguments[], void* in_context)
 {
-    (void)argc;
-    (void)argv;
-    (void)context;
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)in_context;
+
     cli_print("resetting...");
-    uart_flush();
+    uart_bsp_flush();
+
     NVIC_SystemReset();
+
     return CLI_OK_STATUS; /* not reached */
 }
 
-/* --- console glue (EmbeddedCli) --- */
+static int prv_cli_put_character(char in_character)
+{
+    uart_bsp_write_character(in_character);
 
-static cli_cfg_t g_cli;
+    return 0;
+}
 
-static int cli_put(char c) { return uart_putc(c); }
+/* ==========================================================================
+ * ott - public
+ * ========================================================================= */
+
+void ott_execute_pending(void)
+{
+    const ott_scenario_t* scenario;
+    ott_spec_t spec;
+    char reason[OTT_REASON_MAX_SIZE];
+    bool has_passed;
+
+    prv_read_spec(&spec);
+
+    if (!prv_is_spec_valid(&spec))
+    {
+        return;
+    }
+
+    /* Drop the request BEFORE running it, so a test that crashes the board cannot
+     * make it boot-loop into the same test. */
+    prv_invalidate_spec();
+
+    scenario = ott_scenarios_get(spec.test_id - OTT_TEST_ID_FIRST);
+    reason[0] = '\0';
+
+    has_passed = scenario->run_fn(spec.parameter, spec.parameter_size, reason, sizeof(reason));
+
+    prv_report(scenario, has_passed, reason);
+}
 
 void ott_init(void)
 {
-    cli_init(&g_cli, cli_put);
-    cli_binding_t ott_binding = {"ott", ott_cmd, NULL, "Schedule an on-target test: ott <name> ('ott' lists them)"};
+    cli_binding_t ott_binding
+        = {"ott", prv_ott_command, NULL, "Schedule an on-target test: ott <name> ('ott' lists them)"};
+    cli_binding_t reset_binding
+        = {"reset", prv_reset_command, NULL, "Reboot the board into nominal mode"};
+
+    cli_init(&g_cli, prv_cli_put_character);
     cli_register(&ott_binding);
-    cli_binding_t reset_binding = {"reset", reset_cmd, NULL, "Reboot the board into nominal mode"};
     cli_register(&reset_binding);
 }
 
 void ott_poll(void)
 {
-    int c;
-    while ((c = uart_getc()) >= 0) {
-        cli_receive_and_process((char)c);
+    char character;
+
+    while (uart_bsp_read_character(&character))
+    {
+        cli_receive_and_process(character);
     }
 }

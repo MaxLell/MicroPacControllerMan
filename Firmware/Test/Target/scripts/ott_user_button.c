@@ -1,81 +1,105 @@
-#include "ott_button.h"
+#include "ott_user_button.h"
 
-#include "button.h"
-#include "systick.h"
-#include "uart.h"
-
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 
-/* Diagnostic cap so the board still returns to nominal mode if nothing happens. */
-#define BUTTON_MAX_MS (30000U)
-#define PRESSES_NEEDED (3U)
-#define DEBOUNCE_MS (20U)
-#define HEARTBEAT_MS (1000U)
-#define POLL_MS (5U)
+#include "sw_timer.h"
+#include "uart_bsp.h"
+#include "user_button.h"
 
-int ott_button_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size)
+/* ==========================================================================
+ * ott_user_button - private
+ * ========================================================================= */
+
+#define OTT_USER_BUTTON_REQUIRED_PRESSES (3U)
+
+/* Diagnostic cap, so the board returns to nominal mode even if nothing happens. */
+#define OTT_USER_BUTTON_TIMEOUT_MS (30000U)
+#define OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS (1000U)
+
+#define OTT_USER_BUTTON_LINE_MAX_SIZE (72U)
+
+static sw_timer_t g_timeout_timer;
+static sw_timer_t g_heartbeat_timer;
+static uint32_t g_press_count;
+
+static void prv_on_timeout(void)
 {
-    (void)argc;
-    (void)argv;
-    (void)out_data;
-    *out_data_size = 0; /* no parameters */
-    return 1;
+    /* Nothing to do: the run loop watches sw_timer_is_active(). */
 }
 
-int ott_button_run(const uint8_t* data, uint32_t data_size, char* reason, unsigned reason_size)
+static void prv_on_heartbeat(void)
 {
-    (void)data;
-    (void)data_size;
+    char line[OTT_USER_BUTTON_LINE_MAX_SIZE];
 
-    button_init();
+    (void)snprintf(line, sizeof(line), "BTN alive pressed=%u presses=%lu\r\n",
+                   user_button_is_pressed() ? 1U : 0U, (unsigned long)g_press_count);
+    uart_bsp_write_string(line);
 
-    uart_write("Button test: press the USER button (B1 = PC13) three times.\r\n");
-    uart_write("Live state below (pressed=1 while held); times out after 30 s.\r\n");
+    sw_timer_start(&g_heartbeat_timer, OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS, prv_on_heartbeat);
+}
 
-    uint32_t start = millis();
-    uint32_t last_beat = start;
-    unsigned presses = 0;
-    int prev = button_pressed();
-    int armed = (prev == 0); /* require a released start so a stuck-low pin can't pass */
+/* ==========================================================================
+ * ott_user_button - public
+ * ========================================================================= */
 
-    char line[72];
-    snprintf(line, sizeof(line), "BTN start pressed=%d\r\n", prev);
-    uart_write(line);
+bool ott_user_button_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
+                           uint32_t* out_parameter_size)
+{
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)out_parameter;
 
-    while ((millis() - start) < BUTTON_MAX_MS && presses < PRESSES_NEEDED) {
-        int now = button_pressed();
-        if (now != prev) {
-            delay_ms(DEBOUNCE_MS); /* debounce the edge */
-            now = button_pressed();
-            if (now != prev) {
-                if (!armed && now == 0) {
-                    armed = 1;
-                }
-                if (armed && now == 1) {
-                    presses++;
-                    snprintf(line, sizeof(line), "BTN press #%u\r\n", presses);
-                    uart_write(line);
-                }
-                prev = now;
-            }
+    *out_parameter_size = 0U;
+
+    return true;
+}
+
+bool ott_user_button_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                         size_t in_reason_size)
+{
+    char line[OTT_USER_BUTTON_LINE_MAX_SIZE];
+
+    (void)in_parameter;
+    (void)in_parameter_size;
+
+    g_press_count = 0U;
+
+    sw_timer_create(&g_timeout_timer);
+    sw_timer_create(&g_heartbeat_timer);
+
+    uart_bsp_write_string("User-button test: press the USER button (B1) three times.\r\n");
+    uart_bsp_write_string("Live state below (pressed=1 while held); times out after 30 s.\r\n");
+
+    sw_timer_start(&g_timeout_timer, OTT_USER_BUTTON_TIMEOUT_MS, prv_on_timeout);
+    sw_timer_start(&g_heartbeat_timer, OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS, prv_on_heartbeat);
+
+    while (sw_timer_is_active(&g_timeout_timer)
+           && (g_press_count < OTT_USER_BUTTON_REQUIRED_PRESSES))
+    {
+        sw_timer_process();
+
+        if (user_button_take_press())
+        {
+            ++g_press_count;
+
+            (void)snprintf(line, sizeof(line), "BTN press #%lu\r\n", (unsigned long)g_press_count);
+            uart_bsp_write_string(line);
         }
-
-        if ((millis() - last_beat) >= HEARTBEAT_MS) {
-            last_beat = millis();
-            snprintf(line, sizeof(line), "BTN alive pressed=%d presses=%u\r\n",
-                     button_pressed(), presses);
-            uart_write(line);
-        }
-
-        delay_ms(POLL_MS);
     }
 
-    if (presses >= PRESSES_NEEDED) {
-        return 1;
+    sw_timer_stop(&g_timeout_timer);
+    sw_timer_stop(&g_heartbeat_timer);
+
+    if (g_press_count >= OTT_USER_BUTTON_REQUIRED_PRESSES)
+    {
+        return true;
     }
-    snprintf(reason, reason_size,
-             "only %u/%u presses seen (PC13 stuck high? check R-001 button map)",
-             presses, PRESSES_NEEDED);
-    return 0;
+
+    (void)snprintf(out_reason, in_reason_size, "only %lu/%u presses seen (PC13 stuck high?)",
+                   (unsigned long)g_press_count, OTT_USER_BUTTON_REQUIRED_PRESSES);
+
+    return false;
 }

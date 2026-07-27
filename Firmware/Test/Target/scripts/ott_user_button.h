@@ -1,13 +1,27 @@
-#ifndef OTT_BUTTON_H
-#define OTT_BUTTON_H
+/*
+ * ott_user_button.h
+ *
+ * user_button OTT (board bring-up): streams the live user-button state over the
+ * console — a heartbeat every second plus every debounced press — so the operator
+ * can see whether the pin actually toggles. Passes once the required number of
+ * presses has been seen, fails on timeout with a diagnostic reason.
+ */
 
+#ifndef OTT_USER_BUTTON_H
+#define OTT_USER_BUTTON_H
+
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-/* button OTT (board bring-up): streams the live USER-button state (B1 = PC13)
- * over the serial console — a per-second heartbeat plus every debounced edge —
- * so the operator can see whether the pin actually toggles. Passes once three
- * presses have been seen; fails on a 30 s timeout with a diagnostic reason. */
-int ott_button_setup(int argc, char* argv[], uint8_t* out_data, uint32_t* out_data_size);
-int ott_button_run(const uint8_t* data, uint32_t data_size, char* reason, unsigned reason_size);
+/* ==========================================================================
+ * ott_user_button - public API
+ * ========================================================================= */
 
-#endif /* OTT_BUTTON_H */
+bool ott_user_button_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
+                           uint32_t* out_parameter_size);
+
+bool ott_user_button_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                         size_t in_reason_size);
+
+#endif /* OTT_USER_BUTTON_H */
