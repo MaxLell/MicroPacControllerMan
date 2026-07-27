@@ -41,6 +41,16 @@ typedef enum
     MSG_GAME_SCORE_UPDATED,                     /*!< Game   -> NVM                     */
     MSG_GAME_OVER,                              /*!< Game   -> System, NVM             */
     MSG_HIGHSCORE_LOADED,                       /*!< NVM    -> System                  */
+
+    /* Game-internal topics — the second broker instance of FR-110 ([03 §3.6]). They never
+     * appear on the system bus: only the Game module bridges the two, forwarding results
+     * outward. These carry *events*, not queries and not per-tick commands — resolving a
+     * tick is inherently sequential (move, eat, then collide in the same tick, §10.7), so
+     * the orchestrator does that synchronously and publishes what happened. */
+    MSG_GAME_PELLET_EATEN,                      /*!< Game   -> Score                   */
+    MSG_GAME_GHOST_EATEN,                       /*!< Game   -> Score                   */
+    MSG_GAME_FRIGHTENED_STARTED,                /*!< Game   -> Score (resets the chain) */
+
     MSG_LAST
 } msg_id_e;
 
@@ -76,6 +86,12 @@ typedef struct
 {
     uint32_t high_score;
 } msg_high_score_t;
+
+/*! \brief Payload of \ref MSG_GAME_PELLET_EATEN (§10.6). */
+typedef struct
+{
+    bool is_power_pellet;
+} msg_pellet_eaten_t;
 
 /*! \brief Payload of \ref MSG_GAME_SCORE_UPDATED. */
 typedef struct
@@ -122,6 +138,7 @@ _Static_assert(sizeof(msg_input_direction_t) <= MSG_PAYLOAD_MAX_SIZE, "payload t
 _Static_assert(sizeof(msg_input_button_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_high_score_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_score_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
+_Static_assert(sizeof(msg_pellet_eaten_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_over_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_render_frame_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 

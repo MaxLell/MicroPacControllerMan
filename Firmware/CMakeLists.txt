@@ -87,9 +87,11 @@ endif()
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         App/agent/agent.c
+        App/ghost/ghost.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
         App/playfield/playfield.c
+        App/score/score.c
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
         Services/delay/delay.c
@@ -105,9 +107,11 @@ if(PACMAN_HOST_BUILD)
 
     target_include_directories(pacman_host PUBLIC
         App/agent
+        App/ghost
         App/ghost_path
         App/pacman
         App/playfield
+        App/score
         Bsp/systick_bsp
         Drivers/display
         Services/delay
@@ -148,9 +152,11 @@ add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/agent/agent.c
     App/app_main.c
+    App/ghost/ghost.c
     App/ghost_path/ghost_path.c
     App/pacman/pacman.c
     App/playfield/playfield.c
+    App/score/score.c
     Bsp/dio_bsp/dio_bsp.c
     Bsp/i2c_bsp/i2c_bsp.c
     Bsp/retain_ram/retain_ram.c
@@ -185,9 +191,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     App/agent
+    App/ghost
     App/ghost_path
     App/pacman
     App/playfield
+    App/score
     Bsp/dio_bsp
     Bsp/i2c_bsp
     Bsp/retain_ram
