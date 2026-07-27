@@ -1,46 +1,89 @@
-#include "button.h"
+#include "switch.h"
 
-#include "systick.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-#include "main.h" /* USER_BUTTON_GPIO_Port / USER_BUTTON_Pin + HAL (CubeMX) */
+#include "custom_assert.h"
+#include "dio_bsp.h"
+#include "main.h"
 
-void button_init(void)
+/* ==========================================================================
+ * switch - private
+ * ========================================================================= */
+
+#define SWITCH_HISTORY_STABLE_ACTIVE (0xFFFFFFFFU)
+#define SWITCH_HISTORY_STABLE_INACTIVE (0x00000000U)
+
+#define SWITCH_BITS_PER_BYTE (8U)
+
+_Static_assert(SWITCH_DEBOUNCE_SAMPLES == (sizeof(uint32_t) * SWITCH_BITS_PER_BYTE),
+               "the debounce window must match the width of switch_t::history");
+
+static bool prv_read_gpio_level(const switch_t* const in_switch)
 {
-    /* PC13 is configured by MX_GPIO_Init() as an input with no pull (GPIO_NOPULL
-     * in the .ioc); the board's external pull-down holds the idle level low.
-     * Nothing to do here — the pull now lives in CubeMX (single source). */
-}
+    ASSERT(in_switch != NULL);
 
-int button_pressed(void)
-{
-    /* This board's B1 is ACTIVE-HIGH: idle low (external pull-down), pressing
-     * drives PC13 to VDD (measured 3.3 V pressed). This polarity must live in
-     * firmware — CubeMX cannot express it. */
-    return (HAL_GPIO_ReadPin(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin) == GPIO_PIN_SET) ? 1 : 0;
-}
+    const bool pin_is_high = (dio_bsp_get_pin(in_switch->gpio.pin) == DIO_BSP_PIN_STATE_HIGH);
 
-int button_wait_press(unsigned timeout_ms)
-{
-    uint32_t start = millis();
-
-    /* Require the button to start released so a stale hold from a prior test does
-     * not count. */
-    while (button_pressed()) {
-        if ((millis() - start) >= timeout_ms) {
-            return 0;
-        }
+    if (in_switch->gpio.active_low)
+    {
+        return !pin_is_high;
     }
 
-    /* Wait for a press, debounced by ~20 ms of stable low. */
-    for (;;) {
-        if ((millis() - start) >= timeout_ms) {
-            return 0;
-        }
-        if (button_pressed()) {
-            delay_ms(20);
-            if (button_pressed()) {
-                return 1;
-            }
-        }
+    return pin_is_high;
+}
+
+/* ==========================================================================
+ * switch - public
+ * ========================================================================= */
+
+void switch_init(switch_t* inout_switch, dio_bsp_pin_e in_pin, bool in_active_low)
+{
+    ASSERT(inout_switch != NULL);
+    ASSERT(in_pin > DIO_BSP_PIN_NONE);
+    ASSERT(in_pin < DIO_BSP_PIN_LAST);
+
+    inout_switch->gpio.pin = in_pin;
+    inout_switch->gpio.active_low = in_active_low;
+
+    inout_switch->history = SWITCH_HISTORY_STABLE_INACTIVE;
+    inout_switch->is_active = false;
+}
+
+bool switch_get_debounced_state(switch_t* inout_switch)
+{
+    ASSERT(inout_switch != NULL);
+
+    inout_switch->history
+        = (inout_switch->history << 1U) | (uint32_t)prv_read_gpio_level(inout_switch);
+
+    if (inout_switch->history == SWITCH_HISTORY_STABLE_ACTIVE)
+    {
+        inout_switch->is_active = true;
     }
+    else if (inout_switch->history == SWITCH_HISTORY_STABLE_INACTIVE)
+    {
+        inout_switch->is_active = false;
+    }
+    else
+    {
+        /* Still bouncing: hold the last debounced state. */
+    }
+
+    return inout_switch->is_active;
+}
+
+uint32_t switch_enter_critical_section(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    return primask;
+}
+
+void switch_exit_critical_section(uint32_t in_primask)
+{
+    __set_PRIMASK(in_primask);
 }
