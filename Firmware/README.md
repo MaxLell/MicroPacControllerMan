@@ -21,6 +21,10 @@ VCP already works without it).
 
 ## Build & flash
 
+One tree, two builds ([03 §3.8](../Docu/PrePlanning/03-Architecture.md#38-build--toolchain)).
+
+**Target firmware** (the default):
+
 ```
 cmake -B build -G "Unix Makefiles"
 cmake --build build -j
@@ -29,10 +33,37 @@ openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
 
 There is **no `-DCMAKE_TOOLCHAIN_FILE`**: the cross-compilation setup (target,
 compiler, Cortex-M4F flags, `.elf` suffix) sits at the top of `CMakeLists.txt`, above
-`project()`, which is when CMake reads it. One file describes the whole build.
+`project()`, which is when CMake reads it. One file describes the whole build. It
+produces `build/pacman.elf` plus `.bin`/`.hex` and prints the flash/RAM usage.
 
-The build produces `build/pacman.elf` plus `.bin`/`.hex`, and prints the flash/RAM
-usage. `-Wall -Wextra` is on; the tree builds warning-free.
+**Host build** — no hardware, no cross-toolchain:
+
+```
+cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
+cmake --build build-host -j
+cd build-host && ctest --output-on-failure
+```
+
+`PACMAN_HOST_BUILD=ON` skips the cross-toolchain block entirely and builds
+`pacman_host`, a static library of the modules that are genuinely hardware-independent
+— today `Services/delay`, `Services/sw_timer` and `Bsp/retain_ram`, plus the tick
+source through its host implementation. It is what the SDL application and the unit
+tests will link against, and it grows as more platform seams are cut (RF-003).
+
+The one test it currently runs, `host_smoke`, is a **placeholder** for the real unit
+suite: VT-UNIT-001..005 need Ceedling with CMock, which needs Ruby (RF-002).
+
+`-Wall -Wextra` is on in both; the tree builds warning-free.
+
+### How a platform port is shaped
+
+`systick_bsp` is the worked example, and the pattern to copy: **one shared header, one
+`.c` per platform, selected in `CMakeLists.txt`.** `systick_bsp.h` contains no HAL, so
+`systick_bsp.c` (SysTick) and `systick_bsp_host.c` (`clock_gettime`) are
+interchangeable and `Services/` never learns which one it got. Prefer this over
+`#ifdef`s inside a module — the only conditional compilation left is where a platform
+genuinely lacks the concept, such as `retain_ram`'s `.noinit` section, which no host
+process has.
 
 ## On-Target Tests (OTT)
 

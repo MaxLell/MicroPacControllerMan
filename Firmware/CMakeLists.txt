@@ -1,7 +1,19 @@
 cmake_minimum_required(VERSION 3.22)
 
 # ==============================================================================
-# Cross-compilation setup
+# Which of the two builds is this?
+#
+#   cmake -B build                              -> STM32 target firmware (default)
+#   cmake -B build-host -DPACMAN_HOST_BUILD=ON  -> host build, no hardware needed
+#
+# [03 Architecture §3.8] requires one source tree to build for both. Only code that
+# is genuinely hardware-independent takes part in the host build; the seams that let
+# more of it do so are being cut incrementally (RF-003).
+# ==============================================================================
+option(PACMAN_HOST_BUILD "Build the hardware-independent code for the host instead of the STM32 target" OFF)
+
+# ==============================================================================
+# Cross-compilation setup (target build only)
 #
 # These variables normally live in a separate toolchain file, but CMake reads them
 # during project() so setting them here works just as well — and keeps the whole
@@ -10,7 +22,11 @@ cmake_minimum_required(VERSION 3.22)
 # The MCU flags are set through the *_INIT variables so they also apply to the
 # STM32CubeMX-generated HAL/CMSIS objects and the startup assembly, which must be
 # built with the same Cortex-M4F ABI as our own code.
+#
+# Guarded, because setting CMAKE_SYSTEM_NAME / CMAKE_C_COMPILER unconditionally is
+# exactly what made a host build impossible before (RF-001).
 # ==============================================================================
+if(NOT PACMAN_HOST_BUILD)
 set(CMAKE_SYSTEM_NAME      Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 
@@ -38,6 +54,7 @@ set(CMAKE_EXE_LINKER_FLAGS_INIT "${MCU_FLAGS} --specs=nano.specs")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+endif()
 
 # ==============================================================================
 # Project
@@ -55,6 +72,46 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# ==============================================================================
+# Host build
+#
+# Only the modules that are already free of the HAL take part. `pacman_host` is the
+# library the SDL application (CON-103 / FR-104) and the unit tests will link
+# against; it grows as the platform-port seams are cut (RF-003).
+#
+# systick_bsp is included through its host implementation: the header is shared
+# with the target, only the .c differs. That is the pattern for every future port.
+# ==============================================================================
+if(PACMAN_HOST_BUILD)
+    add_library(pacman_host STATIC
+        Bsp/retain_ram/retain_ram.c
+        Bsp/systick_bsp/systick_bsp_host.c
+        Services/delay/delay.c
+        Services/sw_timer/sw_timer.c)
+
+    target_include_directories(pacman_host PUBLIC
+        Bsp/retain_ram
+        Bsp/systick_bsp
+        Services/delay
+        Services/sw_timer
+        ThirdParty/EmbeddedCli)
+
+    # Selects the host variants of anything that differs by platform (today: the
+    # retained buffer, which has no `.noinit` section to live in off-target).
+    target_compile_definitions(pacman_host PUBLIC PACMAN_HOST_BUILD)
+    target_compile_options(pacman_host PRIVATE -Wall -Wextra -g)
+
+    # Placeholder until Ceedling/CMock lands (RF-002); proves the host path runs.
+    add_executable(host_smoke Test/Host/host_smoke.c)
+    target_link_libraries(host_smoke PRIVATE pacman_host)
+    target_compile_options(host_smoke PRIVATE -Wall -Wextra -g)
+
+    enable_testing()
+    add_test(NAME host_smoke COMMAND host_smoke)
+
+    return()
 endif()
 
 # Root of the STM32CubeMX / HAL export. It owns the HAL + CMSIS, the Cortex

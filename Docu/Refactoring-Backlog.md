@@ -15,9 +15,8 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
 | ID | Item | Severity | Blocks |
 |---|---|---|---|
-| [RF-001](#rf-001) | `CMakeLists.txt` hardcodes the ARM toolchain — no host build possible | **High** | M3 |
-| [RF-002](#rf-002) | No host-side unit-test infrastructure at all | **High** | M3 |
-| [RF-003](#rf-003) | Application is not yet separable from the hardware | **High** | M3 |
+| [RF-002](#rf-002) | No host-side unit-test framework — **blocked: Ceedling needs Ruby** | **High** | M3 |
+| [RF-003](#rf-003) | Application is not yet separable from the hardware — first seam cut | **High** | M3 |
 | [RF-004](#rf-004) | Our own shims live under `ThirdParty/` | Low | — |
 | [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | — |
 | [RF-006](#rf-006) | Display chip-select delay is a spin count, not a duration | Medium | — |
@@ -30,50 +29,61 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
 ---
 
-### RF-001
-
-**`CMakeLists.txt` hardcodes the ARM toolchain — no host build possible.** **High.**
-
-[03 Architecture §3.8](PrePlanning/03-Architecture.md#38-build--toolchain) requires one
-source tree to build three ways: target firmware, host build, and unit tests. When the
-cross-toolchain was folded into `Firmware/CMakeLists.txt` (DEC-013, review note 2.2),
-it was placed **unconditionally** above `project()` — `CMAKE_SYSTEM_NAME Generic` and
-`CMAKE_C_COMPILER arm-none-eabi-gcc`. A host build therefore cannot be configured from
-that file without editing it. This was invisible while the tree was target-only.
-
-*Done when* `cmake -B build` still cross-compiles for the target and a documented
-second invocation configures a host build, from the same tree. Candidates: guard the
-toolchain block behind an option (`if(NOT PACMAN_HOST_BUILD)`), or add a
-`CMakePresets.json` with `target` / `host` presets as the reference project does. Do
-**not** simply restore a separate toolchain file — that undoes review note 2.2.
-
 ### RF-002
 
-**No host-side unit-test infrastructure at all.** **High.**
+**No host-side unit-test framework — blocked on Ruby.** **High.**
 
-`Firmware/Test/` contains only `Target/` and the Python OTT harness. There is no
-`Test/Host/`, no Unity, no Ceedling — so none of VT-UNIT-001..005
-([06 V&V](PrePlanning/06-Verification-and-Validation.md)) can run, and M3's exit
-criteria are unreachable. [CON-102](PrePlanning/02-Requirements.md) names
-Ceedling/Unity; note the reference project instead vendors Unity into `Test/support/`
-and drives it from CMake, which avoids a Ruby dependency. That choice is still open.
+None of VT-UNIT-001..005 ([06 V&V](PrePlanning/06-Verification-and-Validation.md)) can
+run, so M3's exit criteria are unreachable.
 
-*Done when* `Test/Host/` holds unit tests that run on the host with one command, and
-the vendored framework lives where [§3.9](PrePlanning/03-Architecture.md#39-firmware-source-tree-layout)
-says it should.
+The framework question is settled: **Ceedling**, as [CON-102](PrePlanning/02-Requirements.md)
+says. The reference project's tests depend on **CMock** — they mock a dependency by
+header name (`mock_systick_bsp.h`, `systick_bsp_get_tick_ExpectAndReturn(...)`) — and
+CMock comes with Ceedling. That also explains why `custom_assert.h` and
+`test_support.h` exist as shims: under Ceedling a test build redirects `ASSERT` to a
+callback so assertions themselves can be asserted on, and `STATIC` opens statics up to
+tests. Hand-vendoring Unity under CMake was considered and rejected: it would mean
+hand-writing every fake and diverging from the reference for no gain.
+
+**Blocked:** Ceedling needs Ruby, which is not installed on the dev machine
+(`ruby`, `gem`, `ceedling` all absent). Unblock with:
+
+```bash
+sudo apt-get install -y ruby ruby-dev
+gem install ceedling
+```
+
+*Done when* `Test/Host/` holds real unit tests driven by `ceedling test:all`, with a
+`project.yml` modelled on the reference project's, the assert-callback shim in place,
+and `Test/Host/host_smoke.c` deleted once real tests cover the same ground.
+
+Meanwhile `Test/Host/host_smoke.c` is a stopgap: a plain C program, built by the host
+CMake build and registered with `ctest`, that exercises `delay`, `sw_timer` and
+`retain_ram` so the host path cannot rot unnoticed. It is not a unit-test suite — it
+has no mocking and no per-test isolation.
 
 ### RF-003
 
-**Application is not yet separable from the hardware.** **High.**
+**Application is not yet separable from the hardware.** **High.** *First seam cut.*
 
-The goal is that the game logic runs on the host with no hardware dependency. Today
-the layering is clean but the seams are not cut yet:
+The goal is that the game logic runs on the host with no hardware dependency.
+
+**Done so far — the timing seam.** `systick_bsp.h` is HAL-free, so the tick now has two
+implementations behind one header: `systick_bsp.c` (SysTick) and
+`systick_bsp_host.c` (`clock_gettime(CLOCK_MONOTONIC)`). `Services/delay` and
+`Services/sw_timer` therefore build and run on the host unchanged. This is the pattern
+every remaining port should copy: shared header, one `.c` per platform, selected in
+`CMakeLists.txt` — not `#ifdef`s inside a module.
+
+**Still to do:**
 
 - `Drivers/display` and `Drivers/touchpad` talk to `Bsp/spi_bsp`, `Bsp/i2c_bsp` and
-  `Bsp/dio_bsp` directly, so nothing above them can be built without the HAL.
-- `Services/delay` and `Services/sw_timer` read the tick from `Bsp/systick_bsp`, so
-  even the hardware-independent layer currently needs a target build.
+  `Bsp/dio_bsp` directly, so nothing above them can be built without the HAL. These
+  need a port at the *driver* boundary (a display sink, an input source), not at the
+  bus boundary — mocking SPI on the host would be pointless work.
 - There is no NVM module yet, and the high score will need the same treatment.
+- The message broker and Model/Control do not exist yet; they should be written
+  host-first so the dependency never forms.
 
 [§3.8](PrePlanning/03-Architecture.md#38-build--toolchain) already anticipates this —
 "the host/target split behind Input, Display, NVM and timing is realised as small

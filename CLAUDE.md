@@ -58,7 +58,15 @@ openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
 python3 Test/run_ott.py --suite                          # enumeration + boot banner
 python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS; also display/touchpad/touchdot
 ./m2.sh all                                              # build + flash + all four, interactively
+
+# Host build — no hardware, no cross-toolchain (RF-001 closed)
+cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
+cmake --build build-host -j && (cd build-host && ctest --output-on-failure)
 ```
+
+A **platform port** is one shared header + one `.c` per platform, selected in
+`CMakeLists.txt` — see `Bsp/systick_bsp` (`systick_bsp.c` / `systick_bsp_host.c`).
+Prefer that over `#ifdef`s inside a module.
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
 (`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`).
