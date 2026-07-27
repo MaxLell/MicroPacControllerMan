@@ -143,6 +143,19 @@ The 1 ms tick hook is deliberately *not* on that list: `systick_bsp.c` provides 
 strong `HAL_IncTick()`, overriding the HAL's `__weak` one, so the generated
 `stm32g4xx_it.c` stays untouched and a re-generation cannot drop the hook.
 
+One cosmetic item: `Core/Src/gpio.c` carries hand-added explanations on the generated
+comments (`… : DISPLAY_DISP (PB4) high = panel on`). A re-generation drops those, but
+the *code* it emits is identical, so nothing breaks — only the reading aid is lost.
+
+**Editing the `.ioc` by hand** is fine for a pin *label*, which is what
+`TOUCHPAD_RESET` was: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
+rename to the `<label>_Pin` / `<label>_GPIO_Port` macros in `Core/Inc/main.h` and
+their uses in `Core/Src/gpio.c`, and the result is byte-identical to what CubeMX
+would generate. Do **not** hand-edit peripheral *settings* that way (clock tree,
+FIFO modes, timing words): those fan out into initialisation code across several
+generated files, and getting the `.ioc` and the code out of step is worse than
+leaving the setting alone. Open CubeMX for those.
+
 ## Hardware notes
 
 The Click Shield for Nucleo-64 (MIKROE-5193) mates with the **ST-Morpho** headers,
@@ -166,7 +179,7 @@ clock-independent.
 | Display DISP | PB4 | the Click reuses the idle MISO line as the panel enable |
 | Display EXTCOMIN | PC8 | mikroBUS PWM1, external VCOM clock |
 | I2C1 SCL / SDA | PB8 / PB9 | mikroBUS slot 2, MTCH6102 at address **0x25** |
-| Touchpad RST | PA4 | |
+| Touchpad reset | PA4 | mikroBUS signal `RST`; `.ioc` label `TOUCHPAD_RESET`, active LOW |
 | User button B1 | PC13 | **active HIGH** on this board (external pull-down) |
 | Console | PA2 / PA3 | LPUART1 → ST-LINK VCP, 115200 8N1 |
 

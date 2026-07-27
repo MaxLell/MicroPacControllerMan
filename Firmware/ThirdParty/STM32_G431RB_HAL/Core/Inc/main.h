@@ -59,8 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USER_BUTTON_Pin GPIO_PIN_13
 #define USER_BUTTON_GPIO_Port GPIOC
-#define TOUCH_RST_Pin GPIO_PIN_4
-#define TOUCH_RST_GPIO_Port GPIOA
+#define TOUCHPAD_RESET_Pin GPIO_PIN_4
+#define TOUCHPAD_RESET_GPIO_Port GPIOA
 /* Slot-1 control pins for the MikroE Click Shield for Nucleo-64 (MIKROE-5193),
  * which mates with the ST-Morpho headers — NOT the Arduino header. Slot-1 SPI is
  * SCK=PB3 / MOSI=PB5 / MISO=PB4 (see spi.c), CS1=PB12, PWM1=PC8. Verified against
