@@ -59,10 +59,14 @@
     - +:Test/Host/**
     - -:Test/support
   :source:
+    - Drivers/**
     - Services/**
     - ThirdParty/embedded_utils
   :include:
+    - Drivers/**
     - Services/**
+    - Bsp/dio_bsp
+    - Bsp/spi_bsp
     - Bsp/systick_bsp
     - ThirdParty/embedded_utils
   :support:

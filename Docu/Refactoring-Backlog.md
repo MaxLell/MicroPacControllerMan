@@ -15,7 +15,7 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
 | ID | Item | Severity | Blocks |
 |---|---|---|---|
-| [RF-003](#rf-003) | Application is not yet separable from the hardware — first seam cut | **High** | M3 |
+| [RF-003](#rf-003) | Application is not yet separable from the hardware — input + NVM seams left | **High** | M3 |
 | [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | — |
 | [RF-006](#rf-006) | Display chip-select delay is a spin count, not a duration | Medium | — |
 | [RF-007](#rf-007) | Display always pushes the full frame | Deferred — measure first | — |
@@ -29,35 +29,45 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
 ### RF-003
 
-**Application is not yet separable from the hardware.** **High.** *First seam cut.*
+**Application is not yet separable from the hardware.** **High.** *Timing and display
+seams cut; input and NVM remain.*
 
 The goal is that the game logic runs on the host with no hardware dependency.
 
-**Done so far — the timing seam.** `systick_bsp.h` is HAL-free, so the tick now has two
-implementations behind one header: `systick_bsp.c` (SysTick) and
-`systick_bsp_host.c` (`clock_gettime(CLOCK_MONOTONIC)`). `Services/delay` and
-`Services/sw_timer` therefore build and run on the host unchanged. This is the pattern
-every remaining port should copy: shared header, one `.c` per platform, selected in
-`CMakeLists.txt` — not `#ifdef`s inside a module.
+**Done — the pattern.** A platform port is **one shared header, one `.c` per platform,
+selected in `CMakeLists.txt`** — never `#ifdef`s inside a module. Two ports exist:
+
+- **Timing.** `systick_bsp.h` with `systick_bsp.c` (SysTick) and `systick_bsp_host.c`
+  (`clock_gettime`). `Services/delay` and `Services/sw_timer` build and run on both.
+- **Display.** `display.h` is now a display *sink* that shows a `framebuffer_t`, with
+  `display.c` (LS013B7DH03 over SPI) and `display_host.c` (headless: keeps the last
+  frame, which is what an SDL window will blit). The frame buffer itself moved out into
+  `Services/framebuffer` and `gfx` moved to `Services/gfx`, so all the drawing is pure
+  logic and unit-tested on the host.
+
+Note what that bought: the panel's inverted bit sense is now confined to `display.c`,
+and `test_display.c` pins it down byte-for-byte with the BSP mocked — a polarity
+mistake there would otherwise only show up as a photographic negative on the panel,
+which no automated check would catch.
 
 **Still to do:**
 
-- `Drivers/display` and `Drivers/touchpad` talk to `Bsp/spi_bsp`, `Bsp/i2c_bsp` and
-  `Bsp/dio_bsp` directly, so nothing above them can be built without the HAL. These
-  need a port at the *driver* boundary (a display sink, an input source), not at the
-  bus boundary — mocking SPI on the host would be pointless work.
-- There is no NVM module yet, and the high score will need the same treatment.
+- **Input.** `Drivers/touchpad` talks to `Bsp/i2c_bsp` and `Bsp/dio_bsp` directly. The
+  port belongs at the *semantic* level the game wants — a direction and a button, not
+  raw touch coordinates — because that is what makes a keyboard a drop-in host
+  implementation. The quadrant mapping of [FR-004](PrePlanning/02-Requirements.md) is
+  logic and should end up in a host-tested module, not inside a platform file.
+- **NVM.** No module yet; the high score will need the same treatment
+  ([FR-005](PrePlanning/02-Requirements.md), NFR-004).
 - The message broker and Model/Control do not exist yet; they should be written
   host-first so the dependency never forms.
 
-[§3.8](PrePlanning/03-Architecture.md#38-build--toolchain) already anticipates this —
+[§3.8](PrePlanning/03-Architecture.md#38-build--toolchain) anticipates exactly this —
 "the host/target split behind Input, Display, NVM and timing is realised as small
-platform ports" — and explicitly leaves the interfaces to be defined during this phase.
+platform ports" — and leaves the interfaces to be defined during this phase.
 
 *Done when* Model/Control and the message broker compile and run with no `Bsp/` and no
-HAL in the include path, against platform ports that have a target and a host
-implementation. This is M3 work, not a cleanup; it is listed here so the seam locations
-are agreed before game code is written on top of them.
+HAL in the include path, against ports that have a target and a host implementation.
 
 ### RF-005
 

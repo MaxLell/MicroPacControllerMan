@@ -26,9 +26,16 @@ A module under test is compiled natively and its dependencies are replaced by
 CMock-generated mocks, so a test can drive cases real hardware and real time cannot
 reach on demand — the 32-bit tick wrapping around, for instance.
 
-Current coverage: `Services/delay` and `Services/sw_timer`. The game's Model/Control
-tests ([VT-UNIT-001..005](../../Docu/PrePlanning/06-Verification-and-Validation.md))
-arrive with the game itself in M3.
+Current coverage: `Services/delay`, `Services/sw_timer`, `Services/framebuffer`,
+`Services/gfx` and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
+Model/Control tests
+([VT-UNIT-001..005](../../Docu/PrePlanning/06-Verification-and-Validation.md)) arrive
+with the game itself in M3.
+
+`test_display.c` is worth reading as the example of why the BSP is the mocking boundary:
+it captures every byte the panel driver would clock out and asserts on the wire format,
+including the inverted bit sense. A polarity mistake there shows up on hardware only as
+a photographic negative — no build, and no OTT PASS/FAIL, would catch it.
 
 **Mocking a dependency** — include `mock_<module>.h` instead of `<module>.h` and set
 expectations:

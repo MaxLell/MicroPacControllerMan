@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "display.h"
+#include "framebuffer.h"
 #include "gfx.h"
 #include "sw_timer.h"
 #include "uart_bsp.h"
@@ -49,6 +50,8 @@
 
 typedef void (*ott_display_scene_fn)(void);
 
+/* The scenario owns the frame it draws; the display only borrows it when shown. */
+static framebuffer_t g_framebuffer;
 static sw_timer_t g_timeout_timer;
 static sw_timer_t g_hold_timer;
 static sw_timer_t g_vcom_timer;
@@ -65,9 +68,9 @@ static void prv_on_hold_elapsed(void)
 
 static void prv_on_vcom_due(void)
 {
-    display_service_vcom();
+    display_service();
 
-    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
+    sw_timer_start(&g_vcom_timer, DISPLAY_SERVICE_PERIOD_MS, prv_on_vcom_due);
 }
 
 /* Hold the current frame, keeping the panel's COM inversion alive. Returns `true`
@@ -93,102 +96,102 @@ static bool prv_hold(uint32_t in_duration_ms)
 
 static void prv_scene_rays(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t x = 0; x < DISPLAY_WIDTH; x = (int16_t)(x + OTT_DISPLAY_RAY_SPACING))
+    for (int16_t x = 0; x < FRAMEBUFFER_WIDTH; x = (int16_t)(x + OTT_DISPLAY_RAY_SPACING))
     {
-        gfx_line(0, 0, x, DISPLAY_HEIGHT - 1, DISPLAY_COLOR_BLACK);
+        gfx_line(&g_framebuffer, 0, 0, x, FRAMEBUFFER_HEIGHT - 1, FRAMEBUFFER_COLOR_BLACK);
     }
 
-    for (int16_t y = 0; y < DISPLAY_HEIGHT; y = (int16_t)(y + OTT_DISPLAY_RAY_SPACING))
+    for (int16_t y = 0; y < FRAMEBUFFER_HEIGHT; y = (int16_t)(y + OTT_DISPLAY_RAY_SPACING))
     {
-        gfx_line(DISPLAY_WIDTH - 1, 0, 0, y, DISPLAY_COLOR_BLACK);
+        gfx_line(&g_framebuffer, FRAMEBUFFER_WIDTH - 1, 0, 0, y, FRAMEBUFFER_COLOR_BLACK);
     }
 }
 
 static void prv_scene_nested_rectangles(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (DISPLAY_WIDTH / 2);
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2);
          inset = (int16_t)(inset + OTT_DISPLAY_RING_SPACING))
     {
-        gfx_rectangle(inset, inset, (int16_t)(DISPLAY_WIDTH - (2 * inset)),
-                      (int16_t)(DISPLAY_HEIGHT - (2 * inset)), DISPLAY_COLOR_BLACK);
+        gfx_rectangle(&g_framebuffer, inset, inset, (int16_t)(FRAMEBUFFER_WIDTH - (2 * inset)),
+                      (int16_t)(FRAMEBUFFER_HEIGHT - (2 * inset)), FRAMEBUFFER_COLOR_BLACK);
     }
 }
 
 static void prv_scene_alternating_bands(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (DISPLAY_WIDTH / 2);
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2);
          inset = (int16_t)(inset + OTT_DISPLAY_BAND_SPACING))
     {
-        const display_color_e color = (((inset / OTT_DISPLAY_BAND_SPACING) % 2) != 0)
-                                          ? DISPLAY_COLOR_WHITE
-                                          : DISPLAY_COLOR_BLACK;
+        const framebuffer_color_e color = (((inset / OTT_DISPLAY_BAND_SPACING) % 2) != 0)
+                                          ? FRAMEBUFFER_COLOR_WHITE
+                                          : FRAMEBUFFER_COLOR_BLACK;
 
-        gfx_filled_rectangle(inset, inset, (int16_t)(DISPLAY_WIDTH - (2 * inset)),
-                             (int16_t)(DISPLAY_HEIGHT - (2 * inset)), color);
+        gfx_filled_rectangle(&g_framebuffer, inset, inset, (int16_t)(FRAMEBUFFER_WIDTH - (2 * inset)),
+                             (int16_t)(FRAMEBUFFER_HEIGHT - (2 * inset)), color);
     }
 }
 
 static void prv_scene_concentric_circles(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t radius = OTT_DISPLAY_CIRCLE_FIRST_RADIUS; radius < DISPLAY_WIDTH;
+    for (int16_t radius = OTT_DISPLAY_CIRCLE_FIRST_RADIUS; radius < FRAMEBUFFER_WIDTH;
          radius = (int16_t)(radius + OTT_DISPLAY_CIRCLE_SPACING))
     {
-        gfx_circle(DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2, radius, DISPLAY_COLOR_BLACK);
+        gfx_circle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2, radius, FRAMEBUFFER_COLOR_BLACK);
     }
 }
 
 static void prv_scene_dot_grid(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t y = OTT_DISPLAY_DOT_GRID_ORIGIN; y < DISPLAY_HEIGHT;
+    for (int16_t y = OTT_DISPLAY_DOT_GRID_ORIGIN; y < FRAMEBUFFER_HEIGHT;
          y = (int16_t)(y + OTT_DISPLAY_DOT_GRID_SPACING))
     {
-        for (int16_t x = OTT_DISPLAY_DOT_GRID_ORIGIN; x < DISPLAY_WIDTH;
+        for (int16_t x = OTT_DISPLAY_DOT_GRID_ORIGIN; x < FRAMEBUFFER_WIDTH;
              x = (int16_t)(x + OTT_DISPLAY_DOT_GRID_SPACING))
         {
-            gfx_filled_circle(x, y, OTT_DISPLAY_DOT_RADIUS, DISPLAY_COLOR_BLACK);
+            gfx_filled_circle(&g_framebuffer, x, y, OTT_DISPLAY_DOT_RADIUS, FRAMEBUFFER_COLOR_BLACK);
         }
     }
 }
 
 static void prv_scene_nested_triangles(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (DISPLAY_HEIGHT / 2);
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_HEIGHT / 2);
          inset = (int16_t)(inset + OTT_DISPLAY_WEDGE_SPACING))
     {
-        gfx_triangle(DISPLAY_WIDTH / 2, inset, inset, (int16_t)(DISPLAY_HEIGHT - 1 - inset),
-                     (int16_t)(DISPLAY_WIDTH - 1 - inset), (int16_t)(DISPLAY_HEIGHT - 1 - inset),
-                     DISPLAY_COLOR_BLACK);
+        gfx_triangle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, inset, inset, (int16_t)(FRAMEBUFFER_HEIGHT - 1 - inset),
+                     (int16_t)(FRAMEBUFFER_WIDTH - 1 - inset), (int16_t)(FRAMEBUFFER_HEIGHT - 1 - inset),
+                     FRAMEBUFFER_COLOR_BLACK);
     }
 }
 
 static void prv_scene_composite(void)
 {
-    gfx_fill(DISPLAY_COLOR_WHITE);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    gfx_rectangle(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_COLOR_BLACK);
-    gfx_filled_rectangle(OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_BOX_SIZE,
-                         OTT_DISPLAY_BOX_SIZE, DISPLAY_COLOR_BLACK);
-    gfx_circle(OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y, OTT_DISPLAY_EYE_OUTER_RADIUS,
-               DISPLAY_COLOR_BLACK);
-    gfx_filled_circle(OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y,
-                      OTT_DISPLAY_EYE_INNER_RADIUS, DISPLAY_COLOR_BLACK);
-    gfx_line(OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_DIAGONAL_START_Y, OTT_DISPLAY_DIAGONAL_END_X,
-             OTT_DISPLAY_DIAGONAL_END_Y, DISPLAY_COLOR_BLACK);
-    gfx_filled_triangle(OTT_DISPLAY_WEDGE_LEFT_X, OTT_DISPLAY_WEDGE_BASE_Y,
+    gfx_rectangle(&g_framebuffer, 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_rectangle(&g_framebuffer, OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_BOX_SIZE,
+                         OTT_DISPLAY_BOX_SIZE, FRAMEBUFFER_COLOR_BLACK);
+    gfx_circle(&g_framebuffer, OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y, OTT_DISPLAY_EYE_OUTER_RADIUS,
+               FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_circle(&g_framebuffer, OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y,
+                      OTT_DISPLAY_EYE_INNER_RADIUS, FRAMEBUFFER_COLOR_BLACK);
+    gfx_line(&g_framebuffer, OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_DIAGONAL_START_Y, OTT_DISPLAY_DIAGONAL_END_X,
+             OTT_DISPLAY_DIAGONAL_END_Y, FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_triangle(&g_framebuffer, OTT_DISPLAY_WEDGE_LEFT_X, OTT_DISPLAY_WEDGE_BASE_Y,
                         OTT_DISPLAY_WEDGE_APEX_X, OTT_DISPLAY_WEDGE_APEX_Y,
-                        OTT_DISPLAY_WEDGE_RIGHT_X, OTT_DISPLAY_WEDGE_BASE_Y, DISPLAY_COLOR_BLACK);
+                        OTT_DISPLAY_WEDGE_RIGHT_X, OTT_DISPLAY_WEDGE_BASE_Y, FRAMEBUFFER_COLOR_BLACK);
 }
 
 static const ott_display_scene_fn k_scenes[] = {
@@ -235,12 +238,12 @@ bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, ch
     uart_bsp_write_string("Press the USER button (B1) to finish.\r\n");
 
     sw_timer_start(&g_timeout_timer, OTT_DISPLAY_TIMEOUT_MS, prv_on_timeout);
-    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
+    sw_timer_start(&g_vcom_timer, DISPLAY_SERVICE_PERIOD_MS, prv_on_vcom_due);
 
     for (size_t index = 0U; (index < scene_count) && !is_confirmed; ++index)
     {
         k_scenes[index]();
-        display_flush();
+        display_present(&g_framebuffer);
 
         is_confirmed = prv_hold(OTT_DISPLAY_SCENE_HOLD_MS);
     }
@@ -249,7 +252,7 @@ bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, ch
     if (!is_confirmed)
     {
         prv_scene_composite();
-        display_flush();
+        display_present(&g_framebuffer);
 
         while (sw_timer_is_active(&g_timeout_timer) && !prv_hold(OTT_DISPLAY_SCENE_HOLD_MS)) {}
     }

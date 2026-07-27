@@ -87,13 +87,19 @@ endif()
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         Bsp/systick_bsp/systick_bsp_host.c
+        Drivers/display/display_host.c
         Services/delay/delay.c
+        Services/framebuffer/framebuffer.c
+        Services/gfx/gfx.c
         Services/sw_timer/sw_timer.c
         ThirdParty/embedded_utils/custom_assert.c)
 
     target_include_directories(pacman_host PUBLIC
         Bsp/systick_bsp
+        Drivers/display
         Services/delay
+        Services/framebuffer
+        Services/gfx
         Services/sw_timer
         ThirdParty/embedded_utils)
 
@@ -132,9 +138,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/uart_bsp/uart_bsp.c
     Bsp/user_button/user_button.c
     Drivers/display/display.c
-    Drivers/gfx/gfx.c
     Drivers/touchpad/touchpad.c
     Services/delay/delay.c
+    Services/framebuffer/framebuffer.c
+    Services/gfx/gfx.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
@@ -160,9 +167,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/uart_bsp
     Bsp/user_button
     Drivers/display
-    Drivers/gfx
     Drivers/touchpad
     Services/delay
+    Services/framebuffer
+    Services/gfx
     Services/sw_timer
     Test/Target
     Test/Target/scripts
