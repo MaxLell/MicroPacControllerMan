@@ -20,32 +20,39 @@ Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
 ## Status
 
-- **M1 Toolchain Bring-Up — done & merged.** Register-level blinky (LD2/PA5) +
-  the OTT CLI framework with the retained-RAM/reset flow; `ott blinky`
-  (VT-INT-005) passes via the Python harness on real hardware.
-- **M2 Board Bring-Up — display + touchpad verified on hardware; R-001 closed.**
+- **M1 Toolchain Bring-Up — done & merged.** Build/flash/run proven end-to-end +
+  the OTT CLI framework with the retained-RAM/reset flow, on real hardware.
+- **M2 Board Bring-Up — done, display + touchpad verified on hardware; R-001 closed.**
   The mikroBUS pin map ([02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001))
   is HW-confirmed with a logic analyzer: the Click Shield for Nucleo-64 routes
   slot 1 via the **ST-Morpho** headers, so SPI1 is **SCK=PB3 / MOSI=PB5 /
   DISP=PB4 / CS=PB12 / EXTCOMIN=PC8** — not the Arduino-header PA5/PA6/PA7, whose
-  mismatch was the blank-display root cause. SPI/I2C/button/systick BSP +
-  display/gfx/touchpad drivers on HAL; `display`, `touchpad`, `button` and the
-  `lacheck` / `dispdiag` diagnostics pass; `run_ott.py` has an automatic suite.
-  Remaining: the `touchdot` (display+touchpad) scenario. On-target checklist in
-  [`Firmware/README.md`](Firmware/README.md#m2-hardware-verification-checklist).
+  mismatch was the blank-display root cause. `user_button`, `display`, `touchpad`
+  and `touchdot` all pass; `run_ott.py` has an automatic suite. On-target
+  checklist in [`Firmware/README.md`](Firmware/README.md#m2-hardware-verification-checklist).
+- **Post-M2 structural refactor — landed ([11 DEC-013](Docu/PrePlanning/11-Decisions-and-As-Built.md)).**
+  BSP renamed to the `*_bsp` suffix; new `dio_bsp` owns **all** GPIO; `button` →
+  `switch` + `user_button`; `millis()` replaced by `Services/delay` +
+  `Services/sw_timer`; `retain_ram` reduced to a byte buffer with the `ott_spec`
+  layout moved into `ott.c`; `lacheck`/`dispdiag` deleted; the coding standard
+  applied tree-wide (`Firmware/.clang-format`).
+- **M3 Game — next.**
 
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
-# Build (arm-none-eabi-gcc + CMake; STM32CubeMX + STM32 HAL under ThirdParty — see 11 DEC-012)
-cmake -B build -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.toolchain.cmake
-cmake --build build -j                                   # -> build/pacman.elf, expect LD2 ~1 Hz
+# Build (arm-none-eabi-gcc + CMake; STM32CubeMX + STM32 HAL under ThirdParty — see 11 DEC-012).
+# The cross-toolchain lives in CMakeLists.txt above project(), so no -DCMAKE_TOOLCHAIN_FILE.
+cmake -B build -G "Unix Makefiles"
+cmake --build build -j                                   # -> build/pacman.elf, warning-free
 
 # Flash over ST-LINK V3
 openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
 
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
-python3 Test/run_ott.py blinky --port /dev/ttyACM0       # exit 0 = PASS
+python3 Test/run_ott.py --suite                          # enumeration + boot banner
+python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS; also display/touchpad/touchdot
+./m2.sh all                                              # build + flash + all four, interactively
 ```
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
@@ -68,11 +75,25 @@ After installing openocd, **unplug/replug the board once** so a non-root user ca
 
 - **Layout:** layered tree `App / Bsp / Drivers / Services / Test / ThirdParty`,
   one folder per module — the binding rules are [03 Architecture §3.9](Docu/PrePlanning/03-Architecture.md#39-firmware-source-tree-layout).
+  BSP peripheral wrappers carry the **`_bsp` suffix** (`dio_bsp`, `i2c_bsp`, …),
+  matching [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw);
+  a generic primitive and its instance are separate modules (`switch` vs. `user_button`).
+- **All GPIO goes through `dio_bsp`** — name the pin in `dio_bsp_pin_e` + one row in
+  `k_pin_map`. Do not call `HAL_GPIO_*` anywhere else.
+- **No tick arithmetic, no `millis()`.** `Services/delay` for blocking waits,
+  `Services/sw_timer` for every timeout and periodic job.
+- **HAL over registers.** Direct register access needs a justifying comment; there is
+  exactly one today (`uart_bsp_read_character()` reads `RDR` — the HAL has no
+  non-blocking single-character read).
 - **Adding an OTT test:** new `Firmware/Test/Target/scripts/ott_<name>.c/.h` + one row
-  in `ott_scenarios.c`; nothing else changes.
+  in `ott_scenarios.c` + the source in `CMakeLists.txt`; nothing else changes.
 - **Coding standard:** [c-code-style](https://github.com/MaxLell/c-code-style)
-  (NFR-102). Fixes to the standard itself go via a separate PR to that repo, only
-  with the owner's prior approval.
+  (NFR-102), vendored as `Firmware/.clang-format`: Allman braces, 4 spaces, 120
+  columns, `prv_` statics, `g_` globals, `k_` const tables, `in_`/`out_`/`inout_` on
+  pointer parameters, named constants over literals, no abbreviations, `ASSERT` on
+  public-function preconditions. Keep comments sparse — say *why*, not *what*.
+  Fixes to the standard itself go via a separate PR to that repo, only with the
+  owner's prior approval.
 - **Verify on hardware** when a change has a runtime effect (build → flash → run
   the relevant OTT), the way M1 was verified.
 
