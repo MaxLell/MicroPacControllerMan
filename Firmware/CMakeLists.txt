@@ -86,6 +86,9 @@ endif()
 # ==============================================================================
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
+        App/agent/agent.c
+        App/pacman/pacman.c
+        App/playfield/playfield.c
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
         Services/delay/delay.c
@@ -100,6 +103,9 @@ if(PACMAN_HOST_BUILD)
         ThirdParty/embedded_utils/custom_assert.c)
 
     target_include_directories(pacman_host PUBLIC
+        App/agent
+        App/pacman
+        App/playfield
         Bsp/systick_bsp
         Drivers/display
         Services/delay
@@ -138,7 +144,10 @@ add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    App/agent/agent.c
     App/app_main.c
+    App/pacman/pacman.c
+    App/playfield/playfield.c
     Bsp/dio_bsp/dio_bsp.c
     Bsp/i2c_bsp/i2c_bsp.c
     Bsp/retain_ram/retain_ram.c
@@ -172,6 +181,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # stm32cubemx interface library below.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
+    App/agent
+    App/pacman
+    App/playfield
     Bsp/dio_bsp
     Bsp/i2c_bsp
     Bsp/retain_ram
