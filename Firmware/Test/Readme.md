@@ -27,11 +27,18 @@ CMock-generated mocks, so a test can drive cases real hardware and real time can
 reach on demand — the 32-bit tick wrapping around, for instance.
 
 Current coverage: `Services/delay`, `Services/sw_timer`, `Services/framebuffer`,
-`Services/gfx`, `Services/circular_buffer`, `Services/msg_queue`, `Services/msg_broker`
-and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
+`Services/gfx`, `Services/circular_buffer`, `Services/msg_queue`, `Services/msg_broker`,
+`Services/active_object` and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
 Model/Control tests
 ([VT-UNIT-001..005](../../Docu/PrePlanning/06-Verification-and-Validation.md)) arrive
 with the game itself in M3.
+
+`test_active_object.c` checks the *rules* of the Active Object pattern rather than the
+code implementing them: that a handler dispatching back into its own object is caught
+(otherwise a second message mutates the module's state halfway through the first update),
+and that a handler's publish is not delivered synchronously (otherwise the publisher runs
+inside the consumer and "no shared data" means nothing). Those are the invariants seven
+more modules will depend on.
 
 `test_msg_broker.c` is the example of what unit tests buy that hardware cannot:
 backpressure and slow-consumer isolation are *load* conditions. On the board they happen

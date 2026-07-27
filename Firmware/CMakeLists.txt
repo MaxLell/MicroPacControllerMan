@@ -91,7 +91,9 @@ if(PACMAN_HOST_BUILD)
         Services/delay/delay.c
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
-        Services/circular_buffer/circular_buffer.c
+        Services/active_object/active_object.c
+        Services/active_object/active_object.c
+    Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
         Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
@@ -103,6 +105,7 @@ if(PACMAN_HOST_BUILD)
         Services/delay
         Services/framebuffer
         Services/gfx
+        Services/active_object
         Services/circular_buffer
         Services/msg
         Services/msg_broker
@@ -149,6 +152,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/delay/delay.c
     Services/framebuffer/framebuffer.c
     Services/gfx/gfx.c
+    Services/active_object/active_object.c
     Services/circular_buffer/circular_buffer.c
     Services/msg_broker/msg_broker.c
     Services/msg_queue/msg_queue.c
@@ -181,6 +185,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Services/delay
     Services/framebuffer
     Services/gfx
+    Services/active_object
     Services/circular_buffer
     Services/msg
     Services/msg_broker

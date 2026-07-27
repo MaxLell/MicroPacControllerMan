@@ -24,6 +24,7 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
 | [RF-012](#rf-012) | Slot-2 reset is wired to PD2, firmware drives PA4 | Cosmetic | — |
+| [RF-013](#rf-013) | `run_ott.py` times out silently when another process holds the port | Low | — |
 
 ---
 
@@ -201,3 +202,17 @@ reset pulse simply goes to an unconnected pin.
 *Done when* either the pin is corrected in CubeMX, or the reset is dropped from
 `touchpad_init()` and the dead pin removed from `dio_bsp_pin_e` and the `.ioc`. The
 second is probably the better trade, since the controller does not need it.
+
+### RF-013
+
+**`run_ott.py` times out silently when another process holds the serial port.** Low.
+
+Two readers on the same tty split the incoming bytes, so the harness sees a partial
+stream and eventually reports a timeout or a missing boot banner — with nothing pointing
+at the real cause. Hit twice during development, both times from a stray script left
+holding `/dev/ttyACM0`; it will hit anyone who leaves `console.py` open in another
+terminal and then runs a test.
+
+*Done when* the harness notices at start-up that the port is already open by another
+process and says so, instead of failing as though the firmware were at fault. On Linux
+`fuser`/`lsof` or an advisory `flock` on the device would do it.
