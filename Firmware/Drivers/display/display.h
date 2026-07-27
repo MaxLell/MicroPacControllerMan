@@ -1,41 +1,77 @@
+/*
+ * display.h
+ *
+ * LCD Mono Click driver — Sharp LS013B7DH03, 128x128, 1 bpp memory LCD. The panel
+ * is write-only, so pixels go into a RAM frame buffer and nothing appears until
+ * display_flush().
+ *
+ * The panel needs its COM polarity inverted at least once per second while a
+ * static image is held, otherwise the liquid crystal degrades. The driver serves
+ * both inversion modes on every display_service_vcom() call, so either setting of
+ * the Click's mode-select jumper works.
+ */
+
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
-/*
- * LCD Mono Click driver — Sharp LS013B7DH03, 128x128, 1 bpp memory LCD, over SPI1
- * (Bsp/spi). Write-only panel with a RAM framebuffer here; nothing appears until
- * display_flush(). Protocol: mode 0, LSB-first, active-HIGH CS, ~1 MHz.
+/* ==========================================================================
+ * display - public types
+ * ========================================================================= */
+
+#define DISPLAY_WIDTH (128)
+#define DISPLAY_HEIGHT (128)
+
+/*! \brief Longest interval at which #display_service_vcom must be called while a
+ *         static image is held, in milliseconds. */
+#define DISPLAY_VCOM_PERIOD_MS (1000U)
+
+/*! \brief Drawing colours. `BLACK` is ink on, `WHITE` is background. */
+typedef enum
+{
+    DISPLAY_COLOR_WHITE = 0,
+    DISPLAY_COLOR_BLACK
+} display_color_e;
+
+/* ==========================================================================
+ * display - public API
+ * ========================================================================= */
+
+/*! \brief Bring the panel up: enable it, clear it, and leave it ready to draw. */
+void display_init(void);
+
+/*! \brief Set the whole frame buffer to white. Does not touch the panel. */
+void display_clear(void);
+
+/*! \brief Set one pixel in the frame buffer.
  *
- * Control lines (LCD Mono Click, mikroBUS slot 1 via the Click Shield for
- * Nucleo-64 / ST-Morpho — verified on hardware, R-001 closed):
- *   CS       = PB12 (GPIO, active HIGH)
- *   DISP     = PB4  (GPIO, high = panel on) — the Click routes DISP onto the
- *                    mikroBUS MISO line, so PB4 is used as GPIO, not SPI MISO
- *   EXTCOMIN = PC8  (GPIO, mikroBUS PWM) — external VCOM clock
+ * Coordinates outside the panel are ignored, so callers may draw over the edge.
  *
- * VCOM/polarity inversion: this driver drives the software VCOM bit on every
- * flush AND toggles the EXTCOMIN pin on display_vcom_tick(), so it works whether
- * the board's EXTMODE jumper selects software or external COM inversion. Call
- * display_vcom_tick() at ~1 Hz while a static image is held (Sharp requires an
- * inversion at least once per second).
- *
- * Colors are drawing-sense: BLACK = ink on, WHITE = background.
+ * \param[in]       in_x: column, `0` is the left edge
+ * \param[in]       in_y: row, `0` is the top edge
+ * \param[in]       in_color: member of \ref display_color_e
  */
+void display_set_pixel(int16_t in_x, int16_t in_y, display_color_e in_color);
 
-#define DISPLAY_WIDTH  128
-#define DISPLAY_HEIGHT 128
+/*! \brief Push the whole frame buffer to the panel. */
+void display_flush(void);
 
-#define DISPLAY_WHITE 0
-#define DISPLAY_BLACK 1
+/*! \brief Clear the panel and the frame buffer with the panel's clear-all command. */
+void display_clear_all(void);
 
-void display_init(void);                 /* SPI + GPIOs, panel on, cleared */
-void display_clear(void);                /* framebuffer -> all white (no flush) */
-void display_pixel(int x, int y, int color); /* set one pixel in the framebuffer */
-void display_flush(void);                /* push the whole framebuffer to the panel */
-void display_all_clear(void);            /* hardware clear-all command (+ framebuffer) */
-void display_on(int on);                 /* DISP pin: 1 = on, 0 = blank (RAM kept) */
-void display_vcom_tick(void);            /* service VCOM while idle (call ~1 Hz) */
+/*! \brief Enable or blank the panel. Blanking keeps the panel's own memory.
+ *
+ * \param[in]       in_is_enabled: `true` shows the image, `false` blanks it
+ */
+void display_set_enabled(bool in_is_enabled);
+
+/*! \brief Service the panel's COM inversion.
+ *
+ * Must be called at least every #DISPLAY_VCOM_PERIOD_MS while a static image is
+ * held. Serves both software and external COM inversion.
+ */
+void display_service_vcom(void);
 
 #endif /* DISPLAY_H */
