@@ -24,6 +24,16 @@ void sw_timer_test_reset(void);
 #define TEST_TIMEOUT_MS (100U)
 #define TEST_START_TICK (1000U)
 
+#define TEST_ONE_CALL (1U)
+#define TEST_NO_CALLS (0U)
+#define TEST_REARM_COUNT (2U)
+#define TEST_EXPECTED_PERIODIC_CALLS (TEST_REARM_COUNT + 1U)
+
+/* Multiples of the timeout used to prove a one-shot timer stays silent afterwards. */
+#define TEST_WELL_PAST_TIMEOUT (TEST_TIMEOUT_MS * 5U)
+#define TEST_MUCH_LATER (TEST_TIMEOUT_MS * 9U)
+#define TEST_THREE_TIMEOUTS (TEST_TIMEOUT_MS * 3U)
+
 static uint32_t g_callback_calls;
 static uint32_t g_rearm_budget;
 static sw_timer_t g_timer;
@@ -98,7 +108,7 @@ void test_a_timer_does_not_fire_before_its_timeout(void)
 
     prv_process_at_elapsed(TEST_TIMEOUT_MS - 1U);
 
-    TEST_ASSERT_EQUAL_UINT32(0U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_NO_CALLS, g_callback_calls);
     TEST_ASSERT_TRUE(sw_timer_is_active(&g_timer));
 }
 
@@ -108,7 +118,7 @@ void test_a_timer_fires_exactly_on_its_timeout(void)
 
     prv_process_at_elapsed(TEST_TIMEOUT_MS);
 
-    TEST_ASSERT_EQUAL_UINT32(1U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_CALL, g_callback_calls);
 }
 
 void test_a_timer_goes_inactive_once_it_has_fired(void)
@@ -125,10 +135,10 @@ void test_a_one_shot_timer_fires_only_once(void)
     prv_start_timer(prv_on_expiry);
 
     prv_process_at_elapsed(TEST_TIMEOUT_MS);
-    prv_process_at_elapsed(TEST_TIMEOUT_MS * 5U);
-    prv_process_at_elapsed(TEST_TIMEOUT_MS * 9U);
+    prv_process_at_elapsed(TEST_WELL_PAST_TIMEOUT);
+    prv_process_at_elapsed(TEST_MUCH_LATER);
 
-    TEST_ASSERT_EQUAL_UINT32(1U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_CALL, g_callback_calls);
 }
 
 void test_expiry_survives_tick_wraparound(void)
@@ -140,19 +150,19 @@ void test_expiry_survives_tick_wraparound(void)
     systick_bsp_get_tick_ExpectAndReturn(0U);
     sw_timer_process();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_NO_CALLS, g_callback_calls);
 
     systick_bsp_get_tick_ExpectAndReturn(TEST_TIMEOUT_MS - 2U);
     sw_timer_process();
 
-    TEST_ASSERT_EQUAL_UINT32(1U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_CALL, g_callback_calls);
 }
 
 /* --- re-arming and stopping ----------------------------------------------- */
 
 void test_a_callback_that_rearms_its_timer_makes_it_periodic(void)
 {
-    g_rearm_budget = 2U;
+    g_rearm_budget = TEST_REARM_COUNT;
 
     prv_start_timer(prv_on_expiry_rearming);
 
@@ -160,7 +170,7 @@ void test_a_callback_that_rearms_its_timer_makes_it_periodic(void)
     prv_process_at_elapsed(TEST_TIMEOUT_MS);
     prv_process_at_elapsed(TEST_TIMEOUT_MS);
 
-    TEST_ASSERT_EQUAL_UINT32(3U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_EXPECTED_PERIODIC_CALLS, g_callback_calls);
     TEST_ASSERT_FALSE(sw_timer_is_active(&g_timer));
 }
 
@@ -169,9 +179,9 @@ void test_a_stopped_timer_never_fires(void)
     prv_start_timer(prv_on_expiry);
     sw_timer_stop(&g_timer);
 
-    prv_process_at_elapsed(TEST_TIMEOUT_MS * 3U);
+    prv_process_at_elapsed(TEST_THREE_TIMEOUTS);
 
-    TEST_ASSERT_EQUAL_UINT32(0U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_NO_CALLS, g_callback_calls);
     TEST_ASSERT_FALSE(sw_timer_is_active(&g_timer));
 }
 
@@ -188,12 +198,12 @@ void test_reset_restarts_the_timeout_from_the_current_tick(void)
                                         + (TEST_TIMEOUT_MS - 1U));
     sw_timer_process();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_NO_CALLS, g_callback_calls);
 
     systick_bsp_get_tick_ExpectAndReturn(TEST_START_TICK + (TEST_TIMEOUT_MS * 2U));
     sw_timer_process();
 
-    TEST_ASSERT_EQUAL_UINT32(1U, g_callback_calls);
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_CALL, g_callback_calls);
 }
 
 /* --- preconditions -------------------------------------------------------- */

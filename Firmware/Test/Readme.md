@@ -27,10 +27,19 @@ CMock-generated mocks, so a test can drive cases real hardware and real time can
 reach on demand — the 32-bit tick wrapping around, for instance.
 
 Current coverage: `Services/delay`, `Services/sw_timer`, `Services/framebuffer`,
-`Services/gfx` and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
+`Services/gfx`, `Services/circular_buffer`, `Services/msg_queue`, `Services/msg_broker`
+and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
 Model/Control tests
 ([VT-UNIT-001..005](../../Docu/PrePlanning/06-Verification-and-Validation.md)) arrive
 with the game itself in M3.
+
+`test_msg_broker.c` is the example of what unit tests buy that hardware cannot:
+backpressure and slow-consumer isolation are *load* conditions. On the board they happen
+rarely, at the worst moment, and leave nothing behind but a dropped input or a frame that
+never rendered. Here they are arithmetic. Note it deliberately uses the *real*
+`message_queue` rather than mocking it — the broker's logic mostly is queue
+orchestration, so a mock would turn the tests into assertions about which functions were
+called instead of about what a subscriber receives.
 
 `test_display.c` is worth reading as the example of why the BSP is the mocking boundary:
 it captures every byte the panel driver would clock out and asserts on the wire format,
@@ -63,9 +72,14 @@ ASSERT_PROBE_EXPECT(sw_timer_create(NULL), "in_timer != NULL");
 **Two gotchas when adding a test:**
 
 - Every test file needs an explicit `#include "custom_assert.h"`. Ceedling picks the
-  sources to link from the includes it sees in the *test* file, not transitively, and
+  sources to link from the includes it sees in the *test* file, **not transitively**, and
   every test executable links the assert probe — without it the link fails on
-  `custom_assert_failed`.
+  `custom_assert_failed`. The same applies at any depth: `test_msg_broker.c` has to
+  include `msg_queue.h` **and** `circular_buffer.h`, even though it calls neither, because
+  the broker sits two modules above the ring buffer.
+- **No magic numbers, including in tests.** A literal that carries meaning gets a named
+  constant — a failure message then says which value went missing instead of leaving you
+  to count offsets.
 - A module with file-scope state needs a reset hook for per-test isolation, since all
   tests in a file share one executable. See `sw_timer_test_reset()`, compiled only
   under `TEST`, called from `setUp()`. `STATIC` from `test_support.h` opens statics up

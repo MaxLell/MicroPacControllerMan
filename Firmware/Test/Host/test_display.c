@@ -30,6 +30,31 @@
 
 #define BYTES_PER_LINE_RECORD (1U + FRAMEBUFFER_BYTES_PER_LINE + 1U)
 
+#define FIRST_LINE (0U)
+#define SECOND_LINE (1U)
+#define LAST_LINE (FRAMEBUFFER_HEIGHT - 1U)
+
+/* Wire-format expectations. The panel wants a set bit for white, so an un-inked buffer
+ * goes out as all ones and a fully inked one as all zeroes. */
+#define WIRE_ALL_WHITE (0xFFU)
+#define WIRE_ALL_INK (0x00U)
+#define PADDING_BYTE (0x00U)
+
+/* First data byte of a line record, past its address byte. */
+#define FIRST_DATA_BYTE_OFFSET (1U)
+#define SECOND_DATA_BYTE_OFFSET (2U)
+
+/* A lone inked pixel at each end of a byte, and the byte each produces on the wire. */
+#define LONE_PIXEL_LOW_X (0)
+#define LONE_PIXEL_HIGH_X (7)
+#define LONE_PIXEL_ROW (5)
+#define UNTOUCHED_ROW (4)
+#define WIRE_LOW_BIT_INKED (0xFEU)
+#define WIRE_HIGH_BIT_INKED (0x7FU)
+
+/* A command frame is the command plus one padding byte. */
+#define COMMAND_FRAME_BYTES (2U)
+
 static uint8_t g_captured[CAPTURE_MAX_BYTES];
 static size_t g_captured_length;
 static framebuffer_t g_framebuffer;
@@ -93,9 +118,9 @@ void test_line_addresses_are_one_based_and_ascending(void)
 {
     display_present(&g_framebuffer);
 
-    TEST_ASSERT_EQUAL_UINT8(1U, g_captured[prv_line_offset(0)]);
-    TEST_ASSERT_EQUAL_UINT8(2U, g_captured[prv_line_offset(1)]);
-    TEST_ASSERT_EQUAL_UINT8(FRAMEBUFFER_HEIGHT, g_captured[prv_line_offset(FRAMEBUFFER_HEIGHT - 1)]);
+    TEST_ASSERT_EQUAL_UINT8(1U, g_captured[prv_line_offset(FIRST_LINE)]);
+    TEST_ASSERT_EQUAL_UINT8(2U, g_captured[prv_line_offset(SECOND_LINE)]);
+    TEST_ASSERT_EQUAL_UINT8(FRAMEBUFFER_HEIGHT, g_captured[prv_line_offset(LAST_LINE)]);
 }
 
 void test_every_line_record_ends_with_a_padding_byte(void)
@@ -106,7 +131,7 @@ void test_every_line_record_ends_with_a_padding_byte(void)
     {
         const size_t padding_index = prv_line_offset(line) + 1U + FRAMEBUFFER_BYTES_PER_LINE;
 
-        TEST_ASSERT_EQUAL_UINT8(0x00U, g_captured[padding_index]);
+        TEST_ASSERT_EQUAL_UINT8(PADDING_BYTE, g_captured[padding_index]);
     }
 }
 
@@ -119,7 +144,8 @@ void test_an_empty_frame_goes_out_as_all_ones(void)
     /* No ink anywhere, so every data bit on the wire must be white, i.e. set. */
     for (uint16_t byte = 0U; byte < FRAMEBUFFER_BYTES_PER_LINE; ++byte)
     {
-        TEST_ASSERT_EQUAL_HEX8(0xFFU, g_captured[prv_line_offset(0) + 1U + byte]);
+        TEST_ASSERT_EQUAL_HEX8(WIRE_ALL_WHITE,
+                               g_captured[prv_line_offset(FIRST_LINE) + FIRST_DATA_BYTE_OFFSET + byte]);
     }
 }
 
@@ -131,7 +157,8 @@ void test_a_fully_inked_frame_goes_out_as_all_zeroes(void)
 
     for (uint16_t byte = 0U; byte < FRAMEBUFFER_BYTES_PER_LINE; ++byte)
     {
-        TEST_ASSERT_EQUAL_HEX8(0x00U, g_captured[prv_line_offset(0) + 1U + byte]);
+        TEST_ASSERT_EQUAL_HEX8(WIRE_ALL_INK,
+                               g_captured[prv_line_offset(FIRST_LINE) + FIRST_DATA_BYTE_OFFSET + byte]);
     }
 }
 
@@ -139,24 +166,30 @@ void test_a_single_inked_pixel_clears_exactly_its_bit_on_the_wire(void)
 {
     /* Pixel 0 of row 5 is bit 0 of that row's first data byte. Inked in the buffer, so
      * cleared on the wire; its seven neighbours stay set. */
-    framebuffer_set_pixel(&g_framebuffer, 0, 5, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, LONE_PIXEL_LOW_X, LONE_PIXEL_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
 
     display_present(&g_framebuffer);
 
-    TEST_ASSERT_EQUAL_HEX8(0xFEU, g_captured[prv_line_offset(5) + 1U]);
-    TEST_ASSERT_EQUAL_HEX8(0xFFU, g_captured[prv_line_offset(5) + 2U]);
+    TEST_ASSERT_EQUAL_HEX8(WIRE_LOW_BIT_INKED,
+                           g_captured[prv_line_offset(LONE_PIXEL_ROW) + FIRST_DATA_BYTE_OFFSET]);
+    TEST_ASSERT_EQUAL_HEX8(WIRE_ALL_WHITE,
+                           g_captured[prv_line_offset(LONE_PIXEL_ROW) + SECOND_DATA_BYTE_OFFSET]);
     /* A different row is untouched. */
-    TEST_ASSERT_EQUAL_HEX8(0xFFU, g_captured[prv_line_offset(4) + 1U]);
+    TEST_ASSERT_EQUAL_HEX8(WIRE_ALL_WHITE,
+                           g_captured[prv_line_offset(UNTOUCHED_ROW) + FIRST_DATA_BYTE_OFFSET]);
 }
 
 void test_the_pixel_bit_order_within_a_byte_is_preserved(void)
 {
-    framebuffer_set_pixel(&g_framebuffer, 7, 0, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, LONE_PIXEL_HIGH_X, FIRST_LINE,
+                          FRAMEBUFFER_COLOR_BLACK);
 
     display_present(&g_framebuffer);
 
-    /* Pixel 7 is the most significant bit of the first byte. */
-    TEST_ASSERT_EQUAL_HEX8(0x7FU, g_captured[prv_line_offset(0) + 1U]);
+    /* The last pixel of a byte is its most significant bit. */
+    TEST_ASSERT_EQUAL_HEX8(WIRE_HIGH_BIT_INKED,
+                           g_captured[prv_line_offset(FIRST_LINE) + FIRST_DATA_BYTE_OFFSET]);
 }
 
 /* --- VCOM and commands ---------------------------------------------------- */
@@ -180,17 +213,17 @@ void test_clearing_sends_the_clear_all_command(void)
 {
     display_clear();
 
-    TEST_ASSERT_EQUAL_UINT32(2U, (uint32_t)g_captured_length);
+    TEST_ASSERT_EQUAL_UINT32(COMMAND_FRAME_BYTES, (uint32_t)g_captured_length);
     TEST_ASSERT_TRUE((g_captured[0] & COMMAND_CLEAR_ALL) != 0U);
-    TEST_ASSERT_EQUAL_UINT8(0x00U, g_captured[1]);
+    TEST_ASSERT_EQUAL_UINT8(PADDING_BYTE, g_captured[1]);
 }
 
 void test_servicing_the_display_sends_no_line_write(void)
 {
     display_service();
 
-    /* Upkeep only: a two-byte command that must not ask the panel to update. */
-    TEST_ASSERT_EQUAL_UINT32(2U, (uint32_t)g_captured_length);
+    /* Upkeep only: a command frame that must not ask the panel to update. */
+    TEST_ASSERT_EQUAL_UINT32(COMMAND_FRAME_BYTES, (uint32_t)g_captured_length);
     TEST_ASSERT_EQUAL_UINT8(0U, g_captured[0] & COMMAND_WRITE_LINE);
 }
 
