@@ -18,6 +18,11 @@ Start at **[`Docu/PrePlanning/Index.md`](Docu/PrePlanning/Index.md)**. Most-used
 
 Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
+Known work deliberately left undone is tracked in
+**[`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md)** (`RF-xxx`) — check it
+before "fixing" something that was a conscious deferral, and add to it rather than
+silently working around a wart.
+
 ## Status
 
 - **M1 Toolchain Bring-Up — done & merged.** Build/flash/run proven end-to-end +

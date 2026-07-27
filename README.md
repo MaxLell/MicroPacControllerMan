@@ -13,6 +13,7 @@ disciplined, requirements-driven embedded project from spec to firmware.
 | [`Docu/PrePlanning/`](Docu/PrePlanning/Index.md) | **Source of truth**: requirements (EARS), architecture, milestones, verification, risks, the OTT mechanism, and a decisions/as-built log. Start at `Index.md`. |
 | [`Docu/Idea.md`](Docu/Idea.md) | The original idea capture (historical). |
 | [`Firmware/`](Firmware/README.md) | The STM32 firmware — CMake + arm-none-eabi-gcc, STM32CubeMX/HAL, OpenOCD. See its README for build/flash/test. |
+| [`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md) | Known work deliberately not done yet (`RF-xxx`) — deferrals, warts, and what "done" would look like for each. |
 | [`CLAUDE.md`](CLAUDE.md) | Quick-start + conventions (auto-loaded by Claude Code). |
 
 ## Quick start
