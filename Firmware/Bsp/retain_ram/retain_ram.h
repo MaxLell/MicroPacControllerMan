@@ -1,26 +1,37 @@
+/*
+ * retain_ram.h
+ *
+ * Fixed-size RAM buffer that survives a software reset. This module owns the
+ * memory only — what the bytes mean is entirely up to the caller.
+ */
+
 #ifndef RETAIN_RAM_H
 #define RETAIN_RAM_H
 
+#include <stddef.h>
 #include <stdint.h>
 
-/*
- * Retained RAM: a small object placed in the linker's `.noinit` section, which
- * the startup code does NOT zero, so its contents survive a software reset
- * (they are only lost on a cold/power-on or brown-out reset). Used to carry an
- * OTT test request across the reset that the OTT mechanism performs (doc 09).
+/* ==========================================================================
+ * retain_ram - public API
+ * ========================================================================= */
+
+#define RETAIN_RAM_BUFFER_SIZE (64U)
+
+/*! \brief Copy a buffer into the retained memory.
+ *
+ * \param[in]       in_buffer: source bytes, must not be `NULL`
+ * \param[in]       in_buffer_size: must equal #RETAIN_RAM_BUFFER_SIZE
  */
+void retained_ram_write(const uint8_t* const in_buffer, size_t in_buffer_size);
 
-#define OTT_ARG_MAX 32U
-
-typedef struct {
-    uint32_t magic;              /* set to OTT_MAGIC when a request is valid   */
-    uint32_t checksum;           /* over test_id + data_size + data[]          */
-    uint32_t test_id;            /* 0 = none; otherwise scenario index + 1     */
-    uint32_t data_size;          /* valid bytes in data[]                      */
-    uint8_t  data[OTT_ARG_MAX];  /* opaque per-test parameter blob             */
-} ott_spec_t;
-
-/* Pointer to the single retained OTT request (lives in `.noinit`). */
-ott_spec_t* retain_ott_spec(void);
+/*! \brief Copy the retained memory into a buffer.
+ *
+ * The contents are undefined after a power-on or brown-out reset, so the caller
+ * must be able to recognise garbage (magic word, checksum, ...).
+ *
+ * \param[out]      out_buffer: receives the bytes, must not be `NULL`
+ * \param[in]       in_buffer_size: must equal #RETAIN_RAM_BUFFER_SIZE
+ */
+void retained_ram_read(uint8_t* const out_buffer, size_t in_buffer_size);
 
 #endif /* RETAIN_RAM_H */
