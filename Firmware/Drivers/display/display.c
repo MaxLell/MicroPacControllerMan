@@ -28,9 +28,16 @@
 /* A frame-buffer byte of all-ones is all-white (panel-native polarity). */
 #define DISPLAY_FRAME_BUFFER_WHITE_BYTE (0xFFU)
 
-/* The panel wants ~6 us of setup and ~2 us of hold around chip-select; this busy
- * loop covers both with margin at the clock speeds this firmware runs at. */
-#define DISPLAY_CHIP_SELECT_SETTLE_LOOPS (200U)
+/* The panel wants ~6 us of setup and ~2 us of hold around chip-select.
+ *
+ * This is a spin count, not a time, so it scales inversely with the core clock. It
+ * was tuned when the firmware ran at 16 MHz; the clock is now 170 MHz (DEC-004),
+ * which shortened it by roughly 10x to an estimated 6-11 us — i.e. it now only
+ * barely clears the 6 us setup requirement, and would silently violate it on any
+ * further clock or compiler change. Widened so the margin is real again; the cost
+ * is a few microseconds twice per command and twice per flush, which is noise next
+ * to the ~2.3 kB the flush itself clocks out. */
+#define DISPLAY_CHIP_SELECT_SETTLE_LOOPS (600U)
 
 /* Panel-native bits: 1 = white, 0 = black. Bit 0 is the left-most pixel of a
  * byte, matching the LSB-first transfer. */
