@@ -59,6 +59,15 @@ bool uart_bsp_read_character(char* out_character)
 {
     ASSERT(out_character != NULL);
 
+    /* An overrun latches ORE, and while ORE is set the hardware stops raising
+     * RXNE — so a single dropped character would wedge the console permanently.
+     * Clear it and carry on: losing the overrun character is recoverable, losing
+     * the console is not. */
+    if (__HAL_UART_GET_FLAG(&UART_BSP_HANDLE, UART_FLAG_ORE))
+    {
+        __HAL_UART_CLEAR_OREFLAG(&UART_BSP_HANDLE);
+    }
+
     /* The RX FIFO is disabled, so RXNE marks exactly one ready character and
      * reading RDR clears the flag. The HAL has no non-blocking single-character
      * read, so this is the one place where a peripheral register is touched

@@ -57,6 +57,21 @@ def configure_tty(port: str, baud: str) -> None:
     )
 
 
+def write_command(fd: int, command: str, per_char_delay: float = 0.002) -> None:
+    """Send a command one character at a time.
+
+    The firmware polls a single-byte RX register and echoes each character over a
+    blocking UART TX, so it is deaf for the ~90 us it takes to echo. Writing a
+    whole command in one burst overruns that register: the character is lost, the
+    hardware latches ORE and — until the firmware clears it — stops raising RXNE
+    at all. The firmware clears ORE now, but pacing the host means the characters
+    are not dropped in the first place. 2 ms per character is ~20x the echo time
+    and still only ~35 ms for a full command."""
+    for char in command.encode():
+        os.write(fd, bytes([char]))
+        time.sleep(per_char_delay)
+
+
 def read_until(fd: int, needles, timeout: float, echo: bool = False) -> "tuple[str|None, str]":
     """Read until one of `needles` (list of substrings) appears or timeout.
     Returns (matched_needle_or_None, full_text). Echoes bytes live if echo=True."""
@@ -111,12 +126,17 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
                   f"press the USER button (B1) to finish ---")
         # Don't send until the board has finished booting — see wait_until_idle().
         wait_until_idle(fd)
-        os.write(fd, f"ott {test}\r\n".encode())
+        write_command(fd, f"ott {test}\r\n")
         match, text = read_until(fd, [passed, failed, unknown], timeout, echo=interactive)
         if match == passed:
             print(f"\nPASS: {test}")
             return 0
         if match == failed:
+            # read_until returns the instant "OTT FAILED [<test>]" appears, which is
+            # before the ": <reason>" tail has arrived — and the reason is the whole
+            # point of a failure report. Give the rest of the line a moment.
+            _, tail = read_until(fd, ["\n"], 1.0, echo=interactive)
+            text += tail
             for line in text.splitlines():
                 if line.startswith(failed):
                     print(f"\n{line}")
@@ -143,7 +163,8 @@ def check_banner(port: str, baud: str, timeout: float = 5.0) -> bool:
     configure_tty(port, baud)
     fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
     try:
-        os.write(fd, b"reset\r\n")
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
         match, _ = read_until(fd, [BANNER], timeout)
         ok = match is not None
         print(f"[VT-INT-002] boot banner: {'seen' if ok else 'NOT SEEN'}")
