@@ -13,6 +13,7 @@ into a driver.
 | `sw_timer/` | The non-blocking half: arm a timer, keep working, and `sw_timer_process()` fires whatever came due. Timers are one-shot; a callback that re-arms its own timer is periodic. |
 | `framebuffer/` | A 1-bpp frame buffer: memory plus the bit arithmetic to address it. An object, not a hidden global, so several can exist — the render path is specified to hand on a double-buffered snapshot ([03 §3.2](../../Docu/PrePlanning/03-Architecture.md), R-007). Colours are *logical*: a set bit means ink, and whatever polarity a panel wants is that driver's problem. |
 | `gfx/` | Geometric primitives drawn into a frame buffer: lines, rectangles, circles, triangles, filled and outlined. No text or logo. Shapes may hang over the edges; the frame buffer clips them. |
+| `active_object/` | The Active-Object template every module is built on (FR-109, [03 §3.5](../../Docu/PrePlanning/03-Architecture.md)): a single inbound queue, a dispatch handler, and an opaque pointer to the module's private state. A module contributes only its handler and its data. Two of the pattern's rules are *enforced*, not just documented — run-to-completion asserts on re-entry, and asynchronous-only follows from the broker's output queue. |
 | `circular_buffer/` | A generic fixed-capacity FIFO ring buffer of same-sized elements, caller-supplied storage (no heap, NFR-103). Element-type-agnostic — it moves `element_size` bytes and never looks at them. A component in its own right because the ring arithmetic is identical whatever is queued, and it is where off-by-one and wrap-around bugs live. |
 | `msg/` | The shared vocabulary: topic IDs, payload types, and the fixed-size envelope. Header-only — a vocabulary has no behaviour. Transcribed from [03 §3.3](../../Docu/PrePlanning/03-Architecture.md), which stays the authority. |
 | `msg_queue/` | A type-safe skin over `circular_buffer` so callers pass `msg_t` instead of `void*` and cannot get the element size wrong at a call site. |
@@ -40,14 +41,16 @@ reference implementation it was adapted from
   does *not* assert "not already initialized" the way the singleton did — on an
   instance that would read uninitialized memory.
 
-**Threading:** FR-108 wants a worker task per broker. Until FreeRTOS lands in M4,
-`message_broker_process()` is that worker's body and the super-loop calls it. The API
-does not change when the task appears.
+**Threading:** FR-108 wants a worker task per broker, and §3.4 a task per module. Until
+FreeRTOS lands in M4, `msg_broker_process()` and `active_object_process_all()` are those
+task bodies and the loop calls them. This is not a stopgap on the host: §3.4 says the host
+build runs these "as plain functions/loops driven by the SDL event loop instead of tasks".
+Neither API changes when the tasks appear.
 
 Candidates as the project grows:
 
-- the Active-Object base ([§3.5](../../Docu/PrePlanning/03-Architecture.md)),
-- an FSM helper, as in the reference project.
+- an FSM helper, as in the reference project — `active_object` deliberately does not
+  bundle one, since not every module needs states.
 
 **Depends on:** nothing hardware-specific — with one deliberate exception, `delay` and
 `sw_timer` read the tick from `Bsp/systick_bsp`, whose header is HAL-free and has a host
