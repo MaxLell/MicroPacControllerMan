@@ -150,6 +150,15 @@ not the Arduino headers — that mismatch was the original blank-display cause. 
 map is **HW-confirmed** with a logic analyzer (R-001 closed) and recorded in
 [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
 
+The clock tree is owned by the `.ioc` too: **SYSCLK 170 MHz** (PLL, `HSI/4 × 85`, the
+part's maximum) with a **1 kHz SysTick**. Full table in
+[02 §2.3.4](../Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
+One consequence is worth internalising: a delay written as a *spin count* is ~10×
+shorter at 170 MHz than at the 16 MHz this project started on, which is why the only
+such delay left (the display's chip-select settle loop) carries a comment saying so.
+Everything else uses `Services/delay` or `Services/sw_timer`, which are
+clock-independent.
+
 | Signal | Pin | Note |
 |---|---|---|
 | SPI1 SCK / MOSI | PB3 / PB5 | mikroBUS slot 1, mode 0, LSB-first, ~0.66 MHz |

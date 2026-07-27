@@ -62,6 +62,10 @@ After installing openocd, **unplug/replug the board once** so a non-root user ca
 ## Hardware facts
 
 - STM32G431RB Nucleo-64; on-board **ST-LINK V3** = SWD debug **+** virtual COM port.
+- **SYSCLK 170 MHz** (PLL, `HSI/4 × 85` — the part's maximum), 1 kHz SysTick. Owned by
+  the CubeMX `.ioc`; see [02 §2.3.4](Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
+  Consequence: never express a delay as a spin count — at this clock it is ~10× shorter
+  than the 16 MHz the project started on. Use `Services/delay` / `Services/sw_timer`.
 - Serial console: **LPUART1 on PA2/PA3**, **115200 8N1**, at **`/dev/ttyACM0`**.
   The VCP is on the ST-LINK side, so it **stays enumerated across a target reset** —
   that is what makes the OTT reset flow work on one serial handle.
