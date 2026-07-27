@@ -29,7 +29,9 @@
 #define OTT_CHECKSUM_SEED (0x1234ABCDU)
 #define OTT_CHECKSUM_MULTIPLIER (31U)
 
-#define OTT_REASON_MAX_SIZE (64U)
+/* Long enough for the diagnostic reasons the scenarios actually write; snprintf
+ * truncates rather than overruns if one ever outgrows it. */
+#define OTT_REASON_MAX_SIZE (96U)
 
 /* Index of the test name within the argument vector handed to a setup step. */
 #define OTT_ARGUMENT_INDEX_NAME (1)
