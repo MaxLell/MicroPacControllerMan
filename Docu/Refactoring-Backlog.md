@@ -6,8 +6,8 @@ the [Pre-Planning set](PrePlanning/Index.md) stays the source of truth for *what
 system must do*; this file only tracks *what we owe the codebase*.
 
 Every item says why it matters and what "done" looks like, so it can be picked up
-cold. Items use `RF-xxx` IDs. Delete an entry when it is fixed — the git history keeps
-the record.
+cold. Items use `RF-xxx` IDs, and a fixed entry is **deleted** rather than struck
+through — git history keeps the record, and IDs are never reused.
 
 Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
@@ -15,52 +15,17 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
 | ID | Item | Severity | Blocks |
 |---|---|---|---|
-| [RF-002](#rf-002) | No host-side unit-test framework — **blocked: Ceedling needs Ruby** | **High** | M3 |
 | [RF-003](#rf-003) | Application is not yet separable from the hardware — first seam cut | **High** | M3 |
-| [RF-004](#rf-004) | Our own shims live under `ThirdParty/` | Low | — |
 | [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | — |
 | [RF-006](#rf-006) | Display chip-select delay is a spin count, not a duration | Medium | — |
 | [RF-007](#rf-007) | Display always pushes the full frame | Deferred — measure first | — |
 | [RF-008](#rf-008) | LPUART RX FIFO disabled; characters can still be dropped | Low | — |
 | [RF-009](#rf-009) | OTT console keeps partial input across a scenario | Low | — |
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
-| [RF-011](#rf-011) | `ASSERT` behaviour in release builds is undecided | Low | — |
+| [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
 | [RF-012](#rf-012) | Slot-2 reset is wired to PD2, firmware drives PA4 | Cosmetic | — |
 
 ---
-
-### RF-002
-
-**No host-side unit-test framework — blocked on Ruby.** **High.**
-
-None of VT-UNIT-001..005 ([06 V&V](PrePlanning/06-Verification-and-Validation.md)) can
-run, so M3's exit criteria are unreachable.
-
-The framework question is settled: **Ceedling**, as [CON-102](PrePlanning/02-Requirements.md)
-says. The reference project's tests depend on **CMock** — they mock a dependency by
-header name (`mock_systick_bsp.h`, `systick_bsp_get_tick_ExpectAndReturn(...)`) — and
-CMock comes with Ceedling. That also explains why `custom_assert.h` and
-`test_support.h` exist as shims: under Ceedling a test build redirects `ASSERT` to a
-callback so assertions themselves can be asserted on, and `STATIC` opens statics up to
-tests. Hand-vendoring Unity under CMake was considered and rejected: it would mean
-hand-writing every fake and diverging from the reference for no gain.
-
-**Blocked:** Ceedling needs Ruby, which is not installed on the dev machine
-(`ruby`, `gem`, `ceedling` all absent). Unblock with:
-
-```bash
-sudo apt-get install -y ruby ruby-dev
-gem install ceedling
-```
-
-*Done when* `Test/Host/` holds real unit tests driven by `ceedling test:all`, with a
-`project.yml` modelled on the reference project's, the assert-callback shim in place,
-and `Test/Host/host_smoke.c` deleted once real tests cover the same ground.
-
-Meanwhile `Test/Host/host_smoke.c` is a stopgap: a plain C program, built by the host
-CMake build and registered with `ctest`, that exercises `delay`, `sw_timer` and
-`retain_ram` so the host path cannot rot unnoticed. It is not a unit-test suite — it
-has no mocking and no per-test isolation.
 
 ### RF-003
 
@@ -93,20 +58,6 @@ platform ports" — and explicitly leaves the interfaces to be defined during th
 HAL in the include path, against platform ports that have a target and a host
 implementation. This is M3 work, not a cleanup; it is listed here so the seam locations
 are agreed before game code is written on top of them.
-
-### RF-004
-
-**Our own shims live under `ThirdParty/`.** Low.
-
-`ThirdParty/EmbeddedCli/custom_assert.h` and `test_support.h` are project files, not
-vendored code — they were put there to satisfy EmbeddedCli's includes. Twelve of our
-own modules now include them, so they are de-facto project-wide infrastructure sitting
-in a folder that [§3.9](PrePlanning/03-Architecture.md#39-firmware-source-tree-layout)
-defines as "**not our code**".
-
-*Done when* both live in a project-owned module (a `Services/` utility module is the
-natural home) and `ThirdParty/EmbeddedCli/` contains only vendored files, with the
-include path arranged so EmbeddedCli still finds them.
 
 ### RF-005
 
@@ -210,18 +161,22 @@ the BSP.
 
 ### RF-011
 
-**`ASSERT` behaviour in release builds is undecided.** Low.
+**No `ASSERT` handler is registered on the target.** Low.
 
-`custom_assert.h` expands to `bkpt #0` unconditionally. With no debugger attached that
-escalates to a HardFault, which is defensible as fatal-error handling
-([FR-111](PrePlanning/02-Requirements.md)) but is not a decision anyone recorded — and
-the [coding standard](https://github.com/MaxLell/c-code-style) says assertions are
-enabled in Debug and **disabled in Release**. There is currently no Release build, so
-nothing is broken; the asserts added throughout the BSP in PR #6 make the question
-worth settling before one exists.
+Release behaviour is settled: the vendored `custom_assert` compiles assertions away
+entirely under `NDEBUG`, as the [coding standard](https://github.com/MaxLell/c-code-style)
+requires. There is no Release build yet, so nothing depends on it.
 
-*Done when* the intended release behaviour is decided, recorded as a `DEC-xxx`, and
-implemented (a reset with a logged reason is the usual choice for a game).
+What is left is the *debug* target behaviour. `custom_assert_failed()` dispatches to a
+handler registered with `custom_assert_init()`, and the firmware registers none — so a
+failed assertion falls back to the library default, an infinite loop. The board halts,
+which is the right outcome for a detected bug, but it halts silently: nothing is printed
+and, unlike the old `bkpt`, no fault is raised for a debugger to catch. Under an OTT the
+symptom is a harness timeout with no explanation.
+
+*Done when* `app_main()` registers a handler that says what happened — the expression,
+file and line over the console, then halt or reset — and the choice is recorded as a
+`DEC-xxx`. A reset with a logged reason is the usual pick for a game.
 
 ### RF-012
 

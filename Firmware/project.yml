@@ -1,0 +1,113 @@
+# Ceedling configuration — host unit tests (CON-102, VT-UNIT-*).
+#
+#   ceedling test:all              run every unit test
+#   ceedling test:sw_timer         run one module's tests
+#   ceedling clobber               throw away the build directory
+#
+# These tests run on the HOST, not the target — a module under test is compiled
+# natively and its dependencies are replaced by CMock mocks, so nothing here needs
+# the STM32 or the HAL. On-target tests are a different mechanism entirely: see
+# Test/Target and Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md.
+#
+# What gets a unit test: everything ABOVE the BSP. The BSP is the mocking boundary —
+# a Bsp/ header appears under `:include` so CMock can generate a mock from it, never
+# under `:source` as a subject. Hardware itself is verified by the on-target tests in
+# Test/Target, which are not unit-tested and need no mocks.
+#
+# The paths are deliberately narrow. `:source` must not reach into
+# ThirdParty/STM32_G431RB_HAL — that would put the whole HAL and a second main.h on
+# the search path. Add a module's folder here when its first test appears.
+---
+:project:
+  :which_ceedling: gem
+  :ceedling_version: 1.1.1
+
+  :use_mocks: TRUE
+  :use_test_preprocessor: :none
+  :use_deep_preprocessor: :none
+  :use_backtrace: :simple
+  :use_decorators: :auto
+
+  :build_root: build-test
+  :test_file_prefix: test_
+  :default_tasks:
+    - test:all
+
+  :test_threads: 8
+  :compile_threads: 8
+
+  :release_build: FALSE
+
+:mixins:
+  :enabled: []
+  :load_paths: []
+
+:test_build:
+  :use_assembly: FALSE
+
+:plugins:
+  :load_paths: []
+  :enabled:
+    - module_generator
+    - report_tests_pretty_stdout
+
+:extension:
+  :executable: .out
+
+:paths:
+  :test:
+    - +:Test/Host/**
+    - -:Test/support
+  :source:
+    - Services/**
+    - ThirdParty/embedded_utils
+  :include:
+    - Services/**
+    - Bsp/systick_bsp
+    - ThirdParty/embedded_utils
+  :support:
+    - Test/support
+  :libraries: []
+
+:files:
+  :test: []
+  :source: []
+
+# NOTE for anyone adding a test: Ceedling decides which real sources to link from the
+# includes it sees in the TEST file itself, not transitively. Every module here uses
+# ASSERT, and every test executable links Test/support/assert_probe.c, so each test
+# file needs an explicit `#include "custom_assert.h"` or the link fails with
+# undefined references to custom_assert_failed / custom_assert_init.
+
+:defines:
+  :test:
+    # Opens module internals to the tests: `STATIC` becomes empty and the
+    # `sw_timer_test_reset()` hook is compiled in.
+    - TEST
+  :release: []
+  :use_test_definition: FALSE
+
+:flags:
+  :test:
+    :compile:
+      '*':
+        - -Wall
+        - -Wextra
+
+:cmock:
+  :plugins:
+    - :ignore
+    - :callback
+  :verbosity: 2
+  :when_no_prototypes: :warn
+  :treat_as_void: []
+  :enforce_strict_ordering: TRUE
+  :mock_prefix: mock_
+
+:unity:
+  :defines:
+    - UNITY_INCLUDE_DOUBLE
+    - UNITY_SUPPORT_TEST_CASES
+
+:environment: []
+:libraries: []

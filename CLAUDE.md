@@ -59,14 +59,22 @@ python3 Test/run_ott.py --suite                          # enumeration + boot ba
 python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS; also display/touchpad/touchdot
 ./m2.sh all                                              # build + flash + all four, interactively
 
-# Host build — no hardware, no cross-toolchain (RF-001 closed)
-cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
-cmake --build build-host -j && (cd build-host && ctest --output-on-failure)
+# Host build — no hardware, no cross-toolchain
+cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
+
+# Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
+ceedling test:all
 ```
 
-A **platform port** is one shared header + one `.c` per platform, selected in
-`CMakeLists.txt` — see `Bsp/systick_bsp` (`systick_bsp.c` / `systick_bsp_host.c`).
-Prefer that over `#ifdef`s inside a module.
+- **What gets a unit test: everything above the BSP.** The BSP is the *mocking*
+  boundary — mock a `Bsp/` header to test the module above it; don't unit-test the BSP
+  itself. Hardware is verified by the OTTs in `Test/Target`, which are never mocked and
+  never unit-tested. Details in [`Firmware/Test/Readme.md`](Firmware/Test/Readme.md).
+- A **platform port** is one shared header + one `.c` per platform, selected in
+  `CMakeLists.txt` — see `Bsp/systick_bsp` (`systick_bsp.c` / `systick_bsp_host.c`).
+  Prefer that over `#ifdef`s inside a module.
+- `ASSERT` comes from the vendored `ThirdParty/embedded_utils`; a test can verify that
+  a precondition fires via `Test/support/assert_probe.h`.
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
 (`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`).

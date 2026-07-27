@@ -41,19 +41,27 @@ produces `build/pacman.elf` plus `.bin`/`.hex` and prints the flash/RAM usage.
 ```
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
 cmake --build build-host -j
-cd build-host && ctest --output-on-failure
 ```
 
 `PACMAN_HOST_BUILD=ON` skips the cross-toolchain block entirely and builds
 `pacman_host`, a static library of the modules that are genuinely hardware-independent
-— today `Services/delay`, `Services/sw_timer` and `Bsp/retain_ram`, plus the tick
-source through its host implementation. It is what the SDL application and the unit
-tests will link against, and it grows as more platform seams are cut (RF-003).
+— today `Services/delay` and `Services/sw_timer`, plus the tick source through its host
+implementation. It is what the SDL application (CON-103 / FR-104) will link against, and
+it grows as more platform seams are cut (RF-003).
 
-The one test it currently runs, `host_smoke`, is a **placeholder** for the real unit
-suite: VT-UNIT-001..005 need Ceedling with CMock, which needs Ruby (RF-002).
+**Unit tests** run under Ceedling, which does its own compilation with mocked
+dependencies — not through CMake:
 
-`-Wall -Wextra` is on in both; the tree builds warning-free.
+```
+ceedling test:all
+```
+
+Needs `ruby` and `gem install ceedling`. Configuration is `project.yml`; the tests live
+in `Test/Host/`. See [`Test/Readme.md`](Test/Readme.md) for what belongs in a unit test
+(everything above the BSP), how to mock a dependency, and how to assert that an
+assertion fires.
+
+`-Wall -Wextra` is on everywhere; the tree builds warning-free.
 
 ### How a platform port is shaped
 

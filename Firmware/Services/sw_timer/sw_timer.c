@@ -32,6 +32,16 @@ static bool prv_is_registered_timer(const sw_timer_t* const in_timer)
     return false;
 }
 
+static void prv_reset_state(void)
+{
+    for (size_t index = 0U; index < SW_TIMER_MAX_TIMERS; ++index)
+    {
+        g_timer_table[index] = NULL;
+    }
+
+    g_is_initialized = false;
+}
+
 /* ==========================================================================
  * sw_timer - public
  * ========================================================================= */
@@ -40,10 +50,7 @@ void sw_timer_init(void)
 {
     ASSERT(false == g_is_initialized);
 
-    for (size_t index = 0U; index < SW_TIMER_MAX_TIMERS; ++index)
-    {
-        g_timer_table[index] = NULL;
-    }
+    prv_reset_state();
 
     g_is_initialized = true;
 }
@@ -139,3 +146,13 @@ void sw_timer_process(void)
         }
     }
 }
+
+#if defined(TEST)
+/* Drops the module back to its pre-init state so each unit test starts clean —
+ * sw_timer_init() deliberately asserts if called twice. Not built into the
+ * firmware. */
+void sw_timer_test_reset(void)
+{
+    prv_reset_state();
+}
+#endif /* defined(TEST) */

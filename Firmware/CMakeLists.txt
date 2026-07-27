@@ -86,31 +86,25 @@ endif()
 # ==============================================================================
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
-        Bsp/retain_ram/retain_ram.c
         Bsp/systick_bsp/systick_bsp_host.c
         Services/delay/delay.c
-        Services/sw_timer/sw_timer.c)
+        Services/sw_timer/sw_timer.c
+        ThirdParty/embedded_utils/custom_assert.c)
 
     target_include_directories(pacman_host PUBLIC
-        Bsp/retain_ram
         Bsp/systick_bsp
         Services/delay
         Services/sw_timer
-        ThirdParty/EmbeddedCli)
+        ThirdParty/embedded_utils)
 
-    # Selects the host variants of anything that differs by platform (today: the
-    # retained buffer, which has no `.noinit` section to live in off-target).
+    # Selects the host variant of anything that differs by platform.
     target_compile_definitions(pacman_host PUBLIC PACMAN_HOST_BUILD)
     target_compile_options(pacman_host PRIVATE -Wall -Wextra -g)
 
-    # Placeholder until Ceedling/CMock lands (RF-002); proves the host path runs.
-    add_executable(host_smoke Test/Host/host_smoke.c)
-    target_link_libraries(host_smoke PRIVATE pacman_host)
-    target_compile_options(host_smoke PRIVATE -Wall -Wextra -g)
-
-    enable_testing()
-    add_test(NAME host_smoke COMMAND host_smoke)
-
+    # Unit tests are NOT built here — they run under Ceedling, which does its own
+    # compilation with mocked dependencies: `ceedling test:all` (see project.yml).
+    # This build exists for the host *application* (SDL, CON-103 / FR-104), which is
+    # what will link pacman_host once M3 provides it.
     return()
 endif()
 
@@ -148,7 +142,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/scripts/ott_touchdot.c
     Test/Target/scripts/ott_touchpad.c
     Test/Target/scripts/ott_user_button.c
-    ThirdParty/EmbeddedCli/Cli.c)
+    ThirdParty/EmbeddedCli/Cli.c
+    ThirdParty/embedded_utils/custom_assert.c)
 
 # One include dir per module folder (headers are included by bare name).
 # ${CUBE}/Core/Inc gives the BSP the CubeMX pin macros + peripheral handles
@@ -172,6 +167,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target
     Test/Target/scripts
     ThirdParty/EmbeddedCli
+    ThirdParty/embedded_utils
     ${CUBE}/Core/Inc)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} stm32cubemx)
