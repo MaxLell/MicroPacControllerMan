@@ -143,11 +143,13 @@ source of truth in
 | `Bsp/switch/` | Reusable debounced-GPIO input primitive (32-sample history). |
 | `Bsp/user_button/` | This board's B1 (PC13) instance of `switch`, incl. a latched press edge. |
 | `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
-| `Drivers/display/` | LCD Mono Click (LS013B7DH03): RAM frame buffer, VCOM service, panel enable. |
-| `Drivers/gfx/` | 1-bpp geometric primitives on the frame buffer; no text or logo. |
-| `Drivers/touchpad/` | Touchpad Click (MTCH6102): a `touchpad_reading_t` per read. |
+| `Drivers/display/` | The display **port**: shows a `framebuffer_t`. `display.c` = LS013B7DH03 panel over SPI, `display_host.c` = headless host. Owns the panel's inverted bit sense and its COM inversion. |
+| `Drivers/touchpad/` | Touchpad Click (MTCH6102): a `touchpad_reading_t` per read. Not yet a port (RF-003). |
 | `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
+| `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
+| `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
+| `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
 | `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |

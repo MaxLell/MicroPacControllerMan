@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "display.h"
+#include "framebuffer.h"
 #include "gfx.h"
 #include "sw_timer.h"
 #include "touchpad.h"
@@ -30,6 +31,8 @@
 #define OTT_TOUCHDOT_INVERT_X (true)
 #define OTT_TOUCHDOT_INVERT_Y (true)
 
+/* The scenario owns the frame it draws; the display only borrows it when shown. */
+static framebuffer_t g_framebuffer;
 static sw_timer_t g_timeout_timer;
 static sw_timer_t g_frame_timer;
 static sw_timer_t g_vcom_timer;
@@ -42,9 +45,9 @@ static void prv_on_timeout(void)
 
 static void prv_on_vcom_due(void)
 {
-    display_service_vcom();
+    display_service();
 
-    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
+    sw_timer_start(&g_vcom_timer, DISPLAY_SERVICE_PERIOD_MS, prv_on_vcom_due);
 }
 
 /* Scale a raw pad coordinate onto a panel axis, applying the orientation flags. */
@@ -75,32 +78,32 @@ static void prv_on_frame_due(void)
         return;
     }
 
-    gfx_fill(DISPLAY_COLOR_WHITE);
-    gfx_rectangle(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_COLOR_BLACK);
+    gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
+    gfx_rectangle(&g_framebuffer, 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLACK);
 
     if (reading.is_touched)
     {
         if (OTT_TOUCHDOT_SWAP_AXES)
         {
-            dot_x = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, DISPLAY_WIDTH,
+            dot_x = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_WIDTH,
                                        OTT_TOUCHDOT_INVERT_X);
-            dot_y = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, DISPLAY_HEIGHT,
+            dot_y = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_HEIGHT,
                                        OTT_TOUCHDOT_INVERT_Y);
         }
         else
         {
-            dot_x = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, DISPLAY_WIDTH,
+            dot_x = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_WIDTH,
                                        OTT_TOUCHDOT_INVERT_X);
-            dot_y = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, DISPLAY_HEIGHT,
+            dot_y = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_HEIGHT,
                                        OTT_TOUCHDOT_INVERT_Y);
         }
 
-        gfx_filled_circle(dot_x, dot_y, OTT_TOUCHDOT_DOT_RADIUS, DISPLAY_COLOR_BLACK);
-        gfx_horizontal_line(0, dot_y, DISPLAY_WIDTH, DISPLAY_COLOR_BLACK);
-        gfx_vertical_line(dot_x, 0, DISPLAY_HEIGHT, DISPLAY_COLOR_BLACK);
+        gfx_filled_circle(&g_framebuffer, dot_x, dot_y, OTT_TOUCHDOT_DOT_RADIUS, FRAMEBUFFER_COLOR_BLACK);
+        gfx_horizontal_line(&g_framebuffer, 0, dot_y, FRAMEBUFFER_WIDTH, FRAMEBUFFER_COLOR_BLACK);
+        gfx_vertical_line(&g_framebuffer, dot_x, 0, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLACK);
     }
 
-    display_flush();
+    display_present(&g_framebuffer);
 
     sw_timer_start(&g_frame_timer, OTT_TOUCHDOT_FRAME_PERIOD_MS, prv_on_frame_due);
 }
@@ -149,7 +152,7 @@ bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, c
 
     sw_timer_start(&g_timeout_timer, OTT_TOUCHDOT_TIMEOUT_MS, prv_on_timeout);
     sw_timer_start(&g_frame_timer, OTT_TOUCHDOT_FRAME_PERIOD_MS, prv_on_frame_due);
-    sw_timer_start(&g_vcom_timer, DISPLAY_VCOM_PERIOD_MS, prv_on_vcom_due);
+    sw_timer_start(&g_vcom_timer, DISPLAY_SERVICE_PERIOD_MS, prv_on_vcom_due);
 
     while (sw_timer_is_active(&g_timeout_timer) && (g_frame_status == I2C_BSP_STATUS_OK)
            && !user_button_take_press())

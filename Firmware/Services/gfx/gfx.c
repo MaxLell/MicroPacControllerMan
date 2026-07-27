@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "custom_assert.h"
-#include "display.h"
+#include "framebuffer.h"
 
 /* ==========================================================================
  * gfx - private
@@ -40,42 +40,31 @@ static int16_t prv_safe_divisor(int16_t in_divisor)
  * gfx - public
  * ========================================================================= */
 
-void gfx_fill(display_color_e in_color)
+void gfx_fill(framebuffer_t* inout_framebuffer, framebuffer_color_e in_color)
 {
-    if (in_color == DISPLAY_COLOR_WHITE)
-    {
-        display_clear();
-
-        return;
-    }
-
-    for (int16_t y = 0; y < DISPLAY_HEIGHT; ++y)
-    {
-        for (int16_t x = 0; x < DISPLAY_WIDTH; ++x)
-        {
-            display_set_pixel(x, y, in_color);
-        }
-    }
+    framebuffer_fill(inout_framebuffer, in_color);
 }
 
-void gfx_horizontal_line(int16_t in_x, int16_t in_y, int16_t in_width, display_color_e in_color)
+void gfx_horizontal_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
+                         int16_t in_width, framebuffer_color_e in_color)
 {
     for (int16_t offset = 0; offset < in_width; ++offset)
     {
-        display_set_pixel((int16_t)(in_x + offset), in_y, in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_x + offset), in_y, in_color);
     }
 }
 
-void gfx_vertical_line(int16_t in_x, int16_t in_y, int16_t in_height, display_color_e in_color)
+void gfx_vertical_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
+                       int16_t in_height, framebuffer_color_e in_color)
 {
     for (int16_t offset = 0; offset < in_height; ++offset)
     {
-        display_set_pixel(in_x, (int16_t)(in_y + offset), in_color);
+        framebuffer_set_pixel(inout_framebuffer, in_x, (int16_t)(in_y + offset), in_color);
     }
 }
 
-void gfx_line(int16_t in_x_start, int16_t in_y_start, int16_t in_x_end, int16_t in_y_end,
-              display_color_e in_color)
+void gfx_line(framebuffer_t* inout_framebuffer, int16_t in_x_start, int16_t in_y_start,
+              int16_t in_x_end, int16_t in_y_end, framebuffer_color_e in_color)
 {
     int16_t x_start = in_x_start;
     int16_t y_start = in_y_start;
@@ -88,8 +77,8 @@ void gfx_line(int16_t in_x_start, int16_t in_y_start, int16_t in_x_end, int16_t 
     int16_t y;
     bool is_steep;
 
-    /* Bresenham only walks the shallow axis, so mirror a steep line into a
-     * shallow one and swap the coordinates back when plotting. */
+    /* Bresenham only walks the shallow axis, so mirror a steep line into a shallow
+     * one and swap the coordinates back when plotting. */
     is_steep = prv_absolute((int16_t)(y_end - y_start)) > prv_absolute((int16_t)(x_end - x_start));
 
     if (is_steep)
@@ -114,11 +103,11 @@ void gfx_line(int16_t in_x_start, int16_t in_y_start, int16_t in_x_end, int16_t 
     {
         if (is_steep)
         {
-            display_set_pixel(y, x, in_color);
+            framebuffer_set_pixel(inout_framebuffer, y, x, in_color);
         }
         else
         {
-            display_set_pixel(x, y, in_color);
+            framebuffer_set_pixel(inout_framebuffer, x, y, in_color);
         }
 
         error = (int16_t)(error - delta_y);
@@ -131,26 +120,27 @@ void gfx_line(int16_t in_x_start, int16_t in_y_start, int16_t in_x_end, int16_t 
     }
 }
 
-void gfx_rectangle(int16_t in_x, int16_t in_y, int16_t in_width, int16_t in_height,
-                   display_color_e in_color)
+void gfx_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
+                   int16_t in_height, framebuffer_color_e in_color)
 {
-    gfx_horizontal_line(in_x, in_y, in_width, in_color);
-    gfx_horizontal_line(in_x, (int16_t)(in_y + in_height - 1), in_width, in_color);
-    gfx_vertical_line(in_x, in_y, in_height, in_color);
-    gfx_vertical_line((int16_t)(in_x + in_width - 1), in_y, in_height, in_color);
+    gfx_horizontal_line(inout_framebuffer, in_x, in_y, in_width, in_color);
+    gfx_horizontal_line(inout_framebuffer, in_x, (int16_t)(in_y + in_height - 1), in_width,
+                        in_color);
+    gfx_vertical_line(inout_framebuffer, in_x, in_y, in_height, in_color);
+    gfx_vertical_line(inout_framebuffer, (int16_t)(in_x + in_width - 1), in_y, in_height, in_color);
 }
 
-void gfx_filled_rectangle(int16_t in_x, int16_t in_y, int16_t in_width, int16_t in_height,
-                          display_color_e in_color)
+void gfx_filled_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
+                          int16_t in_width, int16_t in_height, framebuffer_color_e in_color)
 {
     for (int16_t row = 0; row < in_height; ++row)
     {
-        gfx_horizontal_line(in_x, (int16_t)(in_y + row), in_width, in_color);
+        gfx_horizontal_line(inout_framebuffer, in_x, (int16_t)(in_y + row), in_width, in_color);
     }
 }
 
-void gfx_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
-                display_color_e in_color)
+void gfx_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, int16_t in_center_y,
+                int16_t in_radius, framebuffer_color_e in_color)
 {
     int16_t x = 0;
     int16_t y = in_radius;
@@ -159,14 +149,22 @@ void gfx_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
     /* Midpoint circle: walk one octant and mirror each point into the other seven. */
     while (x <= y)
     {
-        display_set_pixel((int16_t)(in_center_x + x), (int16_t)(in_center_y + y), in_color);
-        display_set_pixel((int16_t)(in_center_x - x), (int16_t)(in_center_y + y), in_color);
-        display_set_pixel((int16_t)(in_center_x + x), (int16_t)(in_center_y - y), in_color);
-        display_set_pixel((int16_t)(in_center_x - x), (int16_t)(in_center_y - y), in_color);
-        display_set_pixel((int16_t)(in_center_x + y), (int16_t)(in_center_y + x), in_color);
-        display_set_pixel((int16_t)(in_center_x - y), (int16_t)(in_center_y + x), in_color);
-        display_set_pixel((int16_t)(in_center_x + y), (int16_t)(in_center_y - x), in_color);
-        display_set_pixel((int16_t)(in_center_x - y), (int16_t)(in_center_y - x), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x + x),
+                              (int16_t)(in_center_y + y), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x - x),
+                              (int16_t)(in_center_y + y), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x + x),
+                              (int16_t)(in_center_y - y), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x - x),
+                              (int16_t)(in_center_y - y), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x + y),
+                              (int16_t)(in_center_y + x), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x - y),
+                              (int16_t)(in_center_y + x), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x + y),
+                              (int16_t)(in_center_y - x), in_color);
+        framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x - y),
+                              (int16_t)(in_center_y - x), in_color);
 
         ++x;
 
@@ -182,8 +180,8 @@ void gfx_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
     }
 }
 
-void gfx_filled_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
-                       display_color_e in_color)
+void gfx_filled_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, int16_t in_center_y,
+                       int16_t in_radius, framebuffer_color_e in_color)
 {
     const int32_t radius_squared = (int32_t)in_radius * in_radius;
 
@@ -193,22 +191,24 @@ void gfx_filled_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radi
         {
             if ((((int32_t)x * x) + ((int32_t)y * y)) <= radius_squared)
             {
-                display_set_pixel((int16_t)(in_center_x + x), (int16_t)(in_center_y + y), in_color);
+                framebuffer_set_pixel(inout_framebuffer, (int16_t)(in_center_x + x),
+                                      (int16_t)(in_center_y + y), in_color);
             }
         }
     }
 }
 
-void gfx_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t in_y_1, int16_t in_x_2,
-                  int16_t in_y_2, display_color_e in_color)
+void gfx_triangle(framebuffer_t* inout_framebuffer, int16_t in_x_0, int16_t in_y_0, int16_t in_x_1,
+                  int16_t in_y_1, int16_t in_x_2, int16_t in_y_2, framebuffer_color_e in_color)
 {
-    gfx_line(in_x_0, in_y_0, in_x_1, in_y_1, in_color);
-    gfx_line(in_x_1, in_y_1, in_x_2, in_y_2, in_color);
-    gfx_line(in_x_2, in_y_2, in_x_0, in_y_0, in_color);
+    gfx_line(inout_framebuffer, in_x_0, in_y_0, in_x_1, in_y_1, in_color);
+    gfx_line(inout_framebuffer, in_x_1, in_y_1, in_x_2, in_y_2, in_color);
+    gfx_line(inout_framebuffer, in_x_2, in_y_2, in_x_0, in_y_0, in_color);
 }
 
-void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t in_y_1,
-                         int16_t in_x_2, int16_t in_y_2, display_color_e in_color)
+void gfx_filled_triangle(framebuffer_t* inout_framebuffer, int16_t in_x_0, int16_t in_y_0,
+                         int16_t in_x_1, int16_t in_y_1, int16_t in_x_2, int16_t in_y_2,
+                         framebuffer_color_e in_color)
 {
     int16_t x_top = in_x_0;
     int16_t y_top = in_y_0;
@@ -229,8 +229,8 @@ void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t
     int32_t left_accumulator = 0;
     int32_t right_accumulator = 0;
 
-    /* Sort the corners by row, so the shape splits into a flat-bottom half above
-     * the middle corner and a flat-top half below it. */
+    /* Sort the corners by row, so the shape splits into a flat-bottom half above the
+     * middle corner and a flat-top half below it. */
     if (y_top > y_middle)
     {
         prv_swap(&y_top, &y_middle);
@@ -273,7 +273,8 @@ void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t
             right_x = x_bottom;
         }
 
-        gfx_horizontal_line(left_x, y_top, (int16_t)(right_x - left_x + 1), in_color);
+        gfx_horizontal_line(inout_framebuffer, left_x, y_top, (int16_t)(right_x - left_x + 1),
+                            in_color);
 
         return;
     }
@@ -285,8 +286,8 @@ void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t
     delta_x_middle_bottom = (int16_t)(x_bottom - x_middle);
     delta_y_middle_bottom = (int16_t)(y_bottom - y_middle);
 
-    /* A flat-bottom triangle includes the middle row; otherwise it is drawn by
-     * the second loop. */
+    /* A flat-bottom triangle includes the middle row; otherwise it is drawn by the
+     * second loop. */
     last_flat_top_row = (y_middle == y_bottom) ? y_middle : (int16_t)(y_middle - 1);
 
     for (row = y_top; row <= last_flat_top_row; ++row)
@@ -302,7 +303,8 @@ void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t
             prv_swap(&left_x, &right_x);
         }
 
-        gfx_horizontal_line(left_x, row, (int16_t)(right_x - left_x + 1), in_color);
+        gfx_horizontal_line(inout_framebuffer, left_x, row, (int16_t)(right_x - left_x + 1),
+                            in_color);
     }
 
     left_accumulator = (int32_t)delta_x_middle_bottom * (row - y_middle);
@@ -321,6 +323,7 @@ void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t
             prv_swap(&left_x, &right_x);
         }
 
-        gfx_horizontal_line(left_x, row, (int16_t)(right_x - left_x + 1), in_color);
+        gfx_horizontal_line(inout_framebuffer, left_x, row, (int16_t)(right_x - left_x + 1),
+                            in_color);
     }
 }

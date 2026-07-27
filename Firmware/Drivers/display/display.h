@@ -1,77 +1,57 @@
 /*
  * display.h
  *
- * LCD Mono Click driver — Sharp LS013B7DH03, 128x128, 1 bpp memory LCD. The panel
- * is write-only, so pixels go into a RAM frame buffer and nothing appears until
- * display_flush().
+ * Display sink: shows a frame buffer, and owns nothing else.
  *
- * The panel needs its COM polarity inverted at least once per second while a
- * static image is held, otherwise the liquid crystal degrades. The driver serves
- * both inversion modes on every display_service_vcom() call, so either setting of
- * the Click's mode-select jumper works.
+ * This is a platform port — one interface, one implementation per platform, selected
+ * in CMakeLists.txt. `display.c` drives the LCD Mono Click panel (Sharp LS013B7DH03)
+ * over SPI; `display_host.c` keeps the last frame in memory so a host build can
+ * inspect or render it. Callers see no difference.
+ *
+ * The caller owns the frame buffer, so it can keep more than one and hand on a
+ * snapshot ([03 §3.2](../../../Docu/PrePlanning/03-Architecture.md), R-007).
  */
 
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
 #include <stdbool.h>
-#include <stdint.h>
 
-/* ==========================================================================
- * display - public types
- * ========================================================================= */
-
-#define DISPLAY_WIDTH (128)
-#define DISPLAY_HEIGHT (128)
-
-/*! \brief Longest interval at which #display_service_vcom must be called while a
- *         static image is held, in milliseconds. */
-#define DISPLAY_VCOM_PERIOD_MS (1000U)
-
-/*! \brief Drawing colours. `BLACK` is ink on, `WHITE` is background. */
-typedef enum
-{
-    DISPLAY_COLOR_WHITE = 0,
-    DISPLAY_COLOR_BLACK
-} display_color_e;
+#include "framebuffer.h"
 
 /* ==========================================================================
  * display - public API
  * ========================================================================= */
 
-/*! \brief Bring the panel up: enable it, clear it, and leave it ready to draw. */
+/*! \brief Longest interval at which #display_service must be called while an
+ *         unchanging image is shown, in milliseconds. */
+#define DISPLAY_SERVICE_PERIOD_MS (1000U)
+
+/*! \brief Bring the display up: enabled, blank, ready to be presented to. */
 void display_init(void);
 
-/*! \brief Set the whole frame buffer to white. Does not touch the panel. */
+/*! \brief Show a frame buffer.
+ *
+ * \param[in]       in_framebuffer: frame to show, must not be `NULL`. Borrowed only —
+ *                      the display does not keep the pointer.
+ */
+void display_present(const framebuffer_t* in_framebuffer);
+
+/*! \brief Blank the display itself, without touching any frame buffer. */
 void display_clear(void);
 
-/*! \brief Set one pixel in the frame buffer.
- *
- * Coordinates outside the panel are ignored, so callers may draw over the edge.
- *
- * \param[in]       in_x: column, `0` is the left edge
- * \param[in]       in_y: row, `0` is the top edge
- * \param[in]       in_color: member of \ref display_color_e
- */
-void display_set_pixel(int16_t in_x, int16_t in_y, display_color_e in_color);
-
-/*! \brief Push the whole frame buffer to the panel. */
-void display_flush(void);
-
-/*! \brief Clear the panel and the frame buffer with the panel's clear-all command. */
-void display_clear_all(void);
-
-/*! \brief Enable or blank the panel. Blanking keeps the panel's own memory.
+/*! \brief Enable or blank the display. Blanking keeps what was last presented.
  *
  * \param[in]       in_is_enabled: `true` shows the image, `false` blanks it
  */
 void display_set_enabled(bool in_is_enabled);
 
-/*! \brief Service the panel's COM inversion.
+/*! \brief Periodic upkeep the platform may need.
  *
- * Must be called at least every #DISPLAY_VCOM_PERIOD_MS while a static image is
- * held. Serves both software and external COM inversion.
+ * Must be called at least every #DISPLAY_SERVICE_PERIOD_MS while an unchanging image
+ * is shown. On the target this services the panel's COM inversion, which the liquid
+ * crystal needs to avoid degrading; on a host it does nothing.
  */
-void display_service_vcom(void);
+void display_service(void);
 
 #endif /* DISPLAY_H */
