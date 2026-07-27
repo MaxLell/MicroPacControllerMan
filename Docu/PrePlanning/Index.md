@@ -18,6 +18,10 @@ This document set is the **source of truth** for the project going forward. The 
 10. [10 Pacman Game Design](10-Pacman-Game-Design.md) — The concrete game rules for implementation: maze layout, movement/tick model, ghost behaviour, power pellets, scoring, and end conditions.
 11. [11 Decisions & As-Built](11-Decisions-and-As-Built.md) — Implementation decisions actually taken and where the built firmware deviates from the intended design (as-built vs. planned).
 
+### See also (not part of the spec set)
+
+- [Refactoring Backlog](../Refactoring-Backlog.md) — known work deliberately not done yet: noticed in passing, deferred by decision, or blocked. A living work list, so it is kept outside the numbered set.
+
 ## ID Conventions
 
 | Prefix | Meaning |
@@ -31,6 +35,7 @@ This document set is the **source of truth** for the project going forward. The 
 | `VT-UNIT-0xx` | Verification Test — unit test (small scope, host-side) |
 | `VT-INT-0xx` | Verification Test — integration test (large scope, target and/or host) |
 | `DEC-0xx` | Implementation decision / as-built record ([11](11-Decisions-and-As-Built.md)) |
+| `RF-0xx` | Refactoring-backlog item ([Refactoring Backlog](../Refactoring-Backlog.md)) — outside the spec set |
 
 ## Status
 

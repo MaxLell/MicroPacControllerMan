@@ -1,65 +1,10 @@
 # Firmware — MicroPacControllerMan
 
-STM32G431RB Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** against
-**vendored CMSIS** (no vendor HAL yet), flashed with **OpenOCD** over ST-LINK V3.
-
-## Milestone 1 — Toolchain Bring-Up
-
-Goal: prove the whole toolchain end-to-end — build, flash, and run — and stand up
-the base **On-Target Test (OTT)** infrastructure. The board blinks the on-board LED
-**LD2 (PA5)** at ~1 Hz and serves an OTT CLI on the **ST-LINK virtual COM port**
-(LPUART1, PA2/PA3, 115200 8N1). `ott blinky` drives PA5 and reads the pin back to
-verify the blink mechanism automatically — target of
-[VT-INT-005](../Docu/PrePlanning/06-Verification-and-Validation.md).
-
-Init is register-level against CMSIS (see `App/main.c`); the default reset clock
-(HSI 16 MHz) is used. The ST/ARM-provided device files — CMSIS core + STM32G4
-device headers, `system_stm32g4xx.c`, the startup file and the linker script —
-are vendored verbatim under `ThirdParty/STM32G431/` from ST's public repositories
-(`STM32CubeG4` / `cmsis_device_g4`).
-
-## Milestone 2 — Board Bring-Up
-
-Adds the mikroBUS peripherals on the Click Shield for Nucleo-64: the **LCD Mono
-Click** (Sharp LS013B7DH03, 128×128 mono, SPI1) in slot 1 and the **Touchpad
-Click** (MTCH6102, I2C1) in slot 2, plus the on-board user button (B1/PC13).
-New BSP transports (`Bsp/spi`, `Bsp/i2c`, `Bsp/button`, `Bsp/systick`), device
-drivers (`Drivers/display`, `Drivers/gfx`, `Drivers/touchpad`), and three OTT
-scenarios:
-
-```
-ott display     # geometric GFX demo (lines/rects/circles/triangles) — confirm on the LCD (VT-INT-006)
-ott touchpad    # live X/Y + touch-present streamed to the console — confirm it tracks your finger (VT-INT-007)
-ott touchdot    # a dot on the LCD follows your finger — confirms display + touchpad together
-```
-
-All three are **interactive**: they run until you press the USER button (B1),
-with a 120 s safety cap. The pin map is **HW-confirmed** (logic analyzer, R-001
-closed) and recorded in [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
-Key facts: the Click Shield for Nucleo-64 mates with the **ST-Morpho** headers, so
-slot-1 SPI1 = **SCK PB3 / MOSI PB5 / DISP PB4 (MISO line) / CS PB12 (active-high) /
-EXTCOMIN PC8**; the MTCH6102 is at I2C address **0x25** on PB8/PB9; set the shield's
-**VLS switch to 3V3**; the LCD's EXTMODE selects software VCOM (EXTMODE=low).
-
-### M2 hardware-verification checklist
-
-Shortcut: **`./m2.sh all`** builds, flashes once, and walks through the three
-interactive tests in sequence (or `./m2.sh display|touchpad|touchdot|suite` for
-one). Set the port with `PORT=/dev/ttyACMx ./m2.sh …`. The manual steps below are
-the same thing spelled out.
-
-Run on the physical board to close M2 (R-001 / VT-INT-003/004/006/007):
-
-1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
-2. **Pin map (VT-INT-003/004): DONE** — confirmed on hardware with a logic analyzer (R-001 closed). Slot-1 SPI1 = PB3/PB5/PB4/PB12/PC8, slot-2 I2C1 = PB8/PB9; see [02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001). The `lacheck` OTT re-verifies wiring via per-pin fingerprints if you ever need to re-check.
-3. **Build & flash**, then `python3 Test/run_ott.py --suite` — expect PASS for enumeration, banner, blinky.
-4. **`python3 Test/run_ott.py display`** — watch the geometric patterns cycle on the LCD; press B1. If blank, see [doc 08 §8.4](../Docu/PrePlanning/08-Troubleshooting-Guide.md).
-5. **`python3 Test/run_ott.py touchpad`** — move your finger; the streamed x/y should track it; press B1. "not responding" → check the I2C map / RST.
-6. **`python3 Test/run_ott.py touchdot`** — the dot should follow your finger; press B1. If axes are swapped/mirrored, flip the mapping in `ott_touchdot.c`.
+STM32G431RB Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** against the
+**STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with **OpenOCD** over
+ST-LINK V3.
 
 ## Toolchain
-
-Install the cross toolchain, build system, and flasher (Debian/Ubuntu):
 
 ```
 sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
@@ -69,87 +14,208 @@ The `openocd` package also installs the ST-LINK udev rules; after installing,
 **unplug/replug the board once** so a non-root user can flash over SWD (the serial
 VCP already works without it).
 
-> Verified with gcc-arm-none-eabi 13.2.1, cmake 3.28, openocd 0.12.0. No vendor
-> IDE or STM32CubeMX is required. (A local, no-root install via xPack/Kitware
-> tarballs to `~/.local/opt` also works if apt is unavailable.)
+> Verified with gcc-arm-none-eabi 13.2.1, cmake 3.28, openocd 0.12.0. A local,
+> no-root install via xPack/Kitware tarballs to `~/.local/opt` also works if apt is
+> unavailable. STM32CubeMX itself is only needed to *change* the pin configuration —
+> its output is committed.
 
 ## Build & flash
 
 ```
-cmake -B build -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.toolchain.cmake
+cmake -B build -G "Unix Makefiles"
 cmake --build build -j
 openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
-
 ```
 
-Expected: **LD2 blinks at ~1 Hz**.
+There is **no `-DCMAKE_TOOLCHAIN_FILE`**: the cross-compilation setup (target,
+compiler, Cortex-M4F flags, `.elf` suffix) sits at the top of `CMakeLists.txt`, above
+`project()`, which is when CMake reads it. One file describes the whole build.
+
+The build produces `build/pacman.elf` plus `.bin`/`.hex`, and prints the flash/RAM
+usage. `-Wall -Wextra` is on; the tree builds warning-free.
 
 ## On-Target Tests (OTT)
 
-The firmware serves an OTT CLI on the VCP (built on the vendored **EmbeddedCli**
-framework, `ThirdParty/EmbeddedCli/`); each test prints a machine-parseable
-result without a debugger (FR-106 / FR-107):
+The firmware serves a command line on the ST-LINK virtual COM port (**LPUART1,
+PA2/PA3, 115200 8N1**, usually `/dev/ttyACM0`), built on the vendored
+**EmbeddedCli**. Each test prints a machine-parseable verdict with no debugger
+attached (FR-106 / FR-107):
 
 ```
-help            # list CLI commands
-ott             # list available OTT tests
-ott blinky      # -> "OTT PASSED [blinky]" or "OTT FAILED [blinky]: <reason>"
+help                 # list CLI commands
+ott                  # list available OTT tests
+ott user_button      # -> "OTT PASSED [user_button]" or "OTT FAILED [user_button]: <reason>"
+reset                # reboot into nominal mode (re-emits the boot banner)
 ```
 
 `ott <name>` uses the **retained-RAM/reset flow** from
 [doc 09](../Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md): the command's
 `setup` step writes a request (magic word + checksum + parameter blob) into a
 `.noinit` RAM region that survives a software reset, then triggers
-`NVIC_SystemReset()`. On the next boot `ott_execute_pending()` validates the
-request, invalidates it (so a mid-test crash can't loop-boot the same test), runs
-the scenario's `run` step, and prints the `OTT PASSED/FAILED [<name>]` result over
-the console before falling through into normal operation. The ST-LINK VCP stays
-enumerated across the target reset, so the host harness reads the result on the
-same serial handle. This framework was brought forward from Milestone 2 so the
-display/touchpad OTTs added there only need a new scenario module.
+`NVIC_SystemReset()`. On the next boot `ott_execute_pending()` validates the request,
+invalidates it (so a mid-test crash cannot loop-boot the same test), runs the
+scenario's `run` step, prints the verdict, and falls through into normal operation.
+The VCP is on the ST-LINK side, so it stays enumerated across the target reset and
+the host harness reads the result on the same serial handle.
+
+`Test/Target/ott.c` owns the request layout; `Bsp/retain_ram` only owns the 64-byte
+buffer it lives in and knows nothing about its contents.
 
 Run them from the host with the harness (stdlib Python, no pyserial):
 
 ```
-python3 Test/run_ott.py --suite     # automatic regression: enumeration + banner + blinky
-python3 Test/run_ott.py blinky      # one automatic test; exit 0 = PASS, 1 = FAIL, 2 = timeout
-python3 Test/run_ott.py display     # interactive: streams live, confirm on the board, press B1
+python3 Test/run_ott.py --suite         # automatic: enumeration (VT-INT-001) + boot banner (VT-INT-002)
+python3 Test/run_ott.py user_button     # interactive; exit 0 = PASS, 1 = FAIL, 2 = timeout
+python3 Test/run_ott.py display         # interactive: streams live, confirm on the board, press B1
 ```
+
+The four current scenarios are all **interactive** by design — the firmware
+renders/prints and waits for you to confirm with B1, with a safety cap (30 s for
+`user_button`, 120 s for the rest) so the board always returns to nominal mode:
+
+```
+ott user_button  # live button state + every debounced press; passes after 3 presses
+ott display      # geometric GFX patterns — confirm on the LCD (VT-INT-006)
+ott touchpad     # live x/y + touch-present on the console (VT-INT-007)
+ott touchdot     # a dot on the LCD follows your finger — display + touchpad together
+```
+
+**Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a setup and
+a run function, add one row to the table in `ott_scenarios.c`, and add the source to
+`CMakeLists.txt`. Nothing in the OTT core or the CLI changes.
 
 ## Layout
 
-The tree follows the layered layout of the reference project
+Layered tree following the reference project
 ([BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw)) —
-`App` → `Drivers` → `Services` → `Bsp` → CMSIS, plus `Test`. Each layer has a
-`Readme.md`; each module lives in its own folder. The full layer rules and
-"what goes where" are the project's source of truth in
+`App` → `Drivers` → `Services` → `Bsp` → HAL, plus `Test`. Each layer has a
+`Readme.md`; each module lives in its own folder. The layer rules are the project's
+source of truth in
 [03 Architecture §3.9](../Docu/PrePlanning/03-Architecture.md#39-firmware-source-tree-layout).
 
-- `App/main.c` — runs any pending OTT (`ott_execute_pending`) on boot, then the
-  super-loop: nominal ~1 Hz blink + OTT CLI polling.
-- `Bsp/led/`, `Bsp/uart/` — register-level LD2 (PA5) and LPUART1 VCP drivers
-  (`uart_flush` drains the last byte before the OTT reset).
-- `Bsp/retain_ram/` — the `.noinit` retained-RAM object carrying the OTT request
-  across the reset.
-- `Bsp/systick/`, `Bsp/spi/`, `Bsp/i2c/`, `Bsp/button/` — M2 transports: 1 kHz
-  time base, SPI1 (slot 1), I2C1 (slot 2), user button (PC13).
-- `Drivers/display/`, `Drivers/gfx/`, `Drivers/touchpad/` — M2 device drivers:
-  LS013B7DH03 framebuffer, geometric primitives, MTCH6102 touch read.
-- `Services/` — reserved layer (Readme only for now); populated in
-  Milestone 3+ (message broker, Active-Object base, etc.).
-- `Test/Target/ott.c` — OTT core: the `ott` CLI command (schedule + reset) and the
-  boot-time `ott_execute_pending()` runner/reporter.
-- `Test/Target/ott_scenarios.c` — the OTT test registry; add a test by adding one row.
-- `Test/Target/scripts/` — one module per OTT scenario: `ott_blinky` (VT-INT-005),
-  `ott_display` (VT-INT-006), `ott_touchpad` (VT-INT-007), `ott_touchdot` (combined).
-- `Test/run_ott.py` — host harness that drives an OTT and reports PASS/FAIL.
-- `ThirdParty/EmbeddedCli/` — vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli)
-  (CLI parser/dispatch) plus small `custom_assert.h`/`test_support.h` shims. Carries
-  the memory-safety fixes from EmbeddedCli PR #2.
-- `ThirdParty/STM32G431/` — ST/ARM-provided device support (not our code):
-  `CMSIS/` (core + STM32G4 device headers and `system_stm32g4xx.c`),
-  `startup_stm32g431xx.s` (vector table + reset handler), and
-  `STM32G431RBTx_FLASH.ld` (128 KB FLASH / 32 KB RAM memory map incl. the
-  `.noinit` region for the OTT retained-RAM mechanism). See its `Readme.md`.
-- `cmake/arm-none-eabi.toolchain.cmake`, `CMakeLists.txt` — build.
-- `openocd.cfg` — ST-LINK V3 + STM32G4 flash/debug.
+| Module | What |
+|---|---|
+| `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
+| `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
+| `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
+| `Bsp/i2c_bsp/` | Blocking I2C master, device-agnostic, timeout-bounded, status enum. |
+| `Bsp/spi_bsp/` | Blocking transmit-only SPI master. Chip-select belongs to the device driver. |
+| `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
+| `Bsp/switch/` | Reusable debounced-GPIO input primitive (32-sample history). |
+| `Bsp/user_button/` | This board's B1 (PC13) instance of `switch`, incl. a latched press edge. |
+| `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
+| `Drivers/display/` | LCD Mono Click (LS013B7DH03): RAM frame buffer, VCOM service, panel enable. |
+| `Drivers/gfx/` | 1-bpp geometric primitives on the frame buffer; no text or logo. |
+| `Drivers/touchpad/` | Touchpad Click (MTCH6102): a `touchpad_reading_t` per read. |
+| `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
+| `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
+| `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
+| `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
+| `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
+| `ThirdParty/STM32_G431RB_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. |
+| `CMakeLists.txt` | The whole build, cross-toolchain included. |
+| `openocd.cfg` | ST-LINK V3 + STM32G4 flash/debug. |
+| `.clang-format` | The [c-code-style](https://github.com/MaxLell/c-code-style) config (NFR-102). |
+
+### Conventions worth knowing before editing
+
+- **All GPIO goes through `dio_bsp`.** To add a pin: give it a name in
+  `dio_bsp_pin_e` and one row in `k_pin_map`. Do not call `HAL_GPIO_*` elsewhere.
+- **No tick arithmetic.** Use `delay_ms()` when blocking is fine, `sw_timer` when it
+  is not. There is no `millis()`; `systick_bsp_get_tick()` exists for `delay` and
+  `sw_timer` and should not be needed above them.
+- **HAL over registers.** Direct register access needs a reason in a comment. There
+  is exactly one today: `uart_bsp_read_character()` reads `RDR`, because the HAL has
+  no non-blocking single-character read.
+- **Named constants, no bare literals**, and no abbreviations in identifiers
+  (`in_length`, not `len`; `in_memory_address`, not `mem_addr`).
+- `prv_` prefixes module-private functions, `g_` prefixes globals, `k_` prefixes
+  file-scope constant tables, and pointer parameters carry `in_` / `out_` / `inout_`.
+
+### Two things that survive a CubeMX re-generation only if you re-apply them
+
+1. The **`.noinit` section** in `ThirdParty/STM32_G431RB_HAL/STM32G431xx_FLASH.ld`
+   (just after `.bss`). It is marked NON-GENERATED in the script; without it the OTT
+   reset flow silently stops working.
+2. The **`app_main()` call** in the USER CODE block of the generated `Core/Src/main.c`.
+
+The 1 ms tick hook is deliberately *not* on that list: `systick_bsp.c` provides a
+strong `HAL_IncTick()`, overriding the HAL's `__weak` one, so the generated
+`stm32g4xx_it.c` stays untouched and a re-generation cannot drop the hook.
+
+One cosmetic item: `Core/Src/gpio.c` carries hand-added explanations on the generated
+comments (`… : DISPLAY_DISP (PB4) high = panel on`). A re-generation drops those, but
+the *code* it emits is identical, so nothing breaks — only the reading aid is lost.
+
+**Editing the `.ioc` by hand** is fine for a pin *label*, which is what
+`TOUCHPAD_RESET` was: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
+rename to the `<label>_Pin` / `<label>_GPIO_Port` macros in `Core/Inc/main.h` and
+their uses in `Core/Src/gpio.c`, and the result is byte-identical to what CubeMX
+would generate. Do **not** hand-edit peripheral *settings* that way (clock tree,
+FIFO modes, timing words): those fan out into initialisation code across several
+generated files, and getting the `.ioc` and the code out of step is worse than
+leaving the setting alone. Open CubeMX for those.
+
+## Hardware notes
+
+The Click Shield for Nucleo-64 (MIKROE-5193) mates with the **ST-Morpho** headers,
+not the Arduino headers — that mismatch was the original blank-display cause. The
+map is **HW-confirmed** with a logic analyzer (R-001 closed) and recorded in
+[02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
+
+The clock tree is owned by the `.ioc` too: **SYSCLK 170 MHz** (PLL, `HSI/4 × 85`, the
+part's maximum) with a **1 kHz SysTick**. Full table in
+[02 §2.3.4](../Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
+One consequence is worth internalising: a delay written as a *spin count* is ~10×
+shorter at 170 MHz than at the 16 MHz this project started on, which is why the only
+such delay left (the display's chip-select settle loop) carries a comment saying so.
+Everything else uses `Services/delay` or `Services/sw_timer`, which are
+clock-independent.
+
+| Signal | Pin | Note |
+|---|---|---|
+| SPI1 SCK / MOSI | PB3 / PB5 | mikroBUS slot 1, mode 0, LSB-first, ~0.66 MHz |
+| Display CS | PB12 | **active HIGH** |
+| Display DISP | PB4 | the Click reuses the idle MISO line as the panel enable |
+| Display EXTCOMIN | PC8 | mikroBUS PWM1, external VCOM clock |
+| I2C1 SCL / SDA | PB8 / PB9 | mikroBUS slot 2, MTCH6102 at address **0x25** |
+| Touchpad reset | PA4 | mikroBUS signal `RST`; `.ioc` label `TOUCHPAD_RESET`, active LOW |
+| User button B1 | PC13 | **active HIGH** on this board (external pull-down) |
+| Console | PA2 / PA3 | LPUART1 → ST-LINK VCP, 115200 8N1 |
+
+Also: set the shield's **VLS switch to 3V3**, and leave the LCD's JP1 at
+software-VCOM (EXTMODE low) — though the driver serves both modes on every
+`display_service_vcom()` call, so either setting works.
+
+Note there is no LD2 blink any more: PA5 is the Arduino-header SCK and was freed up
+when slot 1 moved to ST-Morpho, but the LED test was retired with the M2 pivot.
+
+## M2 hardware-verification checklist
+
+Shortcut: **`./m2.sh all`** builds, flashes once, and walks through the four
+interactive tests in sequence (or `./m2.sh user_button|display|touchpad|touchdot|suite`
+for one). Set the port with `PORT=/dev/ttyACMx ./m2.sh …`. The manual steps below are
+the same thing spelled out.
+
+1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
+2. **Pin map (VT-INT-003/004): DONE** — confirmed on hardware with a logic analyzer (R-001 closed); see the table above.
+3. **Build & flash**, then `python3 Test/run_ott.py --suite` — expect PASS for enumeration and the boot banner.
+4. **`python3 Test/run_ott.py user_button`** — press B1 three times; the console echoes each press. If nothing changes, PC13 is stuck.
+5. **`python3 Test/run_ott.py display`** — watch the geometric patterns cycle on the LCD; press B1. If blank, see [doc 08 §8.4](../Docu/PrePlanning/08-Troubleshooting-Guide.md).
+6. **`python3 Test/run_ott.py touchpad`** — move your finger; the streamed x/y should track it; press B1. "not responding" → check the I2C map / RST.
+7. **`python3 Test/run_ott.py touchdot`** — the dot should follow your finger; press B1. If the axes are swapped or mirrored, flip `OTT_TOUCHDOT_SWAP_AXES` / `OTT_TOUCHDOT_INVERT_X` / `OTT_TOUCHDOT_INVERT_Y` in `ott_touchdot.c`.
+
+## Milestone history
+
+- **M1 — Toolchain Bring-Up.** Proved build/flash/run end-to-end and stood up the OTT
+  framework with its retained-RAM/reset flow. Init was register-level against
+  vendored CMSIS at that point.
+- **M2 — Board Bring-Up.** Added the mikroBUS peripherals: LCD Mono Click (SPI1, slot
+  1) and Touchpad Click (I2C1, slot 2), plus the user button. Partway through, init
+  moved from register-level to **STM32CubeMX + the STM32 HAL** (DEC-012 in
+  [11 Decisions & As-Built](../Docu/PrePlanning/11-Decisions-and-As-Built.md)), which
+  also retired the register-level `blinky` OTT. The `lacheck` / `dispdiag`
+  logic-analyzer diagnostics were removed once R-001 closed and the regular tests
+  covered the same ground.
+- **M3 — Game: next.** The pub-sub broker, the Active-Object tasks and the Pacman
+  modules under `App/`.

@@ -1,22 +1,57 @@
+/*
+ * gfx.h
+ *
+ * 1 bpp geometric primitives on top of the display frame buffer. Drawing only
+ * touches the frame buffer — call display_flush() to make the result visible.
+ * Shapes may extend past the panel edges; the display clips them.
+ */
+
 #ifndef GFX_H
 #define GFX_H
 
-/*
- * Minimal 1-bpp graphics primitives on top of the display framebuffer
- * (Drivers/display). No text/logo — just the geometric shapes used by the
- * display bring-up demo (VT-INT-006) and the touch-dot test. `color` is
- * DISPLAY_BLACK / DISPLAY_WHITE. Call display_flush() to make it visible.
- */
+#include <stdint.h>
 
-void gfx_fill(int color);
-void gfx_hline(int x, int y, int w, int color);
-void gfx_vline(int x, int y, int h, int color);
-void gfx_line(int x0, int y0, int x1, int y1, int color);
-void gfx_rect(int x, int y, int w, int h, int color);
-void gfx_fill_rect(int x, int y, int w, int h, int color);
-void gfx_circle(int cx, int cy, int r, int color);
-void gfx_fill_circle(int cx, int cy, int r, int color);
-void gfx_triangle(int x0, int y0, int x1, int y1, int x2, int y2, int color);
-void gfx_fill_triangle(int x0, int y0, int x1, int y1, int x2, int y2, int color);
+#include "display.h"
+
+/* ==========================================================================
+ * gfx - public API
+ * ========================================================================= */
+
+/*! \brief Fill the whole frame buffer with one colour. */
+void gfx_fill(display_color_e in_color);
+
+/*! \brief Draw a horizontal line of `in_width` pixels, starting at the given point. */
+void gfx_horizontal_line(int16_t in_x, int16_t in_y, int16_t in_width, display_color_e in_color);
+
+/*! \brief Draw a vertical line of `in_height` pixels, starting at the given point. */
+void gfx_vertical_line(int16_t in_x, int16_t in_y, int16_t in_height, display_color_e in_color);
+
+/*! \brief Draw a line between two points (Bresenham). */
+void gfx_line(int16_t in_x_start, int16_t in_y_start, int16_t in_x_end, int16_t in_y_end,
+              display_color_e in_color);
+
+/*! \brief Draw the outline of a rectangle, `in_x`/`in_y` being its top-left corner. */
+void gfx_rectangle(int16_t in_x, int16_t in_y, int16_t in_width, int16_t in_height,
+                   display_color_e in_color);
+
+/*! \brief Draw a filled rectangle, `in_x`/`in_y` being its top-left corner. */
+void gfx_filled_rectangle(int16_t in_x, int16_t in_y, int16_t in_width, int16_t in_height,
+                          display_color_e in_color);
+
+/*! \brief Draw the outline of a circle around a centre point. */
+void gfx_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
+                display_color_e in_color);
+
+/*! \brief Draw a filled circle around a centre point. */
+void gfx_filled_circle(int16_t in_center_x, int16_t in_center_y, int16_t in_radius,
+                       display_color_e in_color);
+
+/*! \brief Draw the outline of a triangle through three corners. */
+void gfx_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t in_y_1, int16_t in_x_2,
+                  int16_t in_y_2, display_color_e in_color);
+
+/*! \brief Draw a filled triangle through three corners. */
+void gfx_filled_triangle(int16_t in_x_0, int16_t in_y_0, int16_t in_x_1, int16_t in_y_1,
+                         int16_t in_x_2, int16_t in_y_2, display_color_e in_color);
 
 #endif /* GFX_H */

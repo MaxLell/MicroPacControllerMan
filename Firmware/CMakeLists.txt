@@ -1,9 +1,52 @@
 cmake_minimum_required(VERSION 3.22)
 
-# The project name must equal the executable target that the STM32CubeMX
-# interface library appends its generated sources to — see
+# ==============================================================================
+# Cross-compilation setup
+#
+# These variables normally live in a separate toolchain file, but CMake reads them
+# during project() so setting them here works just as well — and keeps the whole
+# build in one file. No -DCMAKE_TOOLCHAIN_FILE needed: `cmake -B build` is enough.
+#
+# The MCU flags are set through the *_INIT variables so they also apply to the
+# STM32CubeMX-generated HAL/CMSIS objects and the startup assembly, which must be
+# built with the same Cortex-M4F ABI as our own code.
+# ==============================================================================
+set(CMAKE_SYSTEM_NAME      Generic)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+
+set(TOOLCHAIN_PREFIX arm-none-eabi-)
+set(CMAKE_C_COMPILER   ${TOOLCHAIN_PREFIX}gcc)
+set(CMAKE_ASM_COMPILER ${TOOLCHAIN_PREFIX}gcc)
+set(CMAKE_OBJCOPY      ${TOOLCHAIN_PREFIX}objcopy CACHE FILEPATH "objcopy")
+set(CMAKE_SIZE         ${TOOLCHAIN_PREFIX}size    CACHE FILEPATH "size")
+
+# Emit <target>.elf directly (openocd.cfg / run_ott.py expect build/pacman.elf).
+set(CMAKE_EXECUTABLE_SUFFIX_C   ".elf")
+set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
+
+# Don't try to link a full executable when probing the compiler — there is no
+# runtime to link against on a bare-metal target.
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+set(MCU_FLAGS "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard")
+set(CMAKE_C_FLAGS_INIT   "${MCU_FLAGS} -ffunction-sections -fdata-sections")
+set(CMAKE_ASM_FLAGS_INIT "${MCU_FLAGS} -x assembler-with-cpp")
+# newlib-nano; the syscall stubs come from the generated syscalls.c / sysmem.c, so
+# no --specs=nosys.specs (which would collide with them).
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${MCU_FLAGS} --specs=nano.specs")
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+# ==============================================================================
+# Project
+#
+# The project name must equal the executable target the STM32CubeMX interface
+# library appends its generated sources to — see
 # ThirdParty/STM32_G431RB_HAL/cmake/stm32cubemx/CMakeLists.txt, which does
 # target_sources(${CMAKE_PROJECT_NAME} ...).
+# ==============================================================================
 set(CMAKE_PROJECT_NAME pacman)
 project(${CMAKE_PROJECT_NAME} C ASM)
 
@@ -16,7 +59,7 @@ endif()
 
 # Root of the STM32CubeMX / HAL export. It owns the HAL + CMSIS, the Cortex
 # startup, the linker script, and the clock + peripheral init (main.c, gpio.c,
-# i2c.c, usart.c, MSP, IRQ handlers). It is regenerated from CubeMX; we only
+# i2c.c, spi.c, usart.c, MSP, IRQ handlers). It is regenerated from CubeMX; we only
 # edit the USER CODE blocks of its main.c (to call app_main()).
 set(CUBE ${CMAKE_SOURCE_DIR}/ThirdParty/STM32_G431RB_HAL)
 
@@ -27,44 +70,48 @@ set(CUBE ${CMAKE_SOURCE_DIR}/ThirdParty/STM32_G431RB_HAL)
 add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 
-# --- our firmware: M2 board bring-up on HAL (UART + systick + the OTT console
-# with the button and touchpad scenarios). The display/gfx drivers and their OTT
-# scenarios are ported to HAL and added here next. ---
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
-    Bsp/uart/uart.c
-    Bsp/systick/systick.c
-    Bsp/button/button.c
-    Bsp/i2c/bsp_i2c.c
-    Bsp/spi/bsp_spi.c
+    Bsp/dio_bsp/dio_bsp.c
+    Bsp/i2c_bsp/i2c_bsp.c
     Bsp/retain_ram/retain_ram.c
-    Drivers/touchpad/touchpad.c
+    Bsp/spi_bsp/spi_bsp.c
+    Bsp/switch/switch.c
+    Bsp/systick_bsp/systick_bsp.c
+    Bsp/uart_bsp/uart_bsp.c
+    Bsp/user_button/user_button.c
     Drivers/display/display.c
     Drivers/gfx/gfx.c
+    Drivers/touchpad/touchpad.c
+    Services/delay/delay.c
+    Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
-    Test/Target/scripts/ott_button.c
-    Test/Target/scripts/ott_touchpad.c
     Test/Target/scripts/ott_display.c
     Test/Target/scripts/ott_touchdot.c
-    Test/Target/scripts/ott_dispdiag.c
-    Test/Target/scripts/ott_lacheck.c
+    Test/Target/scripts/ott_touchpad.c
+    Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c)
 
 # One include dir per module folder (headers are included by bare name).
-# ${CUBE}/Core/Inc gives our BSP the CubeMX pin macros + peripheral handles
-# (main.h, usart.h); the HAL/CMSIS headers arrive via the stm32cubemx lib below.
+# ${CUBE}/Core/Inc gives the BSP the CubeMX pin macros + peripheral handles
+# (main.h, i2c.h, spi.h, usart.h); the HAL/CMSIS headers arrive via the
+# stm32cubemx interface library below.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
-    Bsp/uart
-    Bsp/systick
-    Bsp/button
-    Bsp/i2c
-    Bsp/spi
+    Bsp/dio_bsp
+    Bsp/i2c_bsp
     Bsp/retain_ram
-    Drivers/touchpad
+    Bsp/spi_bsp
+    Bsp/switch
+    Bsp/systick_bsp
+    Bsp/uart_bsp
+    Bsp/user_button
     Drivers/display
     Drivers/gfx
+    Drivers/touchpad
+    Services/delay
+    Services/sw_timer
     Test/Target
     Test/Target/scripts
     ThirdParty/EmbeddedCli

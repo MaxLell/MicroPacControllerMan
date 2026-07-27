@@ -185,6 +185,28 @@ running. **Open minor item:** the shield routes slot-2 RST to **PD2**, while the
 firmware currently drives PA4 — the MTCH6102 runs without an explicit reset, so
 this is cosmetic; re-check when convenient.
 
+### 2.3.4 Clock configuration (as configured)
+
+Owned by the STM32CubeMX `.ioc` ([DEC-012](11-Decisions-and-As-Built.md)) and applied
+by its generated `SystemClock_Config()` before `app_main()` is entered. This is the
+current, intended configuration — M1's HSI-16 MHz default ([DEC-004](11-Decisions-and-As-Built.md))
+is history.
+
+| Item | Value | Note |
+|---|---|---|
+| SYSCLK / HCLK | **170 MHz** | The STM32G431's maximum |
+| Source | PLL | `HSI (16 MHz) / PLLM 4 × PLLN 85` |
+| Time base | SysTick @ **1 kHz** | Owned by the HAL; `Bsp/systick_bsp` reads it and hangs the 1 ms input-debounce hook off it |
+| LPUART1 kernel clock | 170 MHz | Console rate is pinned to 115200 in firmware, not in the `.ioc` |
+| I2C1 kernel clock | 170 MHz | Timing word `0x40B285C2` (≈100 kHz) |
+| SPI1 bit rate | ≈664 kbit/s | `PCLK / 256`; the LS013B7DH03 tolerates ≈1.1 MHz max |
+
+**Consequence worth knowing:** any delay expressed as a *spin count* rather than a
+duration is ~10× shorter here than it was at 16 MHz. The one such delay in the
+firmware (the display's chip-select settle loop) was re-tuned for this clock — see
+[DEC-013](11-Decisions-and-As-Built.md). Prefer `Services/delay` or
+`Services/sw_timer`, which are clock-independent.
+
 ### 2.3.2 Software & Toolchain
 
 | Unique-ID | Name | Description |

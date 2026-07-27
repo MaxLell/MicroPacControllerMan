@@ -1,10 +1,42 @@
 #include "retain_ram.h"
 
-/* Placed in `.noinit` (see linker script) so it is not zeroed at startup and
- * therefore survives a software reset. */
-static ott_spec_t g_ott_spec __attribute__((section(".noinit"), used));
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
-ott_spec_t* retain_ott_spec(void)
+#include "custom_assert.h"
+
+#if !defined(__GNUC__)
+#error "This code relies on GNU extensions. Please compile with a GNU compatible compiler."
+#endif /* !defined(__GNUC__) */
+
+/* ==========================================================================
+ * retain_ram - private
+ * ========================================================================= */
+
+/* The `.noinit` section is not touched by the startup code, so the contents
+ * survive a software reset. The section is declared in the linker script and is
+ * marked NON-GENERATED there — it has to be re-added after a CubeMX
+ * re-generation. */
+__attribute__((section(".noinit"), used, aligned(4))) static uint8_t
+    g_retained_memory_buffer[RETAIN_RAM_BUFFER_SIZE];
+
+/* ==========================================================================
+ * retain_ram - public
+ * ========================================================================= */
+
+void retained_ram_write(const uint8_t* const in_buffer, const size_t in_buffer_size)
 {
-    return &g_ott_spec;
+    ASSERT(in_buffer != NULL);
+    ASSERT(in_buffer_size == RETAIN_RAM_BUFFER_SIZE);
+
+    memcpy(g_retained_memory_buffer, in_buffer, in_buffer_size);
+}
+
+void retained_ram_read(uint8_t* const out_buffer, const size_t in_buffer_size)
+{
+    ASSERT(out_buffer != NULL);
+    ASSERT(in_buffer_size == RETAIN_RAM_BUFFER_SIZE);
+
+    memcpy(out_buffer, g_retained_memory_buffer, in_buffer_size);
 }
