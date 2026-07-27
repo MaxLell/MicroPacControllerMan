@@ -27,10 +27,19 @@ CMock-generated mocks, so a test can drive cases real hardware and real time can
 reach on demand — the 32-bit tick wrapping around, for instance.
 
 Current coverage: `Services/delay`, `Services/sw_timer`, `Services/framebuffer`,
-`Services/gfx` and `Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
+`Services/gfx`, `Services/message_queue`, `Services/message_broker` and
+`Drivers/display` (with `spi_bsp` and `dio_bsp` mocked). The game's
 Model/Control tests
 ([VT-UNIT-001..005](../../Docu/PrePlanning/06-Verification-and-Validation.md)) arrive
 with the game itself in M3.
+
+`test_message_broker.c` is the example of what unit tests buy that hardware cannot:
+backpressure and slow-consumer isolation are *load* conditions. On the board they happen
+rarely, at the worst moment, and leave nothing behind but a dropped input or a frame that
+never rendered. Here they are arithmetic. Note it deliberately uses the *real*
+`message_queue` rather than mocking it — the broker's logic mostly is queue
+orchestration, so a mock would turn the tests into assertions about which functions were
+called instead of about what a subscriber receives.
 
 `test_display.c` is worth reading as the example of why the BSP is the mocking boundary:
 it captures every byte the panel driver would clock out and asserts on the wire format,

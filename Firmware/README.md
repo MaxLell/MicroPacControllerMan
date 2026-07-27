@@ -149,6 +149,9 @@ source of truth in
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
 | `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
+| `Services/message/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
+| `Services/message_queue/` | Fixed-capacity FIFO of messages, caller-supplied storage, no heap. |
+| `Services/message_broker/` | The publish/subscribe bus between modules (FR-103/108/110). Instance-based; output queues, not callbacks. |
 | `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
 | `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
