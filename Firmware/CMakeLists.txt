@@ -91,8 +91,9 @@ if(PACMAN_HOST_BUILD)
         Services/delay/delay.c
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
-        Services/message_broker/message_broker.c
-        Services/message_queue/message_queue.c
+        Services/circular_buffer/circular_buffer.c
+        Services/msg_broker/msg_broker.c
+        Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
         ThirdParty/embedded_utils/custom_assert.c)
 
@@ -102,9 +103,10 @@ if(PACMAN_HOST_BUILD)
         Services/delay
         Services/framebuffer
         Services/gfx
-        Services/message
-        Services/message_broker
-        Services/message_queue
+        Services/circular_buffer
+        Services/msg
+        Services/msg_broker
+        Services/msg_queue
         Services/sw_timer
         ThirdParty/embedded_utils)
 
@@ -147,8 +149,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/delay/delay.c
     Services/framebuffer/framebuffer.c
     Services/gfx/gfx.c
-    Services/message_broker/message_broker.c
-    Services/message_queue/message_queue.c
+    Services/circular_buffer/circular_buffer.c
+    Services/msg_broker/msg_broker.c
+    Services/msg_queue/msg_queue.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
@@ -178,9 +181,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Services/delay
     Services/framebuffer
     Services/gfx
-    Services/message
-    Services/message_broker
-    Services/message_queue
+    Services/circular_buffer
+    Services/msg
+    Services/msg_broker
+    Services/msg_queue
     Services/sw_timer
     Test/Target
     Test/Target/scripts

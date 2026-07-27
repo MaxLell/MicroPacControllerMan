@@ -13,6 +13,25 @@
 #include "framebuffer.h"
 #include "unity.h"
 
+/* Coordinates chosen so the byte-packing cases are covered explicitly: the LSB and MSB
+ * of one byte, the first pixel of the next, and a row other than zero. */
+#define TEST_PIXEL_X (3)
+#define TEST_PIXEL_Y (7)
+#define TEST_BYTE_FIRST_PIXEL_X (0)
+#define TEST_BYTE_LAST_PIXEL_X (7)
+#define TEST_NEXT_BYTE_FIRST_PIXEL_X (8)
+#define TEST_ROW (0)
+#define TEST_OTHER_ROW (1)
+
+/* A row used for the packed-bit check, and two pixels inside it. */
+#define TEST_PACKED_ROW (4)
+#define TEST_PACKED_PIXEL_LOW_X (0)
+#define TEST_PACKED_PIXEL_HIGH_X (9)
+#define TEST_PACKED_BYTE_LOW (0x01U)
+#define TEST_PACKED_BYTE_HIGH (0x02U)
+
+#define TEST_LONE_PIXEL_X (5)
+
 static framebuffer_t g_framebuffer;
 
 static uint32_t prv_count_ink(void)
@@ -70,41 +89,52 @@ void test_filling_white_removes_every_pixel(void)
 
 void test_a_set_pixel_reads_back_black(void)
 {
-    framebuffer_set_pixel(&g_framebuffer, 3, 7, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_PIXEL_X, TEST_PIXEL_Y, FRAMEBUFFER_COLOR_BLACK);
 
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK, framebuffer_get_pixel(&g_framebuffer, 3, 7));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_PIXEL_X, TEST_PIXEL_Y));
     TEST_ASSERT_EQUAL_UINT32(1U, prv_count_ink());
 }
 
 void test_a_pixel_can_be_cleared_again(void)
 {
-    framebuffer_set_pixel(&g_framebuffer, 3, 7, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 3, 7, FRAMEBUFFER_COLOR_WHITE);
+    framebuffer_set_pixel(&g_framebuffer, TEST_PIXEL_X, TEST_PIXEL_Y, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_PIXEL_X, TEST_PIXEL_Y, FRAMEBUFFER_COLOR_WHITE);
 
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE, framebuffer_get_pixel(&g_framebuffer, 3, 7));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_PIXEL_X, TEST_PIXEL_Y));
     TEST_ASSERT_EQUAL_UINT32(0U, prv_count_ink());
 }
 
 void test_pixels_sharing_a_byte_are_independent(void)
 {
     /* Both ends of the first byte, plus the first pixel of the second. */
-    framebuffer_set_pixel(&g_framebuffer, 0, 0, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 7, 0, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 8, 0, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_BYTE_FIRST_PIXEL_X, TEST_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_BYTE_LAST_PIXEL_X, TEST_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_NEXT_BYTE_FIRST_PIXEL_X, TEST_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
 
-    framebuffer_set_pixel(&g_framebuffer, 7, 0, FRAMEBUFFER_COLOR_WHITE);
+    framebuffer_set_pixel(&g_framebuffer, TEST_BYTE_LAST_PIXEL_X, TEST_ROW,
+                          FRAMEBUFFER_COLOR_WHITE);
 
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK, framebuffer_get_pixel(&g_framebuffer, 0, 0));
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE, framebuffer_get_pixel(&g_framebuffer, 7, 0));
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK, framebuffer_get_pixel(&g_framebuffer, 8, 0));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_BYTE_FIRST_PIXEL_X, TEST_ROW));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_BYTE_LAST_PIXEL_X, TEST_ROW));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_BLACK,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_NEXT_BYTE_FIRST_PIXEL_X,
+                                            TEST_ROW));
     TEST_ASSERT_EQUAL_UINT32(2U, prv_count_ink());
 }
 
 void test_rows_are_independent(void)
 {
-    framebuffer_set_pixel(&g_framebuffer, 5, 0, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_LONE_PIXEL_X, TEST_ROW, FRAMEBUFFER_COLOR_BLACK);
 
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE, framebuffer_get_pixel(&g_framebuffer, 5, 1));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE,
+                      framebuffer_get_pixel(&g_framebuffer, TEST_LONE_PIXEL_X, TEST_OTHER_ROW));
     TEST_ASSERT_EQUAL_UINT32(1U, prv_count_ink());
 }
 
@@ -123,10 +153,10 @@ void test_the_far_corner_is_addressable(void)
 
 void test_pixels_outside_the_buffer_are_dropped(void)
 {
-    framebuffer_set_pixel(&g_framebuffer, -1, 0, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 0, -1, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, FRAMEBUFFER_WIDTH, 0, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 0, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, -1, TEST_ROW, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_ROW, -1, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, FRAMEBUFFER_WIDTH, TEST_ROW, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_ROW, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLACK);
 
     TEST_ASSERT_EQUAL_UINT32(0U, prv_count_ink());
 }
@@ -135,9 +165,9 @@ void test_reading_outside_the_buffer_reports_white(void)
 {
     framebuffer_fill(&g_framebuffer, FRAMEBUFFER_COLOR_BLACK);
 
-    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE, framebuffer_get_pixel(&g_framebuffer, -1, 0));
+    TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE, framebuffer_get_pixel(&g_framebuffer, -1, TEST_ROW));
     TEST_ASSERT_EQUAL(FRAMEBUFFER_COLOR_WHITE,
-                      framebuffer_get_pixel(&g_framebuffer, FRAMEBUFFER_WIDTH, 0));
+                      framebuffer_get_pixel(&g_framebuffer, FRAMEBUFFER_WIDTH, TEST_ROW));
 }
 
 /* --- row access for a driver --------------------------------------------- */
@@ -146,15 +176,17 @@ void test_a_row_reflects_the_pixels_set_in_it(void)
 {
     const uint8_t* row;
 
-    framebuffer_set_pixel(&g_framebuffer, 0, 4, FRAMEBUFFER_COLOR_BLACK);
-    framebuffer_set_pixel(&g_framebuffer, 9, 4, FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_PACKED_PIXEL_LOW_X, TEST_PACKED_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
+    framebuffer_set_pixel(&g_framebuffer, TEST_PACKED_PIXEL_HIGH_X, TEST_PACKED_ROW,
+                          FRAMEBUFFER_COLOR_BLACK);
 
-    row = framebuffer_get_line(&g_framebuffer, 4);
+    row = framebuffer_get_line(&g_framebuffer, TEST_PACKED_ROW);
 
     /* Bit 0 of a byte is its left-most pixel, so pixel 0 -> byte 0 bit 0 and
      * pixel 9 -> byte 1 bit 1. */
-    TEST_ASSERT_EQUAL_HEX8(0x01U, row[0]);
-    TEST_ASSERT_EQUAL_HEX8(0x02U, row[1]);
+    TEST_ASSERT_EQUAL_HEX8(TEST_PACKED_BYTE_LOW, row[0]);
+    TEST_ASSERT_EQUAL_HEX8(TEST_PACKED_BYTE_HIGH, row[1]);
 }
 
 /* --- preconditions -------------------------------------------------------- */

@@ -1,5 +1,5 @@
 /*
- * message_broker.h
+ * msg_broker.h
  *
  * Publish/subscribe message bus — the only path between modules (FR-103, FR-107).
  * Specified in [03 §3.2](../../../Docu/PrePlanning/03-Architecture.md); adapted from
@@ -22,54 +22,54 @@
  * payload.
  *
  * **Threading.** FR-108 calls for a dedicated worker task per broker. FreeRTOS arrives
- * in M4, so for now #message_broker_process is that worker's body and the super-loop
- * calls it. The API does not change when the task appears.
+ * in M4, so for now #msg_broker_process is that worker's body and the super-loop calls
+ * it. The API does not change when the task appears.
  */
 
-#ifndef MESSAGE_BROKER_H
-#define MESSAGE_BROKER_H
+#ifndef MSG_BROKER_H
+#define MSG_BROKER_H
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "message.h"
-#include "message_queue.h"
+#include "msg.h"
+#include "msg_queue.h"
 
 /* ==========================================================================
- * message_broker - public types
+ * msg_broker - public types
  * ========================================================================= */
 
 /*! \brief Subscribers that may register for one topic. */
-#define MESSAGE_BROKER_MAX_SUBSCRIBERS_PER_TOPIC (4U)
+#define MSG_BROKER_MAX_SUBSCRIBERS_PER_TOPIC (4U)
 
 typedef enum
 {
-    MESSAGE_BROKER_STATUS_OK = 0,               /*!< Done                              */
-    MESSAGE_BROKER_STATUS_INPUT_FULL,           /*!< Publish rejected — apply backpressure */
-    MESSAGE_BROKER_STATUS_IDLE,                 /*!< Nothing was waiting to be moved   */
-    MESSAGE_BROKER_STATUS_NO_SUBSCRIBER         /*!< Delivered to nobody               */
-} message_broker_status_e;
+    MSG_BROKER_STATUS_OK = 0,                   /*!< Done                              */
+    MSG_BROKER_STATUS_INPUT_FULL,               /*!< Publish rejected — apply backpressure */
+    MSG_BROKER_STATUS_IDLE,                     /*!< Nothing was waiting to be moved   */
+    MSG_BROKER_STATUS_NO_SUBSCRIBER             /*!< Delivered to nobody               */
+} msg_broker_status_e;
 
 /*! \brief A module's end of the bus: its own output queue, plus what it has missed. */
 typedef struct
 {
-    message_queue_t queue;
-    uint32_t dropped_count;                     /*!< Messages lost to a full queue     */
-} message_subscriber_t;
+    msg_queue_t queue;
+    uint32_t dropped_msg_count;                 /*!< Messages lost to a full queue     */
+} msg_subscriber_t;
 
 typedef struct
 {
-    message_queue_t input_queue;
-    message_subscriber_t* topics[MESSAGE_ID_LAST][MESSAGE_BROKER_MAX_SUBSCRIBERS_PER_TOPIC];
+    msg_queue_t input_queue;
+    msg_subscriber_t* topics[MSG_LAST][MSG_BROKER_MAX_SUBSCRIBERS_PER_TOPIC];
     bool is_initialized;
     bool is_started;
-    uint32_t published_count;                   /*!< Accepted into the input queue     */
-    uint32_t delivered_count;                   /*!< Copies handed to subscribers      */
-    uint32_t dropped_count;                     /*!< Copies lost to full output queues */
-} message_broker_t;
+    uint32_t published_msg_count;               /*!< Accepted into the input queue     */
+    uint32_t delivered_msg_count;               /*!< Copies handed to subscribers      */
+    uint32_t dropped_msg_count;                 /*!< Copies lost to full output queues */
+} msg_broker_t;
 
 /* ==========================================================================
- * message_subscriber - public API
+ * msg_subscriber - public API
  * ========================================================================= */
 
 /*! \brief Give a subscriber its output queue.
@@ -77,22 +77,21 @@ typedef struct
  * Call before subscribing to anything.
  *
  * \param[out]      inout_subscriber: subscriber to initialize, must not be `NULL`
- * \param[in]       inout_storage: array of at least `in_capacity` messages, borrowed
+ * \param[in]       inout_msg_buffer: array of at least `in_capacity` messages, borrowed
  *                      for the subscriber's lifetime
  * \param[in]       in_capacity: queue depth, at least `1`
  */
-void message_subscriber_init(message_subscriber_t* inout_subscriber, message_t* inout_storage,
-                             uint16_t in_capacity);
+void msg_subscriber_init(msg_subscriber_t* inout_subscriber, msg_t* inout_msg_buffer,
+                         uint16_t in_capacity);
 
 /*! \brief Take the next message from a subscriber's own queue.
  *
  * \param[in,out]   inout_subscriber: initialized subscriber
- * \param[out]      out_message: receives the message, must not be `NULL`
- * \return          \ref MESSAGE_BROKER_STATUS_OK when one was taken,
- *                      \ref MESSAGE_BROKER_STATUS_IDLE when the queue was empty
+ * \param[out]      out_msg: receives the message, must not be `NULL`
+ * \return          \ref MSG_BROKER_STATUS_OK when one was taken,
+ *                      \ref MSG_BROKER_STATUS_IDLE when the queue was empty
  */
-message_broker_status_e message_subscriber_receive(message_subscriber_t* inout_subscriber,
-                                                  message_t* out_message);
+msg_broker_status_e msg_subscriber_receive(msg_subscriber_t* inout_subscriber, msg_t* out_msg);
 
 /*! \brief How many messages this subscriber has lost to a full queue.
  *
@@ -100,28 +99,27 @@ message_broker_status_e message_subscriber_receive(message_subscriber_t* inout_s
  * ignoring — the broker deliberately drops for the slow subscriber instead of stalling
  * everyone else, so the loss is silent otherwise.
  */
-uint32_t message_subscriber_get_dropped_count(const message_subscriber_t* in_subscriber);
+uint32_t msg_subscriber_get_dropped_msg_count(const msg_subscriber_t* in_subscriber);
 
 /* ==========================================================================
- * message_broker - public API
+ * msg_broker - public API
  * ========================================================================= */
 
 /*! \brief Initialize a broker instance and give it its input queue.
  *
  * \param[out]      inout_broker: instance to initialize, must not be `NULL`
- * \param[in]       inout_storage: array of at least `in_capacity` messages, borrowed
+ * \param[in]       inout_msg_buffer: array of at least `in_capacity` messages, borrowed
  *                      for the broker's lifetime
  * \param[in]       in_capacity: input queue depth, at least `1`
  */
-void message_broker_init(message_broker_t* inout_broker, message_t* inout_storage,
-                         uint16_t in_capacity);
+void msg_broker_init(msg_broker_t* inout_broker, msg_t* inout_msg_buffer, uint16_t in_capacity);
 
 /*! \brief Arm the broker so it will move messages (FR-108).
  *
- * Subscriptions are set up before this; #message_broker_process refuses to run until
- * it has been called. Once FreeRTOS is in, this is where the worker task starts.
+ * Subscriptions are set up before this; #msg_broker_process refuses to run until it has
+ * been called. Once FreeRTOS is in, this is where the worker task starts.
  */
-void message_broker_start(message_broker_t* inout_broker);
+void msg_broker_start(msg_broker_t* inout_broker);
 
 /*! \brief Register a subscriber's queue for one topic.
  *
@@ -129,31 +127,30 @@ void message_broker_start(message_broker_t* inout_broker);
  *
  * \param[in,out]   inout_broker: initialized instance
  * \param[in,out]   inout_subscriber: initialized subscriber
- * \param[in]       in_topic: topic between \ref MESSAGE_ID_NONE and \ref MESSAGE_ID_LAST
+ * \param[in]       in_topic: topic between \ref MSG_NONE and \ref MSG_LAST
  */
-void message_broker_subscribe(message_broker_t* inout_broker,
-                              message_subscriber_t* inout_subscriber, message_id_e in_topic);
+void msg_broker_subscribe(msg_broker_t* inout_broker, msg_subscriber_t* inout_subscriber,
+                          msg_id_e in_topic);
 
 /*! \brief Hand a message to the broker's input queue.
  *
  * Copies the message in and returns immediately — it is not delivered until
- * #message_broker_process runs. Never blocks (NFR-105).
+ * #msg_broker_process runs. Never blocks (NFR-105).
  *
  * \param[in,out]   inout_broker: started instance
- * \param[in]       in_message: message to publish, must not be `NULL`
- * \return          \ref MESSAGE_BROKER_STATUS_OK, or
- *                      \ref MESSAGE_BROKER_STATUS_INPUT_FULL when the input queue is
- *                      full — the publisher decides what to do, it is not blocked
+ * \param[in]       in_msg: message to publish, must not be `NULL`
+ * \return          \ref MSG_BROKER_STATUS_OK, or \ref MSG_BROKER_STATUS_INPUT_FULL when
+ *                      the input queue is full — the publisher decides what to do, it
+ *                      is not blocked
  */
-message_broker_status_e message_broker_publish(message_broker_t* inout_broker,
-                                              const message_t* in_message);
+msg_broker_status_e msg_broker_publish(msg_broker_t* inout_broker, const msg_t* in_msg);
 
 /*! \brief Whether at least `in_headroom` more messages would fit in the input queue.
  *
  * The backpressure check of NFR-105: a publisher that can throttle asks first instead
  * of discovering a full queue after the fact.
  */
-bool message_broker_has_input_space(const message_broker_t* in_broker, uint16_t in_headroom);
+bool msg_broker_has_input_space(const msg_broker_t* in_broker, uint16_t in_headroom);
 
 /*! \brief Move one message from the input queue to every subscriber of its topic.
  *
@@ -161,20 +158,19 @@ bool message_broker_has_input_space(const message_broker_t* in_broker, uint16_t 
  * dropped and counted; the others still get it, and the broker is not stalled.
  *
  * \param[in,out]   inout_broker: started instance
- * \return          \ref MESSAGE_BROKER_STATUS_OK when a message was delivered to at
- *                      least one subscriber, \ref MESSAGE_BROKER_STATUS_NO_SUBSCRIBER
- *                      when it had none, \ref MESSAGE_BROKER_STATUS_IDLE when the input
- *                      queue was empty
+ * \return          \ref MSG_BROKER_STATUS_OK when a message was delivered to at least
+ *                      one subscriber, \ref MSG_BROKER_STATUS_NO_SUBSCRIBER when it had
+ *                      none, \ref MSG_BROKER_STATUS_IDLE when the input queue was empty
  */
-message_broker_status_e message_broker_process(message_broker_t* inout_broker);
+msg_broker_status_e msg_broker_process(msg_broker_t* inout_broker);
 
 /*! \brief Drain the input queue completely, for a super-loop that wants one call.
  *
  * \return          Number of messages moved
  */
-uint32_t message_broker_process_all(message_broker_t* inout_broker);
+uint32_t msg_broker_process_all(msg_broker_t* inout_broker);
 
 /*! \brief Total copies the broker has lost to full subscriber queues. */
-uint32_t message_broker_get_dropped_count(const message_broker_t* in_broker);
+uint32_t msg_broker_get_dropped_msg_count(const msg_broker_t* in_broker);
 
-#endif /* MESSAGE_BROKER_H */
+#endif /* MSG_BROKER_H */
