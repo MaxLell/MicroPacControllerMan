@@ -18,15 +18,15 @@
  * ========================================================================= */
 
 /*! \brief Width of a device's internal memory-address pointer, in bytes. */
-#define I2C_BSP_MEMORY_ADDRESS_WIDTH_8_BIT (1U)
+#define I2C_BSP_MEMORY_ADDRESS_WIDTH_8_BIT  (1U)
 #define I2C_BSP_MEMORY_ADDRESS_WIDTH_16_BIT (2U)
 
 typedef enum
 {
-    I2C_BSP_STATUS_OK = 0,                      /*!< Transfer completed                       */
-    I2C_BSP_STATUS_ERROR_NOT_ACKNOWLEDGED,      /*!< Device did not acknowledge (absent?)     */
-    I2C_BSP_STATUS_ERROR_TIMEOUT,               /*!< Bus did not complete within the timeout  */
-    I2C_BSP_STATUS_ERROR_UNSUPPORTED_WIDTH      /*!< Memory-address width is not supported    */
+    I2C_BSP_STATUS_OK = 0,                 /*!< Transfer completed                       */
+    I2C_BSP_STATUS_ERROR_NOT_ACKNOWLEDGED, /*!< Device did not acknowledge (absent?)     */
+    I2C_BSP_STATUS_ERROR_TIMEOUT,          /*!< Bus did not complete within the timeout  */
+    I2C_BSP_STATUS_ERROR_UNSUPPORTED_WIDTH /*!< Memory-address width is not supported    */
 } i2c_bsp_status_e;
 
 /* ==========================================================================
@@ -48,8 +48,7 @@ void i2c_bsp_init(void);
  * \return          \ref I2C_BSP_STATUS_OK on success, member of
  *                      \ref i2c_bsp_status_e otherwise
  */
-i2c_bsp_status_e i2c_bsp_write(uint8_t in_device_address, const uint8_t* const in_data,
-                               size_t in_length);
+i2c_bsp_status_e i2c_bsp_write(uint8_t in_device_address, const uint8_t* const in_data, size_t in_length);
 
 /*! \brief Read a byte sequence from a device.
  *
@@ -76,7 +75,6 @@ i2c_bsp_status_e i2c_bsp_read(uint8_t in_device_address, uint8_t* const out_data
  *                      \ref i2c_bsp_status_e otherwise
  */
 i2c_bsp_status_e i2c_bsp_read_memory(uint8_t in_device_address, uint16_t in_memory_address,
-                                     size_t in_memory_address_width, uint8_t* const out_data,
-                                     size_t in_length);
+                                     size_t in_memory_address_width, uint8_t* const out_data, size_t in_length);
 
 #endif /* I2C_BSP_H */

@@ -63,9 +63,8 @@ dio_bsp_pin_state_e dio_bsp_get_pin(dio_bsp_pin_e in_pin)
 {
     const dio_bsp_pin_map_t* const pin_map = prv_get_pin_map(in_pin);
 
-    return (HAL_GPIO_ReadPin(pin_map->port, pin_map->pin_mask) == GPIO_PIN_SET)
-               ? DIO_BSP_PIN_STATE_HIGH
-               : DIO_BSP_PIN_STATE_LOW;
+    return (HAL_GPIO_ReadPin(pin_map->port, pin_map->pin_mask) == GPIO_PIN_SET) ? DIO_BSP_PIN_STATE_HIGH
+                                                                                : DIO_BSP_PIN_STATE_LOW;
 }
 
 void dio_bsp_toggle_pin(dio_bsp_pin_e in_pin)

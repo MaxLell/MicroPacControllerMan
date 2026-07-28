@@ -32,11 +32,11 @@ typedef struct
 } game_level_config_t;
 
 static const game_level_config_t k_level_configs[PLAYFIELD_LEVEL_COUNT] = {
-    {200U, 6000U, 5000U, 20000U, 2U},           /* level 1 — slower than Pacman        */
+    {200U, 6000U, 5000U, 20000U, 2U}, /* level 1 — slower than Pacman        */
     {170U, 5000U, 4000U, 20000U, 2U},
-    {150U, 4000U, 3000U, 20000U, 1U},           /* level 3 — matches Pacman's speed    */
+    {150U, 4000U, 3000U, 20000U, 1U}, /* level 3 — matches Pacman's speed    */
     {130U, 2000U, 2000U, 20000U, 1U},
-    {110U, 0U, 0U, 20000U, 0U}};                /* level 5 — faster, no frightened     */
+    {110U, 0U, 0U, 20000U, 0U}}; /* level 5 — faster, no frightened     */
 
 /* §10.5: a frightened ghost moves at half its current speed. */
 #define FRIGHTENED_SPEED_DIVISOR (2U)
@@ -82,8 +82,7 @@ static void prv_init_bus(game_t* const inout_game)
 {
     memset(&inout_game->internal_broker, 0, sizeof(inout_game->internal_broker));
 
-    msg_broker_init(&inout_game->internal_broker, inout_game->internal_msg_buffer,
-                    GAME_INTERNAL_BROKER_CAPACITY);
+    msg_broker_init(&inout_game->internal_broker, inout_game->internal_msg_buffer, GAME_INTERNAL_BROKER_CAPACITY);
     score_init(&inout_game->score, &inout_game->internal_broker);
     msg_broker_start(&inout_game->internal_broker);
 }
@@ -107,8 +106,8 @@ static void prv_place_entities(game_t* const inout_game)
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
         /* Three pen cells for four ghosts, so they share — they leave immediately anyway. */
-        const cell_t pen_cell = playfield_get_pen_cell(&inout_game->playfield,
-                                                       (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT));
+        const cell_t pen_cell =
+            playfield_get_pen_cell(&inout_game->playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT));
 
         ghost_reset(&inout_game->ghosts[index], (ghost_personality_e)index, pen_cell);
     }
@@ -149,7 +148,7 @@ static uint32_t prv_get_phase_duration(const game_t* const in_game)
     const game_level_config_t* const config = prv_get_config(in_game);
 
     return (prv_get_scheduled_mode(in_game) == GHOST_MODE_SCATTER) ? config->scatter_duration_ms
-                                                                  : config->chase_duration_ms;
+                                                                   : config->chase_duration_ms;
 }
 
 /* Push the mode every entity should be in. Safe to call every tick: setting a mode a ghost
@@ -161,8 +160,7 @@ static void prv_apply_mode(game_t* const inout_game)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        ghost_set_mode(&inout_game->ghosts[index], is_frightened ? GHOST_MODE_FRIGHTENED
-                                                                 : scheduled);
+        ghost_set_mode(&inout_game->ghosts[index], is_frightened ? GHOST_MODE_FRIGHTENED : scheduled);
     }
 }
 
@@ -172,10 +170,9 @@ static void prv_advance_timers(game_t* const inout_game, uint32_t in_elapsed_ms)
     {
         /* The frightened window freezes the scatter/chase plan rather than running it down
          * in the background, so the ghosts resume the phase they were interrupted in. */
-        inout_game->frightened_remaining_ms
-            = (inout_game->frightened_remaining_ms > in_elapsed_ms)
-                  ? (inout_game->frightened_remaining_ms - in_elapsed_ms)
-                  : 0U;
+        inout_game->frightened_remaining_ms = (inout_game->frightened_remaining_ms > in_elapsed_ms)
+                                                  ? (inout_game->frightened_remaining_ms - in_elapsed_ms)
+                                                  : 0U;
 
         return;
     }
@@ -255,8 +252,8 @@ static void prv_lose_life(game_t* const inout_game)
 /* §10.7's two ways of meeting: sharing a cell, or swapping cells in the same tick and so
  * passing through each other. The second is easy to miss and shows up as a ghost that
  * walks straight through Pacman — which is why the previous cells are threaded in here. */
-static bool prv_have_met(cell_t in_pacman_cell, cell_t in_pacman_previous_cell,
-                         cell_t in_ghost_cell, cell_t in_ghost_previous_cell)
+static bool prv_have_met(cell_t in_pacman_cell, cell_t in_pacman_previous_cell, cell_t in_ghost_cell,
+                         cell_t in_ghost_previous_cell)
 {
     if (playfield_are_cells_equal(in_pacman_cell, in_ghost_cell))
     {
@@ -278,8 +275,7 @@ static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_prev
     {
         ghost_t* const ghost = &inout_game->ghosts[index];
 
-        if (!prv_have_met(pacman_cell, in_pacman_previous_cell, ghost_get_cell(ghost),
-                          in_ghost_previous_cells[index]))
+        if (!prv_have_met(pacman_cell, in_pacman_previous_cell, ghost_get_cell(ghost), in_ghost_previous_cells[index]))
         {
             continue;
         }
@@ -287,9 +283,8 @@ static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_prev
         if (ghost_is_frightened(ghost))
         {
             prv_publish(inout_game, MSG_GAME_GHOST_EATEN, NULL, 0U);
-            ghost_send_to_pen(ghost, playfield_get_pen_cell(&inout_game->playfield,
-                                                            (uint8_t)(index
-                                                                      % PLAYFIELD_PEN_CELL_COUNT)));
+            ghost_send_to_pen(
+                ghost, playfield_get_pen_cell(&inout_game->playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
 
             continue;
         }
@@ -363,8 +358,8 @@ static bool prv_move_ghosts(game_t* const inout_game)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        (void)ghost_advance(&inout_game->ghosts[index], &inout_game->playfield, pacman_cell,
-                            pacman_direction, blinky_cell);
+        (void)ghost_advance(&inout_game->ghosts[index], &inout_game->playfield, pacman_cell, pacman_direction,
+                            blinky_cell);
     }
 
     /* Pacman stood still during this step, so his previous cell is his current one. */
@@ -488,8 +483,7 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
     inout_game->pacman_move_elapsed_ms += in_elapsed_ms;
     inout_game->ghost_move_elapsed_ms += in_elapsed_ms;
 
-    while ((inout_game->pacman_move_elapsed_ms >= pacman_period)
-           && (inout_game->state == GAME_STATE_RUNNING))
+    while ((inout_game->pacman_move_elapsed_ms >= pacman_period) && (inout_game->state == GAME_STATE_RUNNING))
     {
         inout_game->pacman_move_elapsed_ms -= pacman_period;
 
@@ -501,8 +495,7 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
 
     ghost_period = prv_get_ghost_period_ms(inout_game);
 
-    while ((inout_game->ghost_move_elapsed_ms >= ghost_period)
-           && (inout_game->state == GAME_STATE_RUNNING))
+    while ((inout_game->ghost_move_elapsed_ms >= ghost_period) && (inout_game->state == GAME_STATE_RUNNING))
     {
         inout_game->ghost_move_elapsed_ms -= ghost_period;
 

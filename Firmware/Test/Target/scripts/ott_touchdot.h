@@ -20,7 +20,6 @@
 bool ott_touchdot_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
                         uint32_t* out_parameter_size);
 
-bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
-                      size_t in_reason_size);
+bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason, size_t in_reason_size);
 
 #endif /* OTT_TOUCHDOT_H */

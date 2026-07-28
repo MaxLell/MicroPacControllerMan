@@ -33,18 +33,18 @@
  *         assigned. */
 typedef enum
 {
-    GHOST_BLINKY = 0,                           /*!< Direct: aims at Pacman            */
-    GHOST_PINKY,                                /*!< Ambush: aims ahead of Pacman      */
-    GHOST_INKY,                                 /*!< Flank: aims past Pacman from Blinky */
-    GHOST_CLYDE,                                /*!< Shy: backs off when close         */
+    GHOST_BLINKY = 0, /*!< Direct: aims at Pacman            */
+    GHOST_PINKY,      /*!< Ambush: aims ahead of Pacman      */
+    GHOST_INKY,       /*!< Flank: aims past Pacman from Blinky */
+    GHOST_CLYDE,      /*!< Shy: backs off when close         */
     GHOST_COUNT
 } ghost_personality_e;
 
 typedef enum
 {
-    GHOST_MODE_SCATTER = 0,                     /*!< Heads for its own corner          */
-    GHOST_MODE_CHASE,                           /*!< Hunts, per its personality        */
-    GHOST_MODE_FRIGHTENED                       /*!< Flees Pacman, edible (§10.5)      */
+    GHOST_MODE_SCATTER = 0, /*!< Heads for its own corner          */
+    GHOST_MODE_CHASE,       /*!< Hunts, per its personality        */
+    GHOST_MODE_FRIGHTENED   /*!< Flees Pacman, edible (§10.5)      */
 } ghost_mode_e;
 
 typedef struct
@@ -52,7 +52,7 @@ typedef struct
     agent_t agent;
     ghost_personality_e personality;
     ghost_mode_e mode;
-    bool may_reverse;                           /*!< Earned by a mode change (§10.1)   */
+    bool may_reverse; /*!< Earned by a mode change (§10.1)   */
 } ghost_t;
 
 /* ==========================================================================
@@ -101,8 +101,8 @@ void ghost_set_mode(ghost_t* inout_ghost, ghost_mode_e in_mode);
  * \param[in]       in_blinky_cell: Blinky's cell, for Inky's rule
  * \return          The target cell
  */
-cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell,
-                        direction_e in_pacman_direction, cell_t in_blinky_cell);
+cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell, direction_e in_pacman_direction,
+                        cell_t in_blinky_cell);
 
 /*! \brief Move the ghost one cell.
  *

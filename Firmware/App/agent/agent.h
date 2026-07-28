@@ -26,7 +26,7 @@
 typedef struct
 {
     cell_t cell;
-    direction_e direction;                      /*!< Which way it is facing            */
+    direction_e direction; /*!< Which way it is facing            */
 } agent_t;
 
 /* ==========================================================================
@@ -51,8 +51,7 @@ void agent_place(agent_t* inout_agent, cell_t in_cell, direction_e in_direction)
  * \param[in]       in_direction: direction to test; \ref DIRECTION_NONE is never a step
  * \return          `true` when a step that way would land on an open cell
  */
-bool agent_can_step(const agent_t* in_agent, const playfield_t* in_playfield,
-                    direction_e in_direction);
+bool agent_can_step(const agent_t* in_agent, const playfield_t* in_playfield, direction_e in_direction);
 
 /*! \brief Face a direction and step one cell that way if it is open.
  *

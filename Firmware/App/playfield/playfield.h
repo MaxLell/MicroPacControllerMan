@@ -26,35 +26,35 @@
  * playfield - public types
  * ========================================================================= */
 
-#define PLAYFIELD_WIDTH (11)
-#define PLAYFIELD_HEIGHT (9)
+#define PLAYFIELD_WIDTH          (11)
+#define PLAYFIELD_HEIGHT         (9)
 
 /*! \brief Levels, each with its own maze (FR-025). Levels are 1-based. */
-#define PLAYFIELD_LEVEL_COUNT (5)
-#define PLAYFIELD_FIRST_LEVEL (1)
+#define PLAYFIELD_LEVEL_COUNT    (5)
+#define PLAYFIELD_FIRST_LEVEL    (1)
 
 /*! \brief Cells in the ghost pen (§10.2). */
 #define PLAYFIELD_PEN_CELL_COUNT (3)
 
 typedef struct
 {
-    int16_t x;                                  /*!< Column, `0` is the left edge      */
-    int16_t y;                                  /*!< Row, `0` is the top edge          */
+    int16_t x; /*!< Column, `0` is the left edge      */
+    int16_t y; /*!< Row, `0` is the top edge          */
 } cell_t;
 
 typedef enum
 {
-    PLAYFIELD_PELLET_NONE = 0,                  /*!< Nothing to eat here               */
-    PLAYFIELD_PELLET_NORMAL,                    /*!< 10 points (§10.6)                 */
-    PLAYFIELD_PELLET_POWER                      /*!< 50 points, triggers frightened     */
+    PLAYFIELD_PELLET_NONE = 0, /*!< Nothing to eat here               */
+    PLAYFIELD_PELLET_NORMAL,   /*!< 10 points (§10.6)                 */
+    PLAYFIELD_PELLET_POWER     /*!< 50 points, triggers frightened     */
 } playfield_pellet_e;
 
 typedef struct
 {
-    uint8_t level;                              /*!< 1..#PLAYFIELD_LEVEL_COUNT         */
+    uint8_t level; /*!< 1..#PLAYFIELD_LEVEL_COUNT         */
     bool walls[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     playfield_pellet_e pellets[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
-    uint16_t remaining_pellet_count;            /*!< Normal and power together         */
+    uint16_t remaining_pellet_count; /*!< Normal and power together         */
     cell_t pacman_start;
     cell_t pen_cells[PLAYFIELD_PEN_CELL_COUNT];
 } playfield_t;

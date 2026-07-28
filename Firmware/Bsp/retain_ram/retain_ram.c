@@ -24,8 +24,7 @@ static uint8_t g_retained_memory_buffer[RETAIN_RAM_BUFFER_SIZE];
  * survive a software reset. The section is declared in the linker script and is
  * marked NON-GENERATED there — it has to be re-added after a CubeMX
  * re-generation (RF-005). */
-__attribute__((section(".noinit"), used, aligned(4))) static uint8_t
-    g_retained_memory_buffer[RETAIN_RAM_BUFFER_SIZE];
+__attribute__((section(".noinit"), used, aligned(4))) static uint8_t g_retained_memory_buffer[RETAIN_RAM_BUFFER_SIZE];
 #endif /* !defined(PACMAN_HOST_BUILD) && !defined(TEST) */
 
 /* ==========================================================================

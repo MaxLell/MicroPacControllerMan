@@ -16,7 +16,7 @@
  * brought up by the CubeMX MX_SPI1_Init(). MISO is deliberately absent: the LCD
  * Mono Click repurposes that mikroBUS line as the panel's DISP control, which is
  * a plain digital output (see dio_bsp). */
-#define SPI_BSP_HANDLE (hspi1)
+#define SPI_BSP_HANDLE     (hspi1)
 
 /* Generous for a 128-byte display line at ~0.66 MHz (~1.6 ms), but bounded so a
  * stuck bus is reported rather than hanging a test. */
@@ -44,6 +44,5 @@ void spi_bsp_write(const uint8_t* const in_data, size_t in_length)
     ASSERT(in_length > 0U);
     ASSERT(in_length <= SPI_BSP_LENGTH_MAX);
 
-    (void)HAL_SPI_Transmit(&SPI_BSP_HANDLE, (uint8_t*)in_data, (uint16_t)in_length,
-                           SPI_BSP_TIMEOUT_MS);
+    (void)HAL_SPI_Transmit(&SPI_BSP_HANDLE, (uint8_t*)in_data, (uint16_t)in_length, SPI_BSP_TIMEOUT_MS);
 }

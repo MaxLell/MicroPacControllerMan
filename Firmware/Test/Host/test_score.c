@@ -26,12 +26,11 @@
 
 #define BROKER_INPUT_CAPACITY (16U)
 
-#define GHOST_POINTS_FIRST (200U)
-#define GHOST_POINTS_SECOND (400U)
-#define GHOST_POINTS_THIRD (800U)
-#define GHOST_POINTS_FOURTH (1600U)
-#define GHOST_POINTS_ALL_FOUR (GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_THIRD \
-                               + GHOST_POINTS_FOURTH)
+#define GHOST_POINTS_FIRST    (200U)
+#define GHOST_POINTS_SECOND   (400U)
+#define GHOST_POINTS_THIRD    (800U)
+#define GHOST_POINTS_FOURTH   (1600U)
+#define GHOST_POINTS_ALL_FOUR (GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_THIRD + GHOST_POINTS_FOURTH)
 
 static msg_t g_broker_input_msg_buffer[BROKER_INPUT_CAPACITY];
 static msg_broker_t g_broker;
@@ -133,8 +132,7 @@ void test_pellets_accumulate(void)
     prv_eat_pellet(false);
     prv_eat_pellet(true);
 
-    TEST_ASSERT_EQUAL_UINT32((2U * SCORE_PELLET_POINTS) + SCORE_POWER_PELLET_POINTS,
-                             score_get_total(&g_score));
+    TEST_ASSERT_EQUAL_UINT32((2U * SCORE_PELLET_POINTS) + SCORE_POWER_PELLET_POINTS, score_get_total(&g_score));
 }
 
 /* --- the ghost bonus chain (§10.5/§10.6) --------------------------------- */
@@ -150,8 +148,7 @@ void test_the_ghost_chain_doubles_for_each_ghost_in_one_window(void)
     TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_FIRST + GHOST_POINTS_SECOND, score_get_total(&g_score));
 
     prv_eat_ghost();
-    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_THIRD,
-                             score_get_total(&g_score));
+    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_THIRD, score_get_total(&g_score));
 
     prv_eat_ghost();
     TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_ALL_FOUR, score_get_total(&g_score));
@@ -169,8 +166,7 @@ void test_the_chain_restarts_with_the_next_power_pellet(void)
 
     prv_eat_ghost();
 
-    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_FIRST,
-                             score_get_total(&g_score));
+    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_FIRST + GHOST_POINTS_SECOND + GHOST_POINTS_FIRST, score_get_total(&g_score));
 }
 
 void test_the_chain_does_not_climb_past_the_fourth_ghost(void)
@@ -184,8 +180,7 @@ void test_the_chain_does_not_climb_past_the_fourth_ghost(void)
         prv_eat_ghost();
     }
 
-    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_ALL_FOUR + (2U * GHOST_POINTS_FOURTH),
-                             score_get_total(&g_score));
+    TEST_ASSERT_EQUAL_UINT32(GHOST_POINTS_ALL_FOUR + (2U * GHOST_POINTS_FOURTH), score_get_total(&g_score));
 }
 
 void test_the_next_ghost_value_tracks_the_chain(void)

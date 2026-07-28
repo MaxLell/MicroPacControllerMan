@@ -14,15 +14,15 @@
 /* The console instance. LPUART1 (PA2/PA3) is the NUCLEO-G431RB ST-LINK virtual
  * COM port; the handle itself is brought up by the CubeMX MX_LPUART1_UART_Init().
  * Point this at another handle to move the console. */
-#define UART_BSP_HANDLE (hlpuart1)
+#define UART_BSP_HANDLE                      (hlpuart1)
 
 /* The console contract the host tools rely on (Test/run_ott.py, Test/console.py)
  * is 115200 8N1. Pinning the rate here rather than in the .ioc makes this the
  * single source of truth and survives a CubeMX re-generation. */
-#define UART_BSP_BAUD_RATE (115200U)
+#define UART_BSP_BAUD_RATE                   (115200U)
 
 #define UART_BSP_TRANSFER_SIZE_ONE_CHARACTER (1U)
-#define UART_BSP_RECEIVED_DATA_MASK (0xFFU)
+#define UART_BSP_RECEIVED_DATA_MASK          (0xFFU)
 
 /* ==========================================================================
  * uart_bsp - public
@@ -41,8 +41,8 @@ void uart_bsp_init(void)
 
 void uart_bsp_write_character(char in_character)
 {
-    (void)HAL_UART_Transmit(&UART_BSP_HANDLE, (const uint8_t*)&in_character,
-                            UART_BSP_TRANSFER_SIZE_ONE_CHARACTER, HAL_MAX_DELAY);
+    (void)HAL_UART_Transmit(&UART_BSP_HANDLE, (const uint8_t*)&in_character, UART_BSP_TRANSFER_SIZE_ONE_CHARACTER,
+                            HAL_MAX_DELAY);
 }
 
 void uart_bsp_write_string(const char* const in_string)
@@ -84,5 +84,7 @@ bool uart_bsp_read_character(char* out_character)
 
 void uart_bsp_flush(void)
 {
-    while (!__HAL_UART_GET_FLAG(&UART_BSP_HANDLE, UART_FLAG_TC)) {}
+    while (!__HAL_UART_GET_FLAG(&UART_BSP_HANDLE, UART_FLAG_TC))
+    {
+    }
 }

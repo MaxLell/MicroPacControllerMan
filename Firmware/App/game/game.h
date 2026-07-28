@@ -36,10 +36,10 @@
  * ========================================================================= */
 
 /*! \brief Lives a run starts with (FR-006, §10.8). */
-#define GAME_STARTING_LIVES (3U)
+#define GAME_STARTING_LIVES           (3U)
 
 /*! \brief Pacman's movement period, constant across levels (§10.1/§10.9). */
-#define GAME_PACMAN_MOVE_PERIOD_MS (150U)
+#define GAME_PACMAN_MOVE_PERIOD_MS    (150U)
 
 /*! \brief Internal broker depth. A tick can produce at most one pellet, four ghosts eaten
  *         and one frightened start, so this has generous headroom. */
@@ -47,10 +47,10 @@
 
 typedef enum
 {
-    GAME_STATE_IDLE = 0,                        /*!< Not started, or the run has ended  */
+    GAME_STATE_IDLE = 0, /*!< Not started, or the run has ended  */
     GAME_STATE_RUNNING,
-    GAME_STATE_OVER,                            /*!< All lives lost (FR-007)            */
-    GAME_STATE_WON                              /*!< Final level cleared (FR-027)       */
+    GAME_STATE_OVER, /*!< All lives lost (FR-007)            */
+    GAME_STATE_WON   /*!< Final level cleared (FR-027)       */
 } game_state_e;
 
 /*! \brief What Render needs to draw a frame (§3.6, R-007).
@@ -92,7 +92,7 @@ typedef struct
     uint32_t ghost_move_elapsed_ms;
     uint32_t frightened_remaining_ms;
     uint32_t phase_remaining_ms;
-    uint8_t phase_index;                        /*!< Position in the scatter/chase plan */
+    uint8_t phase_index; /*!< Position in the scatter/chase plan */
 
     /* --- the internal bus (FR-110) --- */
     msg_broker_t internal_broker;

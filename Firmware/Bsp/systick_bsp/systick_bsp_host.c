@@ -18,7 +18,7 @@
  * systick_bsp - private
  * ========================================================================= */
 
-#define SYSTICK_BSP_MILLISECONDS_PER_SECOND (1000U)
+#define SYSTICK_BSP_MILLISECONDS_PER_SECOND     (1000U)
 #define SYSTICK_BSP_NANOSECONDS_PER_MILLISECOND (1000000U)
 
 static systick_bsp_tick_callback_fn g_tick_callback_fn = NULL;

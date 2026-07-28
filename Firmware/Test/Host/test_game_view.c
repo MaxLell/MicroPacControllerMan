@@ -36,20 +36,20 @@
 
 /* Mirrors game_view's own layout constants. Duplicated on purpose: if the picture moves,
  * these tests should say so rather than move with it. */
-#define TILE_SIZE (10)
-#define MAZE_ORIGIN_X ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * TILE_SIZE)) / 2)
-#define MAZE_ORIGIN_Y (2)
-#define HUD_ORIGIN_Y (MAZE_ORIGIN_Y + (PLAYFIELD_HEIGHT * TILE_SIZE) + 4)
+#define TILE_SIZE      (10)
+#define MAZE_ORIGIN_X  ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * TILE_SIZE)) / 2)
+#define MAZE_ORIGIN_Y  (2)
+#define HUD_ORIGIN_Y   (MAZE_ORIGIN_Y + (PLAYFIELD_HEIGHT * TILE_SIZE) + 4)
 
 /* Below the HUD and right of the maze — nothing is ever drawn here. */
 #define UNUSED_PIXEL_X (FRAMEBUFFER_WIDTH - 1)
 #define UNUSED_PIXEL_Y (FRAMEBUFFER_HEIGHT - 1)
 
 /* Level 1 of §10.2: the outer ring is wall, row 3 is open all the way across. */
-#define A_WALL_CELL_X (0)
-#define A_WALL_CELL_Y (0)
-#define OPEN_ROW_Y (3)
-#define PACMAN_CELL_X (5)
+#define A_WALL_CELL_X  (0)
+#define A_WALL_CELL_Y  (0)
+#define OPEN_ROW_Y     (3)
+#define PACMAN_CELL_X  (5)
 
 /* Two cells apart, so neighbouring entities cannot bleed into each other's centres. */
 static const int16_t k_ghost_cell_x[GHOST_COUNT] = {1, 3, 7, 9};
@@ -180,10 +180,8 @@ void test_a_power_pellet_is_drawn_bigger_than_a_normal_one(void)
 
     /* Two pixels off centre: inside the power pellet, outside the normal one — which is the
      * whole point of showing them differently. */
-    TEST_ASSERT_TRUE(prv_is_ink((int16_t)(prv_cell_centre_x(power_cell_x) + offset),
-                                prv_cell_centre_y(OPEN_ROW_Y)));
-    TEST_ASSERT_FALSE(prv_is_ink((int16_t)(prv_cell_centre_x(normal_cell_x) + offset),
-                                 prv_cell_centre_y(OPEN_ROW_Y)));
+    TEST_ASSERT_TRUE(prv_is_ink((int16_t)(prv_cell_centre_x(power_cell_x) + offset), prv_cell_centre_y(OPEN_ROW_Y)));
+    TEST_ASSERT_FALSE(prv_is_ink((int16_t)(prv_cell_centre_x(normal_cell_x) + offset), prv_cell_centre_y(OPEN_ROW_Y)));
 }
 
 void test_an_eaten_cell_shows_nothing(void)
@@ -231,8 +229,7 @@ void test_a_hunting_ghost_is_drawn_solid(void)
 
     game_view_draw(&g_framebuffer, &g_snapshot);
 
-    TEST_ASSERT_TRUE(prv_is_ink(prv_cell_centre_x(k_ghost_cell_x[GHOST_BLINKY]),
-                                prv_cell_centre_y(OPEN_ROW_Y)));
+    TEST_ASSERT_TRUE(prv_is_ink(prv_cell_centre_x(k_ghost_cell_x[GHOST_BLINKY]), prv_cell_centre_y(OPEN_ROW_Y)));
 }
 
 void test_a_frightened_ghost_is_drawn_hollow(void)
@@ -256,8 +253,7 @@ void test_every_ghost_is_drawn(void)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        TEST_ASSERT_TRUE(prv_is_ink(prv_cell_centre_x(k_ghost_cell_x[index]),
-                                    prv_cell_centre_y(OPEN_ROW_Y)));
+        TEST_ASSERT_TRUE(prv_is_ink(prv_cell_centre_x(k_ghost_cell_x[index]), prv_cell_centre_y(OPEN_ROW_Y)));
     }
 }
 

@@ -17,10 +17,10 @@
 
 /* Safety cap, so the board returns to nominal mode even if the operator walks
  * away without confirming. */
-#define OTT_TOUCHPAD_TIMEOUT_MS (120000U)
+#define OTT_TOUCHPAD_TIMEOUT_MS       (120000U)
 #define OTT_TOUCHPAD_SAMPLE_PERIOD_MS (120U)
 
-#define OTT_TOUCHPAD_LINE_MAX_SIZE (64U)
+#define OTT_TOUCHPAD_LINE_MAX_SIZE    (64U)
 
 static sw_timer_t g_timeout_timer;
 static sw_timer_t g_sample_timer;
@@ -43,8 +43,8 @@ static void prv_on_sample_due(void)
         return;
     }
 
-    (void)snprintf(line, sizeof(line), "TP touch=%u x=%3u y=%3u\r\n", reading.is_touched ? 1U : 0U,
-                   (unsigned)reading.x, (unsigned)reading.y);
+    (void)snprintf(line, sizeof(line), "TP touch=%u x=%3u y=%3u\r\n", reading.is_touched ? 1U : 0U, (unsigned)reading.x,
+                   (unsigned)reading.y);
     uart_bsp_write_string(line);
 
     sw_timer_start(&g_sample_timer, OTT_TOUCHPAD_SAMPLE_PERIOD_MS, prv_on_sample_due);
@@ -66,8 +66,7 @@ bool ott_touchpad_setup(int in_argument_count, char* in_arguments[], uint8_t* ou
     return true;
 }
 
-bool ott_touchpad_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
-                      size_t in_reason_size)
+bool ott_touchpad_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason, size_t in_reason_size)
 {
     (void)in_parameter;
     (void)in_parameter_size;
@@ -94,8 +93,7 @@ bool ott_touchpad_run(const uint8_t* in_parameter, uint32_t in_parameter_size, c
     sw_timer_start(&g_timeout_timer, OTT_TOUCHPAD_TIMEOUT_MS, prv_on_timeout);
     sw_timer_start(&g_sample_timer, OTT_TOUCHPAD_SAMPLE_PERIOD_MS, prv_on_sample_due);
 
-    while (sw_timer_is_active(&g_timeout_timer) && (g_sample_status == I2C_BSP_STATUS_OK)
-           && !user_button_take_press())
+    while (sw_timer_is_active(&g_timeout_timer) && (g_sample_status == I2C_BSP_STATUS_OK) && !user_button_take_press())
     {
         sw_timer_process();
     }

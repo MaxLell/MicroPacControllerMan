@@ -25,17 +25,17 @@
 #include "playfield.h"
 #include "unity.h"
 
-#define LEVEL_1 (1U)
+#define LEVEL_1            (1U)
 
 /* Pacman parked mid-maze facing east, with Blinky somewhere behind him — the arrangement
  * §10.4's formulas are written about. */
-#define PACMAN_X (5)
-#define PACMAN_Y (3)
-#define BLINKY_X (2)
-#define BLINKY_Y (3)
+#define PACMAN_X           (5)
+#define PACMAN_Y           (3)
+#define BLINKY_X           (2)
+#define BLINKY_Y           (3)
 
-#define PINKY_LOOK_AHEAD (2)
-#define INKY_LOOK_AHEAD (1)
+#define PINKY_LOOK_AHEAD   (2)
+#define INKY_LOOK_AHEAD    (1)
 #define CLYDE_SHY_DISTANCE (4)
 
 static playfield_t g_playfield;
@@ -92,8 +92,7 @@ void test_pinky_aims_two_cells_ahead_of_pacman(void)
 {
     const cell_t target = prv_chase_target(GHOST_PINKY, prv_cell(1, 1));
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(
-        prv_cell(PACMAN_X + PINKY_LOOK_AHEAD, PACMAN_Y), target));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(PACMAN_X + PINKY_LOOK_AHEAD, PACMAN_Y), target));
 }
 
 void test_pinky_follows_pacmans_facing_not_his_position(void)
@@ -102,9 +101,9 @@ void test_pinky_follows_pacmans_facing_not_his_position(void)
     ghost_reset(&g_ghost, GHOST_PINKY, prv_cell(1, 1));
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(
-        prv_cell(PACMAN_X, PACMAN_Y - PINKY_LOOK_AHEAD),
-        ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_NORTH, prv_blinky_cell())));
+    TEST_ASSERT_TRUE(
+        playfield_are_cells_equal(prv_cell(PACMAN_X, PACMAN_Y - PINKY_LOOK_AHEAD),
+                                  ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_NORTH, prv_blinky_cell())));
 }
 
 void test_inky_aims_past_pacman_along_the_line_from_blinky(void)
@@ -114,8 +113,8 @@ void test_inky_aims_past_pacman_along_the_line_from_blinky(void)
      * (6,3) + ((6,3) - (2,3)) = (10,3). A flipped sign would give (2,3) instead — a ghost
      * that trails Blinky rather than flanking, which looks perfectly reasonable in play. */
     const cell_t pivot = prv_cell(PACMAN_X + INKY_LOOK_AHEAD, PACMAN_Y);
-    const cell_t expected = prv_cell((int16_t)(pivot.x + (pivot.x - BLINKY_X)),
-                                     (int16_t)(pivot.y + (pivot.y - BLINKY_Y)));
+    const cell_t expected =
+        prv_cell((int16_t)(pivot.x + (pivot.x - BLINKY_X)), (int16_t)(pivot.y + (pivot.y - BLINKY_Y)));
     const cell_t target = prv_chase_target(GHOST_INKY, prv_cell(1, 5));
 
     TEST_ASSERT_TRUE(playfield_are_cells_equal(expected, target));
@@ -132,8 +131,8 @@ void test_inky_aims_at_pacman_when_blinky_sits_on_the_pivot(void)
     ghost_reset(&g_ghost, GHOST_INKY, prv_cell(1, 5));
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(
-        pivot, ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_EAST, pivot)));
+    TEST_ASSERT_TRUE(
+        playfield_are_cells_equal(pivot, ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_EAST, pivot)));
 }
 
 void test_clyde_hunts_pacman_from_far_away(void)
@@ -142,8 +141,7 @@ void test_clyde_hunts_pacman_from_far_away(void)
     const cell_t far_cell = prv_cell(1, 7);
     const cell_t target = prv_chase_target(GHOST_CLYDE, far_cell);
 
-    TEST_ASSERT_GREATER_THAN_UINT16(CLYDE_SHY_DISTANCE,
-                                    playfield_get_distance(far_cell, prv_pacman_cell()));
+    TEST_ASSERT_GREATER_THAN_UINT16(CLYDE_SHY_DISTANCE, playfield_get_distance(far_cell, prv_pacman_cell()));
     TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_pacman_cell(), target));
 }
 
@@ -154,8 +152,7 @@ void test_clyde_breaks_off_for_his_corner_when_close(void)
     const cell_t near_cell = prv_cell(PACMAN_X + 1, PACMAN_Y);
     const cell_t target = prv_chase_target(GHOST_CLYDE, near_cell);
 
-    TEST_ASSERT_LESS_OR_EQUAL_UINT16(CLYDE_SHY_DISTANCE,
-                                     playfield_get_distance(near_cell, prv_pacman_cell()));
+    TEST_ASSERT_LESS_OR_EQUAL_UINT16(CLYDE_SHY_DISTANCE, playfield_get_distance(near_cell, prv_pacman_cell()));
     TEST_ASSERT_TRUE(playfield_are_cells_equal(playfield_get_scatter_corner(GHOST_CLYDE), target));
 }
 
@@ -163,8 +160,7 @@ void test_each_personality_gets_its_own_corner(void)
 {
     for (uint8_t personality = 0U; personality < GHOST_COUNT; ++personality)
     {
-        ghost_reset(&g_ghost, (ghost_personality_e)personality,
-                    playfield_get_pen_cell(&g_playfield, 0U));
+        ghost_reset(&g_ghost, (ghost_personality_e)personality, playfield_get_pen_cell(&g_playfield, 0U));
 
         for (uint8_t other = 0U; other < personality; ++other)
         {
@@ -181,9 +177,9 @@ void test_scattering_ignores_pacman_entirely(void)
     ghost_reset(&g_ghost, GHOST_BLINKY, prv_cell(1, 1));
     ghost_set_mode(&g_ghost, GHOST_MODE_SCATTER);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(
-        playfield_get_scatter_corner(GHOST_BLINKY),
-        ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell())));
+    TEST_ASSERT_TRUE(
+        playfield_are_cells_equal(playfield_get_scatter_corner(GHOST_BLINKY),
+                                  ghost_get_target(&g_ghost, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell())));
 }
 
 void test_a_reset_ghost_starts_scattering_and_unfrightened(void)
@@ -202,12 +198,10 @@ void test_a_frightened_ghost_runs_away_from_pacman(void)
     ghost_set_mode(&g_ghost, GHOST_MODE_FRIGHTENED);
 
     TEST_ASSERT_TRUE(ghost_is_frightened(&g_ghost));
-    TEST_ASSERT_TRUE(
-        ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell()));
+    TEST_ASSERT_TRUE(ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell()));
 
     TEST_ASSERT_GREATER_THAN_UINT16(playfield_get_distance(start, prv_pacman_cell()),
-                                    playfield_get_distance(ghost_get_cell(&g_ghost),
-                                                           prv_pacman_cell()));
+                                    playfield_get_distance(ghost_get_cell(&g_ghost), prv_pacman_cell()));
 }
 
 void test_a_chasing_ghost_closes_in(void)
@@ -217,12 +211,10 @@ void test_a_chasing_ghost_closes_in(void)
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
 
-    TEST_ASSERT_TRUE(
-        ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell()));
+    TEST_ASSERT_TRUE(ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell()));
 
     TEST_ASSERT_LESS_THAN_UINT16(playfield_get_distance(start, prv_pacman_cell()),
-                                 playfield_get_distance(ghost_get_cell(&g_ghost),
-                                                        prv_pacman_cell()));
+                                 playfield_get_distance(ghost_get_cell(&g_ghost), prv_pacman_cell()));
 }
 
 void test_being_eaten_returns_the_ghost_to_the_pen_unfrightened(void)
@@ -249,16 +241,14 @@ void test_a_ghost_does_not_turn_around_of_its_own_accord(void)
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
-    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST,
-                        prv_blinky_cell());
+    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell());
 
     facing = ghost_get_direction(&g_ghost);
 
     /* Now aim it back the way it came. */
     (void)ghost_advance(&g_ghost, &g_playfield, start, DIRECTION_EAST, prv_blinky_cell());
 
-    TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing),
-                          ghost_get_direction(&g_ghost));
+    TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
 }
 
 void test_a_mode_change_earns_exactly_one_reversal(void)
@@ -268,16 +258,14 @@ void test_a_mode_change_earns_exactly_one_reversal(void)
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
-    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST,
-                        prv_blinky_cell());
+    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell());
 
     facing = ghost_get_direction(&g_ghost);
 
     /* Frightened is a mode change, and Pacman is now right where it came from, so fleeing
      * means turning around — which the exemption must permit exactly once. */
     ghost_set_mode(&g_ghost, GHOST_MODE_FRIGHTENED);
-    (void)ghost_advance(&g_ghost, &g_playfield, ghost_get_cell(&g_ghost), DIRECTION_EAST,
-                        prv_blinky_cell());
+    (void)ghost_advance(&g_ghost, &g_playfield, ghost_get_cell(&g_ghost), DIRECTION_EAST, prv_blinky_cell());
 
     TEST_ASSERT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
 }
@@ -291,24 +279,21 @@ void test_setting_the_same_mode_again_earns_nothing(void)
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
-    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST,
-                        prv_blinky_cell());
+    (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell());
 
     facing = ghost_get_direction(&g_ghost);
 
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
     (void)ghost_advance(&g_ghost, &g_playfield, start, DIRECTION_EAST, prv_blinky_cell());
 
-    TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing),
-                          ghost_get_direction(&g_ghost));
+    TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
 }
 
 /* --- preconditions ------------------------------------------------------- */
 
 void test_an_unknown_personality_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(ghost_reset(&g_ghost, GHOST_COUNT, prv_cell(1, 1)),
-                        "in_personality < GHOST_COUNT");
+    ASSERT_PROBE_EXPECT(ghost_reset(&g_ghost, GHOST_COUNT, prv_cell(1, 1)), "in_personality < GHOST_COUNT");
 }
 
 void test_a_null_ghost_asserts(void)

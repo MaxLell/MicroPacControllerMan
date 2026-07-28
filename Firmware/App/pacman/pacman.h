@@ -26,7 +26,7 @@
 typedef struct
 {
     agent_t agent;
-    direction_e queued_direction;               /*!< What the player last asked for    */
+    direction_e queued_direction; /*!< What the player last asked for    */
 } pacman_t;
 
 /* ==========================================================================

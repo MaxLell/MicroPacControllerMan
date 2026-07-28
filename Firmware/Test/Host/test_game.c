@@ -38,25 +38,25 @@
 #include "score.h"
 #include "unity.h"
 
-#define PELLET_POINTS (10U)
-#define POWER_PELLET_POINTS (50U)
+#define PELLET_POINTS             (10U)
+#define POWER_PELLET_POINTS       (50U)
 
 /* Level 1 of §10.2. Pacman starts at the bottom-centre with a pellet directly above him,
  * which is the one step every movement test here takes. */
-#define PACMAN_START_X (5)
-#define PACMAN_START_Y (7)
-#define ABOVE_START_X (5)
-#define ABOVE_START_Y (6)
+#define PACMAN_START_X            (5)
+#define PACMAN_START_Y            (7)
+#define ABOVE_START_X             (5)
+#define ABOVE_START_Y             (6)
 
 #define A_TICK_SHORT_OF_A_MOVE_MS (GAME_PACMAN_MOVE_PERIOD_MS - 1U)
 
-#define LEVEL_1 (1U)
-#define LEVEL_2 (2U)
-#define LEVEL_5 (5U)
+#define LEVEL_1                   (1U)
+#define LEVEL_2                   (2U)
+#define LEVEL_5                   (5U)
 
 /* Level 1's frightened window (§10.9), transcribed so a change to the table shows up here
  * as a failing test rather than as a silently different game. */
-#define LEVEL_1_FRIGHTENED_MS (6000U)
+#define LEVEL_1_FRIGHTENED_MS     (6000U)
 
 static game_t g_game;
 
@@ -106,8 +106,7 @@ static void prv_jump_to_level(uint8_t in_level)
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
         ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index,
-                    playfield_get_pen_cell(&g_game.playfield,
-                                           (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
+                    playfield_get_pen_cell(&g_game.playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
     }
 
     g_game.pacman_move_elapsed_ms = 0U;
@@ -132,8 +131,7 @@ static void prv_tick_for(uint32_t in_total_ms, uint32_t in_step_ms)
  * pellet would put the maze's remaining count out of step with its contents. */
 static direction_e prv_find_a_way_out_with_a_pellet(void)
 {
-    static const direction_e k_directions[]
-        = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+    static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
     const cell_t cell = pacman_get_cell(&g_game.pacman);
 
     for (uint8_t index = 0U; index < (sizeof(k_directions) / sizeof(k_directions[0])); ++index)
@@ -200,8 +198,7 @@ static uint32_t prv_measure_ghost_period_ms(void)
         game_tick(&g_game, step_ms);
         elapsed_ms += step_ms;
 
-        if (!playfield_are_cells_equal(start_cell,
-                                       ghost_get_cell(&g_game.ghosts[GHOST_BLINKY])))
+        if (!playfield_are_cells_equal(start_cell, ghost_get_cell(&g_game.ghosts[GHOST_BLINKY])))
         {
             return elapsed_ms;
         }
@@ -274,8 +271,7 @@ void test_a_second_run_starts_from_scratch(void)
      * one's pellets or points. */
     TEST_ASSERT_EQUAL_UINT32(0U, game_get_score(&g_game));
     TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_get_lives(&g_game));
-    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NORMAL,
-                      game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
+    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NORMAL, game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
 }
 
 /* --- movement and timing (§10.1) ----------------------------------------- */
@@ -343,8 +339,7 @@ void test_eating_a_pellet_scores_and_clears_the_cell(void)
     prv_step_north();
 
     TEST_ASSERT_EQUAL_UINT32(PELLET_POINTS, game_get_score(&g_game));
-    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                      game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
+    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE, game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
 }
 
 void test_a_cell_only_pays_once(void)
@@ -400,8 +395,7 @@ void test_the_frightened_window_runs_out(void)
 void test_walking_into_a_ghost_costs_a_life_and_resets_the_positions(void)
 {
     game_start(&g_game);
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
 
     prv_step_north();
 
@@ -414,15 +408,13 @@ void test_the_eaten_pellets_survive_a_lost_life(void)
 {
     game_start(&g_game);
     prv_step_north();
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
 
     game_set_direction(&g_game, DIRECTION_SOUTH);
     game_tick(&g_game, GAME_PACMAN_MOVE_PERIOD_MS);
 
     TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES - 1U, game_get_lives(&g_game));
-    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                      game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
+    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE, game_get_snapshot(&g_game)->pellets[ABOVE_START_Y][ABOVE_START_X]);
     TEST_ASSERT_EQUAL_UINT32(PELLET_POINTS, game_get_score(&g_game));
 }
 
@@ -430,8 +422,7 @@ void test_the_last_life_ends_the_run(void)
 {
     game_start(&g_game);
     g_game.lives = 1U;
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
 
     prv_step_north();
 
@@ -443,8 +434,7 @@ void test_a_finished_run_ignores_further_time(void)
 {
     game_start(&g_game);
     g_game.lives = 1U;
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
     prv_step_north();
 
     const uint32_t version = game_get_snapshot(&g_game)->version;
@@ -461,8 +451,7 @@ void test_eating_a_frightened_ghost_scores_and_sends_it_back_to_the_pen(void)
     prv_step_north();
 
     /* Frightened now, so the next meeting goes the other way (§10.5). */
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
     ghost_set_mode(&g_game.ghosts[GHOST_BLINKY], GHOST_MODE_FRIGHTENED);
 
     game_set_direction(&g_game, DIRECTION_SOUTH);
@@ -478,8 +467,7 @@ void test_passing_through_a_ghost_still_counts_as_meeting_it(void)
 
     /* The ghost is where Pacman is and Pacman is heading for where the ghost will be —
      * they swap cells in one step and would otherwise slip past each other. */
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
-                prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(ABOVE_START_X, ABOVE_START_Y));
     ghost_set_mode(&g_game.ghosts[GHOST_BLINKY], GHOST_MODE_CHASE);
 
     /* Only the ghosts move in this slice, straight down onto Pacman's cell as he leaves

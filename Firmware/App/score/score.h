@@ -30,21 +30,21 @@
 
 /*! \brief Inbox depth. Generous next to the handful of events a tick can produce — at
  *         most one pellet plus four ghosts eaten. */
-#define SCORE_INBOX_CAPACITY (8U)
+#define SCORE_INBOX_CAPACITY      (8U)
 
 /*! \brief Points, per §10.6. */
-#define SCORE_PELLET_POINTS (10U)
+#define SCORE_PELLET_POINTS       (10U)
 #define SCORE_POWER_PELLET_POINTS (50U)
 
 /*! \brief Ghosts eaten in one frightened period, before the bonus stops doubling. */
-#define SCORE_GHOST_CHAIN_LENGTH (4U)
+#define SCORE_GHOST_CHAIN_LENGTH  (4U)
 
 typedef struct
 {
     active_object_t object;
     msg_t inbox[SCORE_INBOX_CAPACITY];
     uint32_t total;
-    uint8_t ghost_chain_index;                  /*!< How many eaten this frightened window */
+    uint8_t ghost_chain_index; /*!< How many eaten this frightened window */
 } score_t;
 
 /* ==========================================================================

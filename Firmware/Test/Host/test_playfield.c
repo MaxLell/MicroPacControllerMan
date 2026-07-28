@@ -22,12 +22,12 @@
 
 /* The reference maze of §10.2 has 4 power pellets and a known pellet total; the rest are
  * checked by property rather than by count, since they are ours to change. */
-#define LEVEL_1 (1U)
-#define LEVEL_5 (5U)
+#define LEVEL_1                    (1U)
+#define LEVEL_5                    (5U)
 #define LEVEL_1_POWER_PELLET_COUNT (4U)
 
 #define MIN_POWER_PELLETS_PER_MAZE (2U)
-#define SCATTER_CORNER_COUNT (4U)
+#define SCATTER_CORNER_COUNT       (4U)
 
 static playfield_t g_playfield;
 
@@ -37,8 +37,7 @@ static bool g_reached[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
  * so the test cannot disagree with the movement code about what is connected. */
 static void prv_flood(cell_t in_cell)
 {
-    static const direction_e k_directions[]
-        = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+    static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
     const cell_t cell = playfield_wrap_cell(in_cell);
 
     if (g_reached[cell.y][cell.x] || !playfield_is_walkable(&g_playfield, cell))
@@ -112,8 +111,7 @@ void test_every_maze_is_fully_connected_from_pacmans_start(void)
                     continue;
                 }
 
-                (void)snprintf(message, sizeof(message),
-                               "level %u: open cell %d,%d is unreachable", level, x, y);
+                (void)snprintf(message, sizeof(message), "level %u: open cell %d,%d is unreachable", level, x, y);
                 TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
             }
         }
@@ -139,8 +137,7 @@ void test_every_pellet_can_be_eaten(void)
                     continue;
                 }
 
-                (void)snprintf(message, sizeof(message),
-                               "level %u: pellet at %d,%d is unreachable", level, x, y);
+                (void)snprintf(message, sizeof(message), "level %u: pellet at %d,%d is unreachable", level, x, y);
                 TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
             }
         }
@@ -161,8 +158,7 @@ void test_the_ghost_pen_is_reachable_in_every_maze(void)
             const cell_t pen_cell = playfield_get_pen_cell(&g_playfield, index);
             char message[64];
 
-            (void)snprintf(message, sizeof(message), "level %u: pen cell %u is sealed off", level,
-                           index);
+            (void)snprintf(message, sizeof(message), "level %u: pen cell %u is sealed off", level, index);
             TEST_ASSERT_TRUE_MESSAGE(g_reached[pen_cell.y][pen_cell.x], message);
         }
     }
@@ -182,8 +178,7 @@ void test_every_maze_is_left_right_symmetric(void)
                 const cell_t right = {(int16_t)(PLAYFIELD_WIDTH - 1 - x), y};
                 char message[64];
 
-                (void)snprintf(message, sizeof(message), "level %u: row %d is not symmetric",
-                               level, y);
+                (void)snprintf(message, sizeof(message), "level %u: row %d is not symmetric", level, y);
                 TEST_ASSERT_EQUAL_MESSAGE(playfield_is_walkable(&g_playfield, left),
                                           playfield_is_walkable(&g_playfield, right), message);
             }
@@ -206,8 +201,7 @@ void test_every_maze_has_a_tunnel(void)
             const cell_t left = {0, y};
             const cell_t right = {PLAYFIELD_WIDTH - 1, y};
 
-            if (playfield_is_walkable(&g_playfield, left)
-                && playfield_is_walkable(&g_playfield, right))
+            if (playfield_is_walkable(&g_playfield, left) && playfield_is_walkable(&g_playfield, right))
             {
                 has_tunnel = true;
             }
@@ -218,8 +212,7 @@ void test_every_maze_has_a_tunnel(void)
             const cell_t top = {x, 0};
             const cell_t bottom = {x, PLAYFIELD_HEIGHT - 1};
 
-            if (playfield_is_walkable(&g_playfield, top)
-                && playfield_is_walkable(&g_playfield, bottom))
+            if (playfield_is_walkable(&g_playfield, top) && playfield_is_walkable(&g_playfield, bottom))
             {
                 has_tunnel = true;
             }
@@ -260,8 +253,7 @@ void test_the_pen_holds_no_pellets_in_any_maze(void)
         for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
         {
             TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                              playfield_get_pellet(&g_playfield,
-                                                   playfield_get_pen_cell(&g_playfield, index)));
+                              playfield_get_pellet(&g_playfield, playfield_get_pen_cell(&g_playfield, index)));
         }
     }
 }
@@ -379,8 +371,7 @@ void test_pacman_can_escape_his_start_pocket_through_the_tunnel(void)
      * reference maze the only way out is the vertical tunnel. */
     const cell_t start = playfield_get_pacman_start(&g_playfield);
     bool has_exit = false;
-    static const direction_e k_directions[]
-        = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+    static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
 
     for (uint8_t index = 0U; index < (sizeof(k_directions) / sizeof(k_directions[0])); ++index)
     {
@@ -429,8 +420,7 @@ void test_the_scatter_corners_are_four_distinct_walkable_cells(void)
 
         for (uint8_t other = 0U; other < index; ++other)
         {
-            TEST_ASSERT_FALSE(
-                playfield_are_cells_equal(corner, playfield_get_scatter_corner(other)));
+            TEST_ASSERT_FALSE(playfield_are_cells_equal(corner, playfield_get_scatter_corner(other)));
         }
     }
 }
@@ -445,8 +435,7 @@ void test_loading_a_level_out_of_range_asserts(void)
 
 void test_loading_level_zero_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(playfield_load_level(&g_playfield, 0U),
-                        "in_level >= PLAYFIELD_FIRST_LEVEL");
+    ASSERT_PROBE_EXPECT(playfield_load_level(&g_playfield, 0U), "in_level >= PLAYFIELD_FIRST_LEVEL");
 }
 
 void test_the_last_level_loads(void)

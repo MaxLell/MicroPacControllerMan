@@ -20,8 +20,7 @@ void agent_place(agent_t* inout_agent, cell_t in_cell, direction_e in_direction)
     inout_agent->direction = in_direction;
 }
 
-bool agent_can_step(const agent_t* in_agent, const playfield_t* in_playfield,
-                    direction_e in_direction)
+bool agent_can_step(const agent_t* in_agent, const playfield_t* in_playfield, direction_e in_direction)
 {
     ASSERT(in_agent != NULL);
     ASSERT(in_playfield != NULL);

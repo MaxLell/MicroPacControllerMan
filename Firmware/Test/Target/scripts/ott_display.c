@@ -15,38 +15,38 @@
  * ott_display - private
  * ========================================================================= */
 
-#define OTT_DISPLAY_SCENE_HOLD_MS (1500U)
+#define OTT_DISPLAY_SCENE_HOLD_MS       (1500U)
 
 /* Safety cap, so the board returns to nominal mode even if the operator walks
  * away without confirming. */
-#define OTT_DISPLAY_TIMEOUT_MS (120000U)
+#define OTT_DISPLAY_TIMEOUT_MS          (120000U)
 
 /* Geometry of the scenes, in pixels. */
-#define OTT_DISPLAY_RAY_SPACING (8)
-#define OTT_DISPLAY_RING_SPACING (6)
-#define OTT_DISPLAY_BAND_SPACING (12)
-#define OTT_DISPLAY_CIRCLE_SPACING (8)
+#define OTT_DISPLAY_RAY_SPACING         (8)
+#define OTT_DISPLAY_RING_SPACING        (6)
+#define OTT_DISPLAY_BAND_SPACING        (12)
+#define OTT_DISPLAY_CIRCLE_SPACING      (8)
 #define OTT_DISPLAY_CIRCLE_FIRST_RADIUS (6)
-#define OTT_DISPLAY_DOT_GRID_SPACING (32)
-#define OTT_DISPLAY_DOT_GRID_ORIGIN (16)
-#define OTT_DISPLAY_DOT_RADIUS (12)
-#define OTT_DISPLAY_WEDGE_SPACING (8)
+#define OTT_DISPLAY_DOT_GRID_SPACING    (32)
+#define OTT_DISPLAY_DOT_GRID_ORIGIN     (16)
+#define OTT_DISPLAY_DOT_RADIUS          (12)
+#define OTT_DISPLAY_WEDGE_SPACING       (8)
 
 /* Composite scene, laid out by hand. */
-#define OTT_DISPLAY_BOX_ORIGIN (8)
-#define OTT_DISPLAY_BOX_SIZE (40)
-#define OTT_DISPLAY_EYE_CENTER_X (96)
-#define OTT_DISPLAY_EYE_CENTER_Y (28)
-#define OTT_DISPLAY_EYE_OUTER_RADIUS (20)
-#define OTT_DISPLAY_EYE_INNER_RADIUS (10)
-#define OTT_DISPLAY_DIAGONAL_START_Y (120)
-#define OTT_DISPLAY_DIAGONAL_END_X (120)
-#define OTT_DISPLAY_DIAGONAL_END_Y (60)
-#define OTT_DISPLAY_WEDGE_LEFT_X (20)
-#define OTT_DISPLAY_WEDGE_BASE_Y (118)
-#define OTT_DISPLAY_WEDGE_APEX_X (64)
-#define OTT_DISPLAY_WEDGE_APEX_Y (70)
-#define OTT_DISPLAY_WEDGE_RIGHT_X (108)
+#define OTT_DISPLAY_BOX_ORIGIN          (8)
+#define OTT_DISPLAY_BOX_SIZE            (40)
+#define OTT_DISPLAY_EYE_CENTER_X        (96)
+#define OTT_DISPLAY_EYE_CENTER_Y        (28)
+#define OTT_DISPLAY_EYE_OUTER_RADIUS    (20)
+#define OTT_DISPLAY_EYE_INNER_RADIUS    (10)
+#define OTT_DISPLAY_DIAGONAL_START_Y    (120)
+#define OTT_DISPLAY_DIAGONAL_END_X      (120)
+#define OTT_DISPLAY_DIAGONAL_END_Y      (60)
+#define OTT_DISPLAY_WEDGE_LEFT_X        (20)
+#define OTT_DISPLAY_WEDGE_BASE_Y        (118)
+#define OTT_DISPLAY_WEDGE_APEX_X        (64)
+#define OTT_DISPLAY_WEDGE_APEX_Y        (70)
+#define OTT_DISPLAY_WEDGE_RIGHT_X       (108)
 
 typedef void (*ott_display_scene_fn)(void);
 
@@ -113,8 +113,7 @@ static void prv_scene_nested_rectangles(void)
 {
     gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2);
-         inset = (int16_t)(inset + OTT_DISPLAY_RING_SPACING))
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2); inset = (int16_t)(inset + OTT_DISPLAY_RING_SPACING))
     {
         gfx_rectangle(&g_framebuffer, inset, inset, (int16_t)(FRAMEBUFFER_WIDTH - (2 * inset)),
                       (int16_t)(FRAMEBUFFER_HEIGHT - (2 * inset)), FRAMEBUFFER_COLOR_BLACK);
@@ -125,12 +124,10 @@ static void prv_scene_alternating_bands(void)
 {
     gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2);
-         inset = (int16_t)(inset + OTT_DISPLAY_BAND_SPACING))
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_WIDTH / 2); inset = (int16_t)(inset + OTT_DISPLAY_BAND_SPACING))
     {
-        const framebuffer_color_e color = (((inset / OTT_DISPLAY_BAND_SPACING) % 2) != 0)
-                                          ? FRAMEBUFFER_COLOR_WHITE
-                                          : FRAMEBUFFER_COLOR_BLACK;
+        const framebuffer_color_e color =
+            (((inset / OTT_DISPLAY_BAND_SPACING) % 2) != 0) ? FRAMEBUFFER_COLOR_WHITE : FRAMEBUFFER_COLOR_BLACK;
 
         gfx_filled_rectangle(&g_framebuffer, inset, inset, (int16_t)(FRAMEBUFFER_WIDTH - (2 * inset)),
                              (int16_t)(FRAMEBUFFER_HEIGHT - (2 * inset)), color);
@@ -167,8 +164,7 @@ static void prv_scene_nested_triangles(void)
 {
     gfx_fill(&g_framebuffer, FRAMEBUFFER_COLOR_WHITE);
 
-    for (int16_t inset = 0; inset < (FRAMEBUFFER_HEIGHT / 2);
-         inset = (int16_t)(inset + OTT_DISPLAY_WEDGE_SPACING))
+    for (int16_t inset = 0; inset < (FRAMEBUFFER_HEIGHT / 2); inset = (int16_t)(inset + OTT_DISPLAY_WEDGE_SPACING))
     {
         gfx_triangle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, inset, inset, (int16_t)(FRAMEBUFFER_HEIGHT - 1 - inset),
                      (int16_t)(FRAMEBUFFER_WIDTH - 1 - inset), (int16_t)(FRAMEBUFFER_HEIGHT - 1 - inset),
@@ -185,19 +181,18 @@ static void prv_scene_composite(void)
                          OTT_DISPLAY_BOX_SIZE, FRAMEBUFFER_COLOR_BLACK);
     gfx_circle(&g_framebuffer, OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y, OTT_DISPLAY_EYE_OUTER_RADIUS,
                FRAMEBUFFER_COLOR_BLACK);
-    gfx_filled_circle(&g_framebuffer, OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y,
-                      OTT_DISPLAY_EYE_INNER_RADIUS, FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_circle(&g_framebuffer, OTT_DISPLAY_EYE_CENTER_X, OTT_DISPLAY_EYE_CENTER_Y, OTT_DISPLAY_EYE_INNER_RADIUS,
+                      FRAMEBUFFER_COLOR_BLACK);
     gfx_line(&g_framebuffer, OTT_DISPLAY_BOX_ORIGIN, OTT_DISPLAY_DIAGONAL_START_Y, OTT_DISPLAY_DIAGONAL_END_X,
              OTT_DISPLAY_DIAGONAL_END_Y, FRAMEBUFFER_COLOR_BLACK);
-    gfx_filled_triangle(&g_framebuffer, OTT_DISPLAY_WEDGE_LEFT_X, OTT_DISPLAY_WEDGE_BASE_Y,
-                        OTT_DISPLAY_WEDGE_APEX_X, OTT_DISPLAY_WEDGE_APEX_Y,
-                        OTT_DISPLAY_WEDGE_RIGHT_X, OTT_DISPLAY_WEDGE_BASE_Y, FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_triangle(&g_framebuffer, OTT_DISPLAY_WEDGE_LEFT_X, OTT_DISPLAY_WEDGE_BASE_Y, OTT_DISPLAY_WEDGE_APEX_X,
+                        OTT_DISPLAY_WEDGE_APEX_Y, OTT_DISPLAY_WEDGE_RIGHT_X, OTT_DISPLAY_WEDGE_BASE_Y,
+                        FRAMEBUFFER_COLOR_BLACK);
 }
 
 static const ott_display_scene_fn k_scenes[] = {
-    prv_scene_rays,          prv_scene_nested_rectangles, prv_scene_alternating_bands,
-    prv_scene_concentric_circles, prv_scene_dot_grid,     prv_scene_nested_triangles,
-    prv_scene_composite,
+    prv_scene_rays,     prv_scene_nested_rectangles, prv_scene_alternating_bands, prv_scene_concentric_circles,
+    prv_scene_dot_grid, prv_scene_nested_triangles,  prv_scene_composite,
 };
 
 /* ==========================================================================
@@ -216,8 +211,7 @@ bool ott_display_setup(int in_argument_count, char* in_arguments[], uint8_t* out
     return true;
 }
 
-bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
-                     size_t in_reason_size)
+bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason, size_t in_reason_size)
 {
     const size_t scene_count = sizeof(k_scenes) / sizeof(k_scenes[0]);
     bool is_confirmed = false;
@@ -254,7 +248,9 @@ bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, ch
         prv_scene_composite();
         display_present(&g_framebuffer);
 
-        while (sw_timer_is_active(&g_timeout_timer) && !prv_hold(OTT_DISPLAY_SCENE_HOLD_MS)) {}
+        while (sw_timer_is_active(&g_timeout_timer) && !prv_hold(OTT_DISPLAY_SCENE_HOLD_MS))
+        {
+        }
     }
 
     sw_timer_stop(&g_timeout_timer);

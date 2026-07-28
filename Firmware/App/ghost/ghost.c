@@ -15,8 +15,8 @@
  * ========================================================================= */
 
 /* §10.4's tunable look-aheads and Clyde's shyness radius. */
-#define PINKY_LOOK_AHEAD (2U)
-#define INKY_LOOK_AHEAD (1U)
+#define PINKY_LOOK_AHEAD   (2U)
+#define INKY_LOOK_AHEAD    (1U)
 #define CLYDE_SHY_DISTANCE (4U)
 
 static cell_t prv_cell_ahead(cell_t in_cell, direction_e in_direction, uint8_t in_step_count)
@@ -34,8 +34,7 @@ static cell_t prv_cell_ahead(cell_t in_cell, direction_e in_direction, uint8_t i
 /* Inky's flank (§10.4): take the cell one ahead of Pacman, then extend the line from
  * Blinky through it by the same length again. The effect is that Inky aims at wherever
  * Pacman is heading *away* from Blinky, which is what makes the pair pincer. */
-static cell_t prv_get_inky_target(cell_t in_pacman_cell, direction_e in_pacman_direction,
-                                  cell_t in_blinky_cell)
+static cell_t prv_get_inky_target(cell_t in_pacman_cell, direction_e in_pacman_direction, cell_t in_blinky_cell)
 {
     const cell_t pivot = prv_cell_ahead(in_pacman_cell, in_pacman_direction, INKY_LOOK_AHEAD);
     cell_t target;
@@ -52,8 +51,7 @@ static cell_t prv_get_clyde_target(const ghost_t* const in_ghost, cell_t in_pacm
 {
     const cell_t corner = playfield_get_scatter_corner((uint8_t)in_ghost->personality);
 
-    if (playfield_get_distance(agent_get_cell(&in_ghost->agent), in_pacman_cell)
-        > CLYDE_SHY_DISTANCE)
+    if (playfield_get_distance(agent_get_cell(&in_ghost->agent), in_pacman_cell) > CLYDE_SHY_DISTANCE)
     {
         return in_pacman_cell;
     }
@@ -105,8 +103,8 @@ void ghost_set_mode(ghost_t* inout_ghost, ghost_mode_e in_mode)
     inout_ghost->may_reverse = true;
 }
 
-cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell,
-                        direction_e in_pacman_direction, cell_t in_blinky_cell)
+cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell, direction_e in_pacman_direction,
+                        cell_t in_blinky_cell)
 {
     ASSERT(in_ghost != NULL);
 
@@ -117,17 +115,11 @@ cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell,
 
     switch (in_ghost->personality)
     {
-        case GHOST_BLINKY:
-            return in_pacman_cell;
-        case GHOST_PINKY:
-            return prv_cell_ahead(in_pacman_cell, in_pacman_direction, PINKY_LOOK_AHEAD);
-        case GHOST_INKY:
-            return prv_get_inky_target(in_pacman_cell, in_pacman_direction, in_blinky_cell);
-        case GHOST_CLYDE:
-            return prv_get_clyde_target(in_ghost, in_pacman_cell);
-        default:
-            ASSERT(false);
-            break;
+        case GHOST_BLINKY: return in_pacman_cell;
+        case GHOST_PINKY: return prv_cell_ahead(in_pacman_cell, in_pacman_direction, PINKY_LOOK_AHEAD);
+        case GHOST_INKY: return prv_get_inky_target(in_pacman_cell, in_pacman_direction, in_blinky_cell);
+        case GHOST_CLYDE: return prv_get_clyde_target(in_ghost, in_pacman_cell);
+        default: ASSERT(false); break;
     }
 
     return in_pacman_cell;
@@ -154,16 +146,14 @@ bool ghost_advance(ghost_t* inout_ghost, const playfield_t* in_playfield, cell_t
 
     if (inout_ghost->mode == GHOST_MODE_FRIGHTENED)
     {
-        chosen = ghost_path_find_step_away_from(in_playfield, agent_get_cell(&inout_ghost->agent),
-                                                in_pacman_cell, forbidden);
+        chosen = ghost_path_find_step_away_from(in_playfield, agent_get_cell(&inout_ghost->agent), in_pacman_cell,
+                                                forbidden);
     }
     else
     {
-        const cell_t target
-            = ghost_get_target(inout_ghost, in_pacman_cell, in_pacman_direction, in_blinky_cell);
+        const cell_t target = ghost_get_target(inout_ghost, in_pacman_cell, in_pacman_direction, in_blinky_cell);
 
-        chosen = ghost_path_find_step_towards(in_playfield, agent_get_cell(&inout_ghost->agent),
-                                              target, forbidden);
+        chosen = ghost_path_find_step_towards(in_playfield, agent_get_cell(&inout_ghost->agent), target, forbidden);
     }
 
     return agent_step(&inout_ghost->agent, in_playfield, chosen);

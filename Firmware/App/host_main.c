@@ -47,16 +47,16 @@
  * ========================================================================= */
 
 /*! \brief Milliseconds per frame — ~60 Hz, and the slice the game is advanced by. */
-#define FRAME_PERIOD_MS (16U)
+#define FRAME_PERIOD_MS  (16U)
 
 /*! \brief Window magnification. 128x128 is unreadably small on a desktop monitor. */
-#define WINDOW_SCALE (5)
+#define WINDOW_SCALE     (5)
 
-#define WINDOW_TITLE "MicroPacControllerMan (host)"
+#define WINDOW_TITLE     "MicroPacControllerMan (host)"
 
 /* The Sharp panel is dark ink on a pale background; the window says the same. */
 #define PIXEL_BACKGROUND (0xFFEFEFE7U)
-#define PIXEL_INK (0xFF101010U)
+#define PIXEL_INK        (0xFF101010U)
 
 typedef struct
 {
@@ -89,10 +89,9 @@ static bool prv_open_window(void)
         return false;
     }
 
-    g_window.window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,
-                                       SDL_WINDOWPOS_CENTERED,
-                                       FRAMEBUFFER_WIDTH * WINDOW_SCALE,
-                                       FRAMEBUFFER_HEIGHT * WINDOW_SCALE, SDL_WINDOW_SHOWN);
+    g_window.window =
+        SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, FRAMEBUFFER_WIDTH * WINDOW_SCALE,
+                         FRAMEBUFFER_HEIGHT * WINDOW_SCALE, SDL_WINDOW_SHOWN);
 
     if (g_window.window == NULL)
     {
@@ -115,9 +114,8 @@ static bool prv_open_window(void)
 
     /* One texel per panel pixel; the renderer does the magnification, so nothing here has
      * to know about the scale factor. */
-    g_window.texture = SDL_CreateTexture(g_window.renderer, SDL_PIXELFORMAT_ARGB8888,
-                                         SDL_TEXTUREACCESS_STREAMING, FRAMEBUFFER_WIDTH,
-                                         FRAMEBUFFER_HEIGHT);
+    g_window.texture = SDL_CreateTexture(g_window.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                                         FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT);
 
     if (g_window.texture == NULL)
     {
@@ -159,9 +157,8 @@ static void prv_present_window(void)
     {
         for (int16_t x = 0; x < FRAMEBUFFER_WIDTH; ++x)
         {
-            pixels[y][x] = (framebuffer_get_pixel(frame, x, y) == FRAMEBUFFER_COLOR_BLACK)
-                               ? PIXEL_INK
-                               : PIXEL_BACKGROUND;
+            pixels[y][x] =
+                (framebuffer_get_pixel(frame, x, y) == FRAMEBUFFER_COLOR_BLACK) ? PIXEL_INK : PIXEL_BACKGROUND;
         }
     }
 
@@ -178,24 +175,16 @@ static void prv_handle_key(SDL_Keycode in_key)
     switch (in_key)
     {
         case SDLK_UP:
-        case SDLK_w:
-            game_set_direction(&g_game, DIRECTION_NORTH);
-            break;
+        case SDLK_w: game_set_direction(&g_game, DIRECTION_NORTH); break;
 
         case SDLK_DOWN:
-        case SDLK_s:
-            game_set_direction(&g_game, DIRECTION_SOUTH);
-            break;
+        case SDLK_s: game_set_direction(&g_game, DIRECTION_SOUTH); break;
 
         case SDLK_LEFT:
-        case SDLK_a:
-            game_set_direction(&g_game, DIRECTION_WEST);
-            break;
+        case SDLK_a: game_set_direction(&g_game, DIRECTION_WEST); break;
 
         case SDLK_RIGHT:
-        case SDLK_d:
-            game_set_direction(&g_game, DIRECTION_EAST);
-            break;
+        case SDLK_d: game_set_direction(&g_game, DIRECTION_EAST); break;
 
         case SDLK_SPACE:
         case SDLK_RETURN:
@@ -208,9 +197,7 @@ static void prv_handle_key(SDL_Keycode in_key)
             break;
 
         case SDLK_ESCAPE:
-        case SDLK_q:
-            g_is_running = false;
-            break;
+        case SDLK_q: g_is_running = false; break;
 
         default:
             /* Not a key the game knows. */
@@ -257,8 +244,7 @@ static void prv_report_progress(void)
     switch (state)
     {
         case GAME_STATE_RUNNING:
-            (void)printf("level %u — %u lives, %u points\n", level, game_get_lives(&g_game),
-                         game_get_score(&g_game));
+            (void)printf("level %u — %u lives, %u points\n", level, game_get_lives(&g_game), game_get_score(&g_game));
             break;
 
         case GAME_STATE_OVER:
@@ -271,8 +257,7 @@ static void prv_report_progress(void)
                          (unsigned)PLAYFIELD_LEVEL_COUNT, game_get_score(&g_game));
             break;
 
-        default:
-            break;
+        default: break;
     }
 }
 
@@ -321,8 +306,7 @@ int main(int in_argument_count, char** in_arguments)
         return 1;
     }
 
-    (void)printf("%s — arrows or WASD to steer, space to (re)start, escape to quit.\n",
-                 WINDOW_TITLE);
+    (void)printf("%s — arrows or WASD to steer, space to (re)start, escape to quit.\n", WINDOW_TITLE);
 
     sw_timer_create(&g_frame_timer);
     sw_timer_start(&g_frame_timer, FRAME_PERIOD_MS, prv_on_frame_due);

@@ -25,22 +25,22 @@
 #include "playfield.h"
 #include "unity.h"
 
-#define LEVEL_1 (1U)
+#define LEVEL_1        (1U)
 
 /* A junction on the reference maze's open row 3 with a gap to the north, so all four
  * directions are worth considering. */
-#define JUNCTION_X (3)
-#define JUNCTION_Y (3)
+#define JUNCTION_X     (3)
+#define JUNCTION_Y     (3)
 
 /* A cell on row 3 whose north neighbour is a wall. */
 #define WALLED_NORTH_X (2)
-#define OPEN_CELL_X (4)
+#define OPEN_CELL_X    (4)
 
 /* Level 5 was authored with genuine dead-end stubs; the reference maze has none, being a
  * fully cross-linked grid. (3,7) there has exactly one open neighbour, to the west. */
-#define LEVEL_5 (5U)
-#define DEAD_END_X (3)
-#define DEAD_END_Y (7)
+#define LEVEL_5        (5U)
+#define DEAD_END_X     (3)
+#define DEAD_END_Y     (7)
 
 static playfield_t g_playfield;
 
@@ -69,8 +69,7 @@ void test_it_steps_towards_a_target_to_the_east(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(PLAYFIELD_WIDTH - 2, JUNCTION_Y);
 
-    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target,
-                                                                   DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 void test_it_steps_towards_a_target_to_the_west(void)
@@ -78,8 +77,7 @@ void test_it_steps_towards_a_target_to_the_west(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target,
-                                                                   DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 void test_it_steps_towards_a_target_to_the_north(void)
@@ -87,8 +85,7 @@ void test_it_steps_towards_a_target_to_the_north(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(JUNCTION_X, 1);
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target,
-                                                                    DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 void test_it_never_steps_into_a_wall(void)
@@ -97,8 +94,7 @@ void test_it_never_steps_into_a_wall(void)
      * rather than walk into it. */
     const cell_t from = prv_cell(WALLED_NORTH_X, JUNCTION_Y);
     const cell_t target = prv_cell(WALLED_NORTH_X, 0);
-    const direction_e chosen
-        = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
 
     TEST_ASSERT_NOT_EQUAL(DIRECTION_NORTH, chosen);
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
@@ -108,8 +104,7 @@ void test_a_target_on_the_current_cell_still_yields_a_legal_step(void)
 {
     /* Degenerate but reachable in play: Blinky standing on Pacman for one tick. */
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
-    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, from,
-                                                            DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, from, DIRECTION_NONE);
 
     TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, chosen);
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
@@ -122,8 +117,7 @@ void test_an_off_maze_target_is_allowed(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(-20, -20);
 
-    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, ghost_path_find_step_towards(&g_playfield, from, target,
-                                                                       DIRECTION_NONE));
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 /* --- the tie-break order (§10.4) ----------------------------------------- */
@@ -142,8 +136,7 @@ void test_ties_break_up_before_left(void)
     TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(north_neighbour, target),
                              playfield_get_distance(west_neighbour, target));
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH,
-                      ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 void test_ties_break_left_before_down_and_right(void)
@@ -164,8 +157,7 @@ void test_ties_break_left_before_down_and_right(void)
     TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(west_neighbour, target),
                              playfield_get_distance(east_neighbour, target));
 
-    TEST_ASSERT_EQUAL(DIRECTION_WEST,
-                      ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
 }
 
 /* --- the no-reverse rule (§10.1) ----------------------------------------- */
@@ -177,8 +169,7 @@ void test_the_forbidden_direction_is_avoided_when_there_is_a_choice(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_NOT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target,
-                                                                       DIRECTION_WEST));
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_WEST));
 }
 
 void test_a_dead_end_forces_the_reverse(void)
@@ -209,8 +200,7 @@ void test_fleeing_moves_away_from_the_cell_to_avoid(void)
 {
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t pacman_cell = prv_cell(1, JUNCTION_Y);
-    const direction_e chosen
-        = ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE);
     const cell_t neighbour = playfield_step(from, chosen);
 
     TEST_ASSERT_GREATER_THAN_UINT16(playfield_get_distance(from, pacman_cell),
@@ -223,9 +213,8 @@ void test_fleeing_and_seeking_disagree_from_the_same_cell(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t pacman_cell = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_NOT_EQUAL(
-        ghost_path_find_step_towards(&g_playfield, from, pacman_cell, DIRECTION_NONE),
-        ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE));
+    TEST_ASSERT_NOT_EQUAL(ghost_path_find_step_towards(&g_playfield, from, pacman_cell, DIRECTION_NONE),
+                          ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE));
 }
 
 void test_fleeing_uses_the_same_tie_break_order(void)
@@ -239,16 +228,14 @@ void test_fleeing_uses_the_same_tie_break_order(void)
     TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(north_neighbour, avoid),
                              playfield_get_distance(west_neighbour, avoid));
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH,
-                      ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE));
 }
 
 void test_fleeing_never_steps_into_a_wall(void)
 {
     const cell_t from = prv_cell(WALLED_NORTH_X, JUNCTION_Y);
     const cell_t avoid = prv_cell(WALLED_NORTH_X, (int16_t)(JUNCTION_Y + 3));
-    const direction_e chosen
-        = ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE);
 
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
 }
@@ -261,13 +248,11 @@ void test_the_same_question_always_gets_the_same_answer(void)
      * A* implementation caches anything, this is what catches a stale cache. */
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, 1);
-    const direction_e first
-        = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
+    const direction_e first = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
 
     for (uint8_t repeat = 0U; repeat < 5U; ++repeat)
     {
-        TEST_ASSERT_EQUAL(first,
-                          ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+        TEST_ASSERT_EQUAL(first, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
     }
 }
 
@@ -277,6 +262,5 @@ void test_a_null_playfield_asserts(void)
 {
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
 
-    ASSERT_PROBE_EXPECT(ghost_path_find_step_towards(NULL, from, from, DIRECTION_NONE),
-                        "in_playfield != NULL");
+    ASSERT_PROBE_EXPECT(ghost_path_find_step_towards(NULL, from, from, DIRECTION_NONE), "in_playfield != NULL");
 }

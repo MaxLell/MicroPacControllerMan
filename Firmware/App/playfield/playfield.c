@@ -13,12 +13,12 @@
 
 /* Map legend, as in [10 §10.2]: '#' wall, '.' pellet, 'o' power pellet, 'P' Pacman
  * start, 'G' ghost pen, ' ' open with nothing on it (a tunnel mouth). */
-#define MAP_WALL '#'
-#define MAP_PELLET '.'
-#define MAP_POWER_PELLET 'o'
-#define MAP_PACMAN_START 'P'
-#define MAP_PEN 'G'
-#define MAP_OPEN ' '
+#define MAP_WALL             '#'
+#define MAP_PELLET           '.'
+#define MAP_POWER_PELLET     'o'
+#define MAP_PACMAN_START     'P'
+#define MAP_PEN              'G'
+#define MAP_OPEN             ' '
 
 #define SCATTER_CORNER_COUNT (4U)
 
@@ -31,7 +31,12 @@
  *
  * Difficulty rises as §10.9 asks: more dead ends, longer committed corridors, fewer
  * safe corners, and fewer power pellets at the top levels. Ghost speed and the
- * frightened window are per level too, but those live in the game rules, not here. */
+ * frightened window are per level too, but those live in the game rules, not here.
+ *
+ * The formatter is turned off across the table on purpose: one row per line *is* the
+ * maze. Reflowed to fill 120 columns the layout stops being readable, and a mistyped
+ * wall — the one mistake this table actually suffers from — becomes invisible. */
+/* clang-format off */
 static const char* const k_mazes[PLAYFIELD_LEVEL_COUNT][PLAYFIELD_HEIGHT] = {
     /* Level 1 — the reference maze of §10.2. Open and forgiving. */
     {"#####.#####",
@@ -94,6 +99,7 @@ static const char* const k_mazes[PLAYFIELD_LEVEL_COUNT][PLAYFIELD_HEIGHT] = {
      "#.###.###.#",
      "#o..#P#..o#",
      "#####.#####"}};
+/* clang-format on */
 
 /* Positive modulo, so a coordinate one step off the low edge lands on the high one. */
 static int16_t prv_wrap_coordinate(int16_t in_value, int16_t in_size)
@@ -252,10 +258,7 @@ cell_t playfield_get_scatter_corner(uint8_t in_index)
     /* Just inside the outer wall, so the corner is a cell a ghost can actually reach
      * rather than one it can only aim at. */
     static const cell_t k_corners[SCATTER_CORNER_COUNT] = {
-        {1, 1},
-        {PLAYFIELD_WIDTH - 2, 1},
-        {1, PLAYFIELD_HEIGHT - 2},
-        {PLAYFIELD_WIDTH - 2, PLAYFIELD_HEIGHT - 2}};
+        {1, 1}, {PLAYFIELD_WIDTH - 2, 1}, {1, PLAYFIELD_HEIGHT - 2}, {PLAYFIELD_WIDTH - 2, PLAYFIELD_HEIGHT - 2}};
 
     ASSERT(in_index < SCATTER_CORNER_COUNT);
 
@@ -268,23 +271,12 @@ cell_t playfield_step(cell_t in_cell, direction_e in_direction)
 
     switch (in_direction)
     {
-        case DIRECTION_NORTH:
-            stepped.y = (int16_t)(stepped.y - 1);
-            break;
-        case DIRECTION_SOUTH:
-            stepped.y = (int16_t)(stepped.y + 1);
-            break;
-        case DIRECTION_WEST:
-            stepped.x = (int16_t)(stepped.x - 1);
-            break;
-        case DIRECTION_EAST:
-            stepped.x = (int16_t)(stepped.x + 1);
-            break;
-        case DIRECTION_NONE:
-            break;
-        default:
-            ASSERT(false);
-            break;
+        case DIRECTION_NORTH: stepped.y = (int16_t)(stepped.y - 1); break;
+        case DIRECTION_SOUTH: stepped.y = (int16_t)(stepped.y + 1); break;
+        case DIRECTION_WEST: stepped.x = (int16_t)(stepped.x - 1); break;
+        case DIRECTION_EAST: stepped.x = (int16_t)(stepped.x + 1); break;
+        case DIRECTION_NONE: break;
+        default: ASSERT(false); break;
     }
 
     return playfield_wrap_cell(stepped);
@@ -307,19 +299,12 @@ direction_e playfield_get_opposite_direction(direction_e in_direction)
 {
     switch (in_direction)
     {
-        case DIRECTION_NORTH:
-            return DIRECTION_SOUTH;
-        case DIRECTION_SOUTH:
-            return DIRECTION_NORTH;
-        case DIRECTION_WEST:
-            return DIRECTION_EAST;
-        case DIRECTION_EAST:
-            return DIRECTION_WEST;
-        case DIRECTION_NONE:
-            return DIRECTION_NONE;
-        default:
-            ASSERT(false);
-            break;
+        case DIRECTION_NORTH: return DIRECTION_SOUTH;
+        case DIRECTION_SOUTH: return DIRECTION_NORTH;
+        case DIRECTION_WEST: return DIRECTION_EAST;
+        case DIRECTION_EAST: return DIRECTION_WEST;
+        case DIRECTION_NONE: return DIRECTION_NONE;
+        default: ASSERT(false); break;
     }
 
     return DIRECTION_NONE;

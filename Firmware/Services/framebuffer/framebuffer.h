@@ -22,16 +22,16 @@
  * framebuffer - public types
  * ========================================================================= */
 
-#define FRAMEBUFFER_WIDTH (128)
-#define FRAMEBUFFER_HEIGHT (128)
+#define FRAMEBUFFER_WIDTH          (128)
+#define FRAMEBUFFER_HEIGHT         (128)
 
-#define FRAMEBUFFER_BITS_PER_BYTE (8)
+#define FRAMEBUFFER_BITS_PER_BYTE  (8)
 #define FRAMEBUFFER_BYTES_PER_LINE (FRAMEBUFFER_WIDTH / FRAMEBUFFER_BITS_PER_BYTE)
 
 typedef enum
 {
-    FRAMEBUFFER_COLOR_WHITE = 0,                /*!< background — no ink              */
-    FRAMEBUFFER_COLOR_BLACK                     /*!< ink on                           */
+    FRAMEBUFFER_COLOR_WHITE = 0, /*!< background — no ink              */
+    FRAMEBUFFER_COLOR_BLACK      /*!< ink on                           */
 } framebuffer_color_e;
 
 typedef struct
@@ -67,8 +67,7 @@ void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_e in_c
  * \param[in]       in_y: row, `0` is the top edge
  * \param[in]       in_color: member of \ref framebuffer_color_e
  */
-void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                           framebuffer_color_e in_color);
+void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, framebuffer_color_e in_color);
 
 /*! \brief Read one pixel.
  *
@@ -78,8 +77,7 @@ void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16
  * \return          The pixel's colour, or \ref FRAMEBUFFER_COLOR_WHITE for
  *                      coordinates outside the buffer
  */
-framebuffer_color_e framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
-                                          int16_t in_y);
+framebuffer_color_e framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y);
 
 /*! \brief Borrow one row's packed bits, for a driver pushing the buffer out.
  *

@@ -15,8 +15,7 @@
 /* Tie-break order of §10.4: Up, Left, Down, Right. Candidates are examined in this
  * sequence and only a strictly better one displaces the incumbent, which makes the order
  * itself the tie-break — no comparison of "equal" cases needed. */
-static const direction_e k_candidate_order[] = {DIRECTION_NORTH, DIRECTION_WEST, DIRECTION_SOUTH,
-                                                DIRECTION_EAST};
+static const direction_e k_candidate_order[] = {DIRECTION_NORTH, DIRECTION_WEST, DIRECTION_SOUTH, DIRECTION_EAST};
 
 #define CANDIDATE_COUNT (sizeof(k_candidate_order) / sizeof(k_candidate_order[0]))
 
@@ -39,9 +38,8 @@ static bool prv_is_further(uint16_t in_candidate, uint16_t in_incumbent)
  * When A* replaces the greedy step, this is the function that changes — the cost of a
  * candidate stops being "distance from the neighbour to the target" and becomes "length
  * of the route through it". The signature and the tie-break stay as they are. */
-static direction_e prv_find_step(const playfield_t* const in_playfield, cell_t in_from,
-                                 cell_t in_reference, direction_e in_forbidden_direction,
-                                 prv_is_better_fn in_is_better)
+static direction_e prv_find_step(const playfield_t* const in_playfield, cell_t in_from, cell_t in_reference,
+                                 direction_e in_forbidden_direction, prv_is_better_fn in_is_better)
 {
     direction_e best_direction = DIRECTION_NONE;
     uint16_t best_cost = 0U;
@@ -92,14 +90,14 @@ static direction_e prv_find_step(const playfield_t* const in_playfield, cell_t i
  * ghost_path - public
  * ========================================================================= */
 
-direction_e ghost_path_find_step_towards(const playfield_t* in_playfield, cell_t in_from,
-                                        cell_t in_target, direction_e in_forbidden_direction)
+direction_e ghost_path_find_step_towards(const playfield_t* in_playfield, cell_t in_from, cell_t in_target,
+                                         direction_e in_forbidden_direction)
 {
     return prv_find_step(in_playfield, in_from, in_target, in_forbidden_direction, prv_is_closer);
 }
 
-direction_e ghost_path_find_step_away_from(const playfield_t* in_playfield, cell_t in_from,
-                                           cell_t in_avoid, direction_e in_forbidden_direction)
+direction_e ghost_path_find_step_away_from(const playfield_t* in_playfield, cell_t in_from, cell_t in_avoid,
+                                           direction_e in_forbidden_direction)
 {
     return prv_find_step(in_playfield, in_from, in_avoid, in_forbidden_direction, prv_is_further);
 }

@@ -30,8 +30,7 @@ static void prv_assert_started(const msg_broker_t* const in_broker)
  * Returns how many subscribers took it. A subscriber whose queue is full has this
  * message counted as dropped and is skipped, so one module that is not draining cannot
  * stall the broker or starve the others. */
-static uint16_t prv_copy_msg_to_subscribers(msg_broker_t* const inout_broker,
-                                            const msg_t* const in_msg)
+static uint16_t prv_copy_msg_to_subscribers(msg_broker_t* const inout_broker, const msg_t* const in_msg)
 {
     uint16_t delivered_count = 0U;
 
@@ -63,8 +62,7 @@ static uint16_t prv_copy_msg_to_subscribers(msg_broker_t* const inout_broker,
  * msg_subscriber - public
  * ========================================================================= */
 
-void msg_subscriber_init(msg_subscriber_t* inout_subscriber, msg_t* inout_msg_buffer,
-                         uint16_t in_capacity)
+void msg_subscriber_init(msg_subscriber_t* inout_subscriber, msg_t* inout_msg_buffer, uint16_t in_capacity)
 {
     ASSERT(inout_subscriber != NULL);
 
@@ -131,8 +129,7 @@ void msg_broker_start(msg_broker_t* inout_broker)
     inout_broker->is_started = true;
 }
 
-void msg_broker_subscribe(msg_broker_t* inout_broker, msg_subscriber_t* inout_subscriber,
-                          msg_id_e in_topic)
+void msg_broker_subscribe(msg_broker_t* inout_broker, msg_subscriber_t* inout_subscriber, msg_id_e in_topic)
 {
     ASSERT(inout_broker != NULL);
     ASSERT(inout_broker->is_initialized);

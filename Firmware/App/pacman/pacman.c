@@ -47,8 +47,7 @@ bool pacman_advance(pacman_t* inout_pacman, const playfield_t* in_playfield)
         return agent_step(&inout_pacman->agent, in_playfield, inout_pacman->queued_direction);
     }
 
-    return agent_step(&inout_pacman->agent, in_playfield,
-                      agent_get_direction(&inout_pacman->agent));
+    return agent_step(&inout_pacman->agent, in_playfield, agent_get_direction(&inout_pacman->agent));
 }
 
 cell_t pacman_get_cell(const pacman_t* in_pacman)

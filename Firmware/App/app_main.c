@@ -13,8 +13,7 @@
  * app_main - private
  * ========================================================================= */
 
-#define APP_MAIN_BOOT_BANNER \
-    "\r\nMicroPacControllerMan booted (M2 HAL bring-up). Type 'ott' for tests.\r\n"
+#define APP_MAIN_BOOT_BANNER "\r\nMicroPacControllerMan booted (M2 HAL bring-up). Type 'ott' for tests.\r\n"
 
 static void prv_on_systick(void)
 {

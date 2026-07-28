@@ -13,13 +13,13 @@
  * ott_user_button - private
  * ========================================================================= */
 
-#define OTT_USER_BUTTON_REQUIRED_PRESSES (3U)
+#define OTT_USER_BUTTON_REQUIRED_PRESSES    (3U)
 
 /* Diagnostic cap, so the board returns to nominal mode even if nothing happens. */
-#define OTT_USER_BUTTON_TIMEOUT_MS (30000U)
+#define OTT_USER_BUTTON_TIMEOUT_MS          (30000U)
 #define OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS (1000U)
 
-#define OTT_USER_BUTTON_LINE_MAX_SIZE (72U)
+#define OTT_USER_BUTTON_LINE_MAX_SIZE       (72U)
 
 static sw_timer_t g_timeout_timer;
 static sw_timer_t g_heartbeat_timer;
@@ -34,8 +34,8 @@ static void prv_on_heartbeat(void)
 {
     char line[OTT_USER_BUTTON_LINE_MAX_SIZE];
 
-    (void)snprintf(line, sizeof(line), "BTN alive pressed=%u presses=%lu\r\n",
-                   user_button_is_pressed() ? 1U : 0U, (unsigned long)g_press_count);
+    (void)snprintf(line, sizeof(line), "BTN alive pressed=%u presses=%lu\r\n", user_button_is_pressed() ? 1U : 0U,
+                   (unsigned long)g_press_count);
     uart_bsp_write_string(line);
 
     sw_timer_start(&g_heartbeat_timer, OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS, prv_on_heartbeat);
@@ -76,8 +76,7 @@ bool ott_user_button_run(const uint8_t* in_parameter, uint32_t in_parameter_size
     sw_timer_start(&g_timeout_timer, OTT_USER_BUTTON_TIMEOUT_MS, prv_on_timeout);
     sw_timer_start(&g_heartbeat_timer, OTT_USER_BUTTON_HEARTBEAT_PERIOD_MS, prv_on_heartbeat);
 
-    while (sw_timer_is_active(&g_timeout_timer)
-           && (g_press_count < OTT_USER_BUTTON_REQUIRED_PRESSES))
+    while (sw_timer_is_active(&g_timeout_timer) && (g_press_count < OTT_USER_BUTTON_REQUIRED_PRESSES))
     {
         sw_timer_process();
 

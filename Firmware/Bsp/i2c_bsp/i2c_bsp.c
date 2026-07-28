@@ -14,17 +14,17 @@
 /* The bus instance. I2C1 (PB8=SCL / PB9=SDA) serves mikroBUS slot 2; the handle
  * is brought up by the CubeMX MX_I2C1_Init(). Point this at another handle to
  * move the transport. */
-#define I2C_BSP_HANDLE (hi2c1)
+#define I2C_BSP_HANDLE               (hi2c1)
 
 /* Generous for a handful of bytes at ~100 kHz, but bounded so a dead bus is
  * reported in well under a second instead of hanging a test. */
-#define I2C_BSP_TIMEOUT_MS (100U)
+#define I2C_BSP_TIMEOUT_MS           (100U)
 
 /* The HAL takes the address already shifted into its 8-bit form. */
 #define I2C_BSP_DEVICE_ADDRESS_SHIFT (1U)
-#define I2C_BSP_DEVICE_ADDRESS_MAX (0x7FU)
+#define I2C_BSP_DEVICE_ADDRESS_MAX   (0x7FU)
 
-#define I2C_BSP_LENGTH_MAX (UINT16_MAX)
+#define I2C_BSP_LENGTH_MAX           (UINT16_MAX)
 
 static bool g_is_initialized = false;
 
@@ -76,29 +76,24 @@ void i2c_bsp_init(void)
     g_is_initialized = true;
 }
 
-i2c_bsp_status_e i2c_bsp_write(uint8_t in_device_address, const uint8_t* const in_data,
-                               size_t in_length)
+i2c_bsp_status_e i2c_bsp_write(uint8_t in_device_address, const uint8_t* const in_data, size_t in_length)
 {
     prv_assert_transfer(in_data, in_length);
 
-    return prv_map_hal_status(HAL_I2C_Master_Transmit(
-        &I2C_BSP_HANDLE, prv_to_hal_device_address(in_device_address), (uint8_t*)in_data,
-        (uint16_t)in_length, I2C_BSP_TIMEOUT_MS));
+    return prv_map_hal_status(HAL_I2C_Master_Transmit(&I2C_BSP_HANDLE, prv_to_hal_device_address(in_device_address),
+                                                      (uint8_t*)in_data, (uint16_t)in_length, I2C_BSP_TIMEOUT_MS));
 }
 
 i2c_bsp_status_e i2c_bsp_read(uint8_t in_device_address, uint8_t* const out_data, size_t in_length)
 {
     prv_assert_transfer(out_data, in_length);
 
-    return prv_map_hal_status(HAL_I2C_Master_Receive(&I2C_BSP_HANDLE,
-                                                    prv_to_hal_device_address(in_device_address),
-                                                    out_data, (uint16_t)in_length,
-                                                    I2C_BSP_TIMEOUT_MS));
+    return prv_map_hal_status(HAL_I2C_Master_Receive(&I2C_BSP_HANDLE, prv_to_hal_device_address(in_device_address),
+                                                     out_data, (uint16_t)in_length, I2C_BSP_TIMEOUT_MS));
 }
 
 i2c_bsp_status_e i2c_bsp_read_memory(uint8_t in_device_address, uint16_t in_memory_address,
-                                     size_t in_memory_address_width, uint8_t* const out_data,
-                                     size_t in_length)
+                                     size_t in_memory_address_width, uint8_t* const out_data, size_t in_length)
 {
     uint16_t hal_memory_address_size;
 
@@ -117,8 +112,7 @@ i2c_bsp_status_e i2c_bsp_read_memory(uint8_t in_device_address, uint16_t in_memo
         return I2C_BSP_STATUS_ERROR_UNSUPPORTED_WIDTH;
     }
 
-    return prv_map_hal_status(HAL_I2C_Mem_Read(&I2C_BSP_HANDLE,
-                                               prv_to_hal_device_address(in_device_address),
+    return prv_map_hal_status(HAL_I2C_Mem_Read(&I2C_BSP_HANDLE, prv_to_hal_device_address(in_device_address),
                                                in_memory_address, hal_memory_address_size, out_data,
                                                (uint16_t)in_length, I2C_BSP_TIMEOUT_MS));
 }

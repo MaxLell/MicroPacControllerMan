@@ -17,19 +17,19 @@
  * ott_touchdot - private
  * ========================================================================= */
 
-#define OTT_TOUCHDOT_DOT_RADIUS (5)
+#define OTT_TOUCHDOT_DOT_RADIUS      (5)
 #define OTT_TOUCHDOT_FRAME_PERIOD_MS (40U)
 
 /* Safety cap, so the board returns to nominal mode even if the operator walks
  * away without confirming. */
-#define OTT_TOUCHDOT_TIMEOUT_MS (120000U)
+#define OTT_TOUCHDOT_TIMEOUT_MS      (120000U)
 
 /* Pad-to-panel orientation, confirmed on hardware: the pad is mirrored on both
  * axes relative to the panel. Flip these if the dot ever tracks the wrong way —
  * SWAP exchanges the axes, the INVERT flags mirror one axis each. */
-#define OTT_TOUCHDOT_SWAP_AXES (false)
-#define OTT_TOUCHDOT_INVERT_X (true)
-#define OTT_TOUCHDOT_INVERT_Y (true)
+#define OTT_TOUCHDOT_SWAP_AXES       (false)
+#define OTT_TOUCHDOT_INVERT_X        (true)
+#define OTT_TOUCHDOT_INVERT_Y        (true)
 
 /* The scenario owns the frame it draws; the display only borrows it when shown. */
 static framebuffer_t g_framebuffer;
@@ -51,8 +51,7 @@ static void prv_on_vcom_due(void)
 }
 
 /* Scale a raw pad coordinate onto a panel axis, applying the orientation flags. */
-static int16_t prv_scale_to_panel(uint16_t in_raw, uint16_t in_raw_max, int16_t in_panel_size,
-                                  bool in_is_inverted)
+static int16_t prv_scale_to_panel(uint16_t in_raw, uint16_t in_raw_max, int16_t in_panel_size, bool in_is_inverted)
 {
     const int16_t panel_max = (int16_t)(in_panel_size - 1);
     int16_t scaled = (int16_t)(((uint32_t)in_raw * (uint32_t)panel_max) / in_raw_max);
@@ -85,17 +84,13 @@ static void prv_on_frame_due(void)
     {
         if (OTT_TOUCHDOT_SWAP_AXES)
         {
-            dot_x = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_WIDTH,
-                                       OTT_TOUCHDOT_INVERT_X);
-            dot_y = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_HEIGHT,
-                                       OTT_TOUCHDOT_INVERT_Y);
+            dot_x = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_WIDTH, OTT_TOUCHDOT_INVERT_X);
+            dot_y = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_HEIGHT, OTT_TOUCHDOT_INVERT_Y);
         }
         else
         {
-            dot_x = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_WIDTH,
-                                       OTT_TOUCHDOT_INVERT_X);
-            dot_y = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_HEIGHT,
-                                       OTT_TOUCHDOT_INVERT_Y);
+            dot_x = prv_scale_to_panel(reading.x, TOUCHPAD_X_MAX, FRAMEBUFFER_WIDTH, OTT_TOUCHDOT_INVERT_X);
+            dot_y = prv_scale_to_panel(reading.y, TOUCHPAD_Y_MAX, FRAMEBUFFER_HEIGHT, OTT_TOUCHDOT_INVERT_Y);
         }
 
         gfx_filled_circle(&g_framebuffer, dot_x, dot_y, OTT_TOUCHDOT_DOT_RADIUS, FRAMEBUFFER_COLOR_BLACK);
@@ -124,8 +119,7 @@ bool ott_touchdot_setup(int in_argument_count, char* in_arguments[], uint8_t* ou
     return true;
 }
 
-bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
-                      size_t in_reason_size)
+bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason, size_t in_reason_size)
 {
     (void)in_parameter;
     (void)in_parameter_size;
@@ -154,8 +148,7 @@ bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, c
     sw_timer_start(&g_frame_timer, OTT_TOUCHDOT_FRAME_PERIOD_MS, prv_on_frame_due);
     sw_timer_start(&g_vcom_timer, DISPLAY_SERVICE_PERIOD_MS, prv_on_vcom_due);
 
-    while (sw_timer_is_active(&g_timeout_timer) && (g_frame_status == I2C_BSP_STATUS_OK)
-           && !user_button_take_press())
+    while (sw_timer_is_active(&g_timeout_timer) && (g_frame_status == I2C_BSP_STATUS_OK) && !user_button_take_press())
     {
         sw_timer_process();
     }
@@ -166,8 +159,7 @@ bool ott_touchdot_run(const uint8_t* in_parameter, uint32_t in_parameter_size, c
 
     if (g_frame_status != I2C_BSP_STATUS_OK)
     {
-        (void)snprintf(out_reason, in_reason_size, "I2C read failed during tracking (status %d)",
-                       (int)g_frame_status);
+        (void)snprintf(out_reason, in_reason_size, "I2C read failed during tracking (status %d)", (int)g_frame_status);
 
         return false;
     }

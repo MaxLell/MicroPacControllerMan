@@ -12,12 +12,11 @@
  * ========================================================================= */
 
 #define FRAMEBUFFER_ALL_INK (0xFFU)
-#define FRAMEBUFFER_NO_INK (0x00U)
+#define FRAMEBUFFER_NO_INK  (0x00U)
 
 static bool prv_is_inside(int16_t in_x, int16_t in_y)
 {
-    return (in_x >= 0) && (in_x < FRAMEBUFFER_WIDTH) && (in_y >= 0)
-           && (in_y < FRAMEBUFFER_HEIGHT);
+    return (in_x >= 0) && (in_x < FRAMEBUFFER_WIDTH) && (in_y >= 0) && (in_y < FRAMEBUFFER_HEIGHT);
 }
 
 static uint8_t prv_bit_mask(int16_t in_x)
@@ -38,13 +37,11 @@ void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_e in_c
 {
     ASSERT(inout_framebuffer != NULL);
 
-    memset(inout_framebuffer->lines,
-           (in_color == FRAMEBUFFER_COLOR_BLACK) ? FRAMEBUFFER_ALL_INK : FRAMEBUFFER_NO_INK,
+    memset(inout_framebuffer->lines, (in_color == FRAMEBUFFER_COLOR_BLACK) ? FRAMEBUFFER_ALL_INK : FRAMEBUFFER_NO_INK,
            sizeof(inout_framebuffer->lines));
 }
 
-void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                           framebuffer_color_e in_color)
+void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, framebuffer_color_e in_color)
 {
     ASSERT(inout_framebuffer != NULL);
 
@@ -59,13 +56,11 @@ void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16
     }
     else
     {
-        inout_framebuffer->lines[in_y][in_x / FRAMEBUFFER_BITS_PER_BYTE]
-            &= (uint8_t)~prv_bit_mask(in_x);
+        inout_framebuffer->lines[in_y][in_x / FRAMEBUFFER_BITS_PER_BYTE] &= (uint8_t)~prv_bit_mask(in_x);
     }
 }
 
-framebuffer_color_e framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
-                                          int16_t in_y)
+framebuffer_color_e framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y)
 {
     ASSERT(in_framebuffer != NULL);
 

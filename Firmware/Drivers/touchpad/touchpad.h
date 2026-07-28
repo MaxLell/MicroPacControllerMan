@@ -27,9 +27,9 @@
 
 typedef struct
 {
-    uint16_t x;                                 /*!< Raw position, `0`..#TOUCHPAD_X_MAX       */
-    uint16_t y;                                 /*!< Raw position, `0`..#TOUCHPAD_Y_MAX       */
-    bool is_touched;                            /*!< A finger is present                      */
+    uint16_t x;      /*!< Raw position, `0`..#TOUCHPAD_X_MAX       */
+    uint16_t y;      /*!< Raw position, `0`..#TOUCHPAD_Y_MAX       */
+    bool is_touched; /*!< A finger is present                      */
 } touchpad_reading_t;
 
 /* ==========================================================================

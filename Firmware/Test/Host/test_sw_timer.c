@@ -21,18 +21,18 @@
 /* Compiled in only under TEST — see sw_timer.c. */
 void sw_timer_test_reset(void);
 
-#define TEST_TIMEOUT_MS (100U)
-#define TEST_START_TICK (1000U)
+#define TEST_TIMEOUT_MS              (100U)
+#define TEST_START_TICK              (1000U)
 
-#define TEST_ONE_CALL (1U)
-#define TEST_NO_CALLS (0U)
-#define TEST_REARM_COUNT (2U)
+#define TEST_ONE_CALL                (1U)
+#define TEST_NO_CALLS                (0U)
+#define TEST_REARM_COUNT             (2U)
 #define TEST_EXPECTED_PERIODIC_CALLS (TEST_REARM_COUNT + 1U)
 
 /* Multiples of the timeout used to prove a one-shot timer stays silent afterwards. */
-#define TEST_WELL_PAST_TIMEOUT (TEST_TIMEOUT_MS * 5U)
-#define TEST_MUCH_LATER (TEST_TIMEOUT_MS * 9U)
-#define TEST_THREE_TIMEOUTS (TEST_TIMEOUT_MS * 3U)
+#define TEST_WELL_PAST_TIMEOUT       (TEST_TIMEOUT_MS * 5U)
+#define TEST_MUCH_LATER              (TEST_TIMEOUT_MS * 9U)
+#define TEST_THREE_TIMEOUTS          (TEST_TIMEOUT_MS * 3U)
 
 static uint32_t g_callback_calls;
 static uint32_t g_rearm_budget;
@@ -194,8 +194,7 @@ void test_reset_restarts_the_timeout_from_the_current_tick(void)
     systick_bsp_get_tick_ExpectAndReturn(TEST_START_TICK + TEST_TIMEOUT_MS);
     sw_timer_reset(&g_timer);
 
-    systick_bsp_get_tick_ExpectAndReturn(TEST_START_TICK + TEST_TIMEOUT_MS
-                                        + (TEST_TIMEOUT_MS - 1U));
+    systick_bsp_get_tick_ExpectAndReturn(TEST_START_TICK + TEST_TIMEOUT_MS + (TEST_TIMEOUT_MS - 1U));
     sw_timer_process();
 
     TEST_ASSERT_EQUAL_UINT32(TEST_NO_CALLS, g_callback_calls);
@@ -228,8 +227,7 @@ void test_starting_an_unregistered_timer_asserts(void)
 
 void test_starting_a_timer_without_a_callback_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(sw_timer_start(&g_timer, TEST_TIMEOUT_MS, NULL),
-                        "in_callback_fn != NULL");
+    ASSERT_PROBE_EXPECT(sw_timer_start(&g_timer, TEST_TIMEOUT_MS, NULL), "in_callback_fn != NULL");
 }
 
 void test_exhausting_the_timer_table_asserts(void)

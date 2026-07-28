@@ -20,19 +20,19 @@
 #include "playfield.h"
 #include "unity.h"
 
-#define LEVEL_1 (1U)
-#define ONE_STEP (1U)
-#define TWO_STEPS (2U)
+#define LEVEL_1          (1U)
+#define ONE_STEP         (1U)
+#define TWO_STEPS        (2U)
 
 /* Row 3 of the reference maze is an open corridor; row 2 above it alternates wall and
  * gap. These cells are picked from that: WALLED_NORTH has a wall above it, OPEN_NORTH a
  * gap, and both have open cells to the left and right. */
-#define OPEN_CELL_X (4)
-#define OPEN_CELL_Y (3)
+#define OPEN_CELL_X      (4)
+#define OPEN_CELL_Y      (3)
 #define CORRIDOR_START_X (1)
-#define WALLED_NORTH_X (2)
-#define OPEN_NORTH_X (3)
-#define CORRIDOR_LAST_X (PLAYFIELD_WIDTH - 2)
+#define WALLED_NORTH_X   (2)
+#define OPEN_NORTH_X     (3)
+#define CORRIDOR_LAST_X  (PLAYFIELD_WIDTH - 2)
 
 static playfield_t g_playfield;
 static pacman_t g_pacman;
@@ -83,8 +83,7 @@ void test_an_agent_steps_onto_an_open_cell(void)
     agent_place(&agent, prv_cell(OPEN_CELL_X, OPEN_CELL_Y), DIRECTION_NONE);
 
     TEST_ASSERT_TRUE(agent_step(&agent, &g_playfield, DIRECTION_EAST));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 1, OPEN_CELL_Y),
-                                               agent_get_cell(&agent)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 1, OPEN_CELL_Y), agent_get_cell(&agent)));
 }
 
 void test_an_agent_blocked_by_a_wall_stays_put_but_turns_to_face_it(void)
@@ -97,8 +96,7 @@ void test_an_agent_blocked_by_a_wall_stays_put_but_turns_to_face_it(void)
     TEST_ASSERT_FALSE(agent_can_step(&agent, &g_playfield, DIRECTION_NORTH));
     TEST_ASSERT_FALSE(agent_step(&agent, &g_playfield, DIRECTION_NORTH));
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y),
-                                               agent_get_cell(&agent)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y), agent_get_cell(&agent)));
     /* The facing still changed — that is what lets it move the instant the way opens. */
     TEST_ASSERT_EQUAL(DIRECTION_NORTH, agent_get_direction(&agent));
 }
@@ -130,8 +128,8 @@ void test_looking_ahead_wraps_through_a_tunnel(void)
 
     agent_place(&agent, mouth, DIRECTION_WEST);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(PLAYFIELD_WIDTH - 1, mouth.y),
-                                               agent_get_cell_ahead(&agent, ONE_STEP)));
+    TEST_ASSERT_TRUE(
+        playfield_are_cells_equal(prv_cell(PLAYFIELD_WIDTH - 1, mouth.y), agent_get_cell_ahead(&agent, ONE_STEP)));
 }
 
 /* --- Pacman: the queued direction ---------------------------------------- */
@@ -153,12 +151,10 @@ void test_intent_is_taken_up_at_the_next_move_not_immediately(void)
 
     /* Setting the intent must not have moved him — input and movement are separate
      * (§10.1), which is what lets the player press early. */
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 
     TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 1, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 1, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
     TEST_ASSERT_EQUAL(DIRECTION_EAST, pacman_get_direction(&g_pacman));
 }
 
@@ -170,8 +166,7 @@ void test_pacman_keeps_going_without_new_input(void)
     (void)pacman_advance(&g_pacman, &g_playfield);
     (void)pacman_advance(&g_pacman, &g_playfield);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 2, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X + 2, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 }
 
 void test_an_impossible_turn_is_remembered_until_it_becomes_possible(void)
@@ -184,23 +179,20 @@ void test_an_impossible_turn_is_remembered_until_it_becomes_possible(void)
     (void)pacman_advance(&g_pacman, &g_playfield);
 
     /* Now on a cell with a wall to the north. */
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(WALLED_NORTH_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(WALLED_NORTH_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 
     pacman_set_intent(&g_pacman, DIRECTION_NORTH);
     (void)pacman_advance(&g_pacman, &g_playfield);
 
     /* North was a wall, so he carried on east — and the request is still pending. */
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_NORTH_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_NORTH_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
     TEST_ASSERT_EQUAL(DIRECTION_EAST, pacman_get_direction(&g_pacman));
 
     /* No further input: the pending turn fires on its own, because here north is open. */
     (void)pacman_advance(&g_pacman, &g_playfield);
 
     TEST_ASSERT_EQUAL(DIRECTION_NORTH, pacman_get_direction(&g_pacman));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_NORTH_X, OPEN_CELL_Y - 1),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_NORTH_X, OPEN_CELL_Y - 1), pacman_get_cell(&g_pacman)));
 }
 
 void test_pacman_stops_against_a_wall_and_waits_facing_it(void)
@@ -211,12 +203,10 @@ void test_pacman_stops_against_a_wall_and_waits_facing_it(void)
     pacman_set_intent(&g_pacman, DIRECTION_EAST);
 
     TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(CORRIDOR_LAST_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(CORRIDOR_LAST_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 
     TEST_ASSERT_FALSE(pacman_advance(&g_pacman, &g_playfield));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(CORRIDOR_LAST_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(CORRIDOR_LAST_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
     TEST_ASSERT_EQUAL(DIRECTION_EAST, pacman_get_direction(&g_pacman));
 }
 
@@ -230,8 +220,7 @@ void test_a_blocked_intent_does_not_change_the_facing(void)
     (void)pacman_advance(&g_pacman, &g_playfield);
 
     /* Standing where north is a wall. */
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(WALLED_NORTH_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(WALLED_NORTH_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 
     pacman_set_intent(&g_pacman, DIRECTION_NORTH);
     (void)pacman_advance(&g_pacman, &g_playfield);
@@ -261,8 +250,7 @@ void test_pacman_may_reverse_freely(void)
     pacman_set_intent(&g_pacman, DIRECTION_WEST);
     (void)pacman_advance(&g_pacman, &g_playfield);
 
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(OPEN_CELL_X, OPEN_CELL_Y), pacman_get_cell(&g_pacman)));
 }
 
 void test_pacman_travels_through_a_tunnel(void)
@@ -273,8 +261,7 @@ void test_pacman_travels_through_a_tunnel(void)
     pacman_set_intent(&g_pacman, DIRECTION_WEST);
 
     TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(PLAYFIELD_WIDTH - 1, mouth.y),
-                                               pacman_get_cell(&g_pacman)));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(PLAYFIELD_WIDTH - 1, mouth.y), pacman_get_cell(&g_pacman)));
 }
 
 void test_pacman_escapes_his_start_pocket(void)

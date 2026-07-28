@@ -26,15 +26,15 @@
  * ========================================================================= */
 
 /* LS013B7DH03 mode-byte bits, in LSB-first wire order (matches the SPI setup). */
-#define DISPLAY_COMMAND_WRITE_LINE (0x01U)
-#define DISPLAY_COMMAND_VCOM (0x02U)
-#define DISPLAY_COMMAND_CLEAR_ALL (0x04U)
+#define DISPLAY_COMMAND_WRITE_LINE       (0x01U)
+#define DISPLAY_COMMAND_VCOM             (0x02U)
+#define DISPLAY_COMMAND_CLEAR_ALL        (0x04U)
 
 /* Line addresses are 1-based on the wire. */
-#define DISPLAY_FIRST_LINE_ADDRESS (1U)
+#define DISPLAY_FIRST_LINE_ADDRESS       (1U)
 
 /* Every command and every line is closed with a don't-care byte. */
-#define DISPLAY_PADDING_BYTE (0x00U)
+#define DISPLAY_PADDING_BYTE             (0x00U)
 
 /* The panel wants ~6 us of setup and ~2 us of hold around chip-select.
  *
@@ -58,7 +58,9 @@ static void prv_set_chip_select(dio_bsp_pin_state_e in_state)
 
 static void prv_wait_chip_select_settle(void)
 {
-    for (volatile uint32_t loop = 0U; loop < DISPLAY_CHIP_SELECT_SETTLE_LOOPS; ++loop) {}
+    for (volatile uint32_t loop = 0U; loop < DISPLAY_CHIP_SELECT_SETTLE_LOOPS; ++loop)
+    {
+    }
 }
 
 static uint8_t prv_toggle_vcom(void)
@@ -152,8 +154,7 @@ void display_clear(void)
 
 void display_set_enabled(bool in_is_enabled)
 {
-    dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_DISP,
-                    in_is_enabled ? DIO_BSP_PIN_STATE_HIGH : DIO_BSP_PIN_STATE_LOW);
+    dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_DISP, in_is_enabled ? DIO_BSP_PIN_STATE_HIGH : DIO_BSP_PIN_STATE_LOW);
 }
 
 void display_service(void)

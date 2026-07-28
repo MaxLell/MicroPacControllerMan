@@ -23,15 +23,15 @@
 
 typedef struct
 {
-    dio_bsp_pin_e pin;                          /*!< Logical pin the switch is wired to      */
-    bool active_low;                            /*!< Pin reads LOW while the switch is active */
+    dio_bsp_pin_e pin; /*!< Logical pin the switch is wired to      */
+    bool active_low;   /*!< Pin reads LOW while the switch is active */
 } switch_gpio_t;
 
 typedef struct
 {
-    switch_gpio_t gpio;                         /*!< GPIO configuration metadata             */
-    uint32_t history;                           /*!< Shift register of the last samples      */
-    bool is_active;                             /*!< Latest debounced state                  */
+    switch_gpio_t gpio; /*!< GPIO configuration metadata             */
+    uint32_t history;   /*!< Shift register of the last samples      */
+    bool is_active;     /*!< Latest debounced state                  */
 } switch_t;
 
 /* ==========================================================================

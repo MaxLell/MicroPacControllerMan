@@ -18,23 +18,23 @@
 
 /* Recognises a deliberately stored request in memory that a power-on reset leaves
  * filled with garbage. */
-#define OTT_MAGIC_WORD (0xB007A5A5U)
+#define OTT_MAGIC_WORD               (0xB007A5A5U)
 
 /* Test ids are 1-based, so an all-zero retained buffer means "no request". */
-#define OTT_TEST_ID_NONE (0U)
-#define OTT_TEST_ID_FIRST (1U)
+#define OTT_TEST_ID_NONE             (0U)
+#define OTT_TEST_ID_FIRST            (1U)
 
 /* Plain multiplicative hash — enough to catch a partially written or decayed
  * buffer, not a security measure. */
-#define OTT_CHECKSUM_SEED (0x1234ABCDU)
-#define OTT_CHECKSUM_MULTIPLIER (31U)
+#define OTT_CHECKSUM_SEED            (0x1234ABCDU)
+#define OTT_CHECKSUM_MULTIPLIER      (31U)
 
 /* Long enough for the diagnostic reasons the scenarios actually write; snprintf
  * truncates rather than overruns if one ever outgrows it. */
-#define OTT_REASON_MAX_SIZE (96U)
+#define OTT_REASON_MAX_SIZE          (96U)
 
 /* Index of the test name within the argument vector handed to a setup step. */
-#define OTT_ARGUMENT_INDEX_NAME (1)
+#define OTT_ARGUMENT_INDEX_NAME      (1)
 #define OTT_ARGUMENT_COUNT_WITH_NAME (2)
 
 typedef struct
@@ -46,8 +46,7 @@ typedef struct
     uint8_t parameter[OTT_PARAMETER_MAX_SIZE];
 } ott_spec_t;
 
-_Static_assert(sizeof(ott_spec_t) <= RETAIN_RAM_BUFFER_SIZE,
-               "the OTT request must fit into the retained RAM buffer");
+_Static_assert(sizeof(ott_spec_t) <= RETAIN_RAM_BUFFER_SIZE, "the OTT request must fit into the retained RAM buffer");
 
 static cli_cfg_t g_cli;
 
@@ -61,8 +60,7 @@ static uint32_t prv_calculate_checksum(const ott_spec_t* const in_spec)
     checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->test_id;
     checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->parameter_size;
 
-    for (uint32_t index = 0U; (index < in_spec->parameter_size) && (index < OTT_PARAMETER_MAX_SIZE);
-         ++index)
+    for (uint32_t index = 0U; (index < in_spec->parameter_size) && (index < OTT_PARAMETER_MAX_SIZE); ++index)
     {
         checksum = (checksum * OTT_CHECKSUM_MULTIPLIER) + in_spec->parameter[index];
     }
@@ -75,8 +73,7 @@ static bool prv_is_spec_valid(const ott_spec_t* const in_spec)
     ASSERT(in_spec != NULL);
 
     return (in_spec->magic_word == OTT_MAGIC_WORD) && (in_spec->test_id >= OTT_TEST_ID_FIRST)
-           && (in_spec->test_id <= ott_scenarios_get_count())
-           && (in_spec->parameter_size <= OTT_PARAMETER_MAX_SIZE)
+           && (in_spec->test_id <= ott_scenarios_get_count()) && (in_spec->parameter_size <= OTT_PARAMETER_MAX_SIZE)
            && (in_spec->checksum == prv_calculate_checksum(in_spec));
 }
 
@@ -107,8 +104,7 @@ static void prv_invalidate_spec(void)
     retained_ram_write(buffer, sizeof(buffer));
 }
 
-static void prv_report(const ott_scenario_t* const in_scenario, bool in_has_passed,
-                       const char* const in_reason)
+static void prv_report(const ott_scenario_t* const in_scenario, bool in_has_passed, const char* const in_reason)
 {
     uart_bsp_write_string("OTT ");
     uart_bsp_write_string(in_has_passed ? "PASSED [" : "FAILED [");
@@ -159,9 +155,8 @@ static int prv_ott_command(int in_argument_count, char* in_arguments[], void* in
 
     if (scenario->setup_fn != NULL)
     {
-        if (!scenario->setup_fn(in_argument_count - OTT_ARGUMENT_INDEX_NAME,
-                                &in_arguments[OTT_ARGUMENT_INDEX_NAME], spec.parameter,
-                                &spec.parameter_size))
+        if (!scenario->setup_fn(in_argument_count - OTT_ARGUMENT_INDEX_NAME, &in_arguments[OTT_ARGUMENT_INDEX_NAME],
+                                spec.parameter, &spec.parameter_size))
         {
             cli_print("OTT ERROR: setup failed for '%s'", scenario->name);
 
@@ -238,10 +233,9 @@ void ott_execute_pending(void)
 
 void ott_init(void)
 {
-    cli_binding_t ott_binding
-        = {"ott", prv_ott_command, NULL, "Schedule an on-target test: ott <name> ('ott' lists them)"};
-    cli_binding_t reset_binding
-        = {"reset", prv_reset_command, NULL, "Reboot the board into nominal mode"};
+    cli_binding_t ott_binding = {"ott", prv_ott_command, NULL,
+                                 "Schedule an on-target test: ott <name> ('ott' lists them)"};
+    cli_binding_t reset_binding = {"reset", prv_reset_command, NULL, "Reboot the board into nominal mode"};
 
     cli_init(&g_cli, prv_cli_put_character);
     cli_register(&ott_binding);

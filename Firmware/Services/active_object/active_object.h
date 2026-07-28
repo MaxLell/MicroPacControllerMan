@@ -53,12 +53,12 @@ typedef void (*active_object_dispatch_fn)(void* inout_context, const msg_t* in_m
 
 typedef struct
 {
-    msg_subscriber_t subscriber;                /*!< The single inbound queue          */
-    active_object_dispatch_fn dispatch_fn;      /*!< The module's handler              */
-    void* context;                              /*!< The module's private data         */
-    const char* name;                           /*!< For diagnostics and logging       */
+    msg_subscriber_t subscriber;           /*!< The single inbound queue          */
+    active_object_dispatch_fn dispatch_fn; /*!< The module's handler              */
+    void* context;                         /*!< The module's private data         */
+    const char* name;                      /*!< For diagnostics and logging       */
     bool is_initialized;
-    bool is_dispatching;                        /*!< Run-to-completion guard           */
+    bool is_dispatching; /*!< Run-to-completion guard           */
     uint32_t handled_msg_count;
 } active_object_t;
 
@@ -80,9 +80,8 @@ typedef struct
  * \param[in,out]   inout_context: the module's private data, passed back to the
  *                      handler. May be `NULL` for a stateless module.
  */
-void active_object_init(active_object_t* inout_object, const char* in_name,
-                        msg_t* inout_msg_buffer, uint16_t in_capacity,
-                        active_object_dispatch_fn in_dispatch_fn, void* inout_context);
+void active_object_init(active_object_t* inout_object, const char* in_name, msg_t* inout_msg_buffer,
+                        uint16_t in_capacity, active_object_dispatch_fn in_dispatch_fn, void* inout_context);
 
 /*! \brief Register this object's inbound queue for one topic.
  *
@@ -93,8 +92,7 @@ void active_object_init(active_object_t* inout_object, const char* in_name,
  * \param[in,out]   inout_broker: the broker to subscribe on
  * \param[in]       in_topic: topic to receive
  */
-void active_object_subscribe(active_object_t* inout_object, msg_broker_t* inout_broker,
-                             msg_id_e in_topic);
+void active_object_subscribe(active_object_t* inout_object, msg_broker_t* inout_broker, msg_id_e in_topic);
 
 /*! \brief Handle at most one queued message, to completion.
  *

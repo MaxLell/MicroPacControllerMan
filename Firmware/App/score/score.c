@@ -14,7 +14,7 @@
  * score - private
  * ========================================================================= */
 
-#define SCORE_OBJECT_NAME "score"
+#define SCORE_OBJECT_NAME        "score"
 
 /* 200, 400, 800, 1600 — the first ghost's value doubled for each further one caught in
  * the same frightened window (§10.6). */
@@ -24,9 +24,8 @@ static uint32_t prv_get_ghost_points(uint8_t in_chain_index)
 {
     /* Beyond the fourth the value stops climbing: there are only four ghosts, so a fifth
      * would mean the chain was not reset when it should have been. */
-    const uint8_t capped_index = (in_chain_index < SCORE_GHOST_CHAIN_LENGTH)
-                                     ? in_chain_index
-                                     : (uint8_t)(SCORE_GHOST_CHAIN_LENGTH - 1U);
+    const uint8_t capped_index =
+        (in_chain_index < SCORE_GHOST_CHAIN_LENGTH) ? in_chain_index : (uint8_t)(SCORE_GHOST_CHAIN_LENGTH - 1U);
 
     return (uint32_t)SCORE_FIRST_GHOST_POINTS << capped_index;
 }
@@ -37,8 +36,7 @@ static void prv_handle_pellet_eaten(score_t* const inout_score, const msg_t* con
 
     memcpy(&payload, in_msg->payload, sizeof(payload));
 
-    inout_score->total
-        += payload.is_power_pellet ? SCORE_POWER_PELLET_POINTS : SCORE_PELLET_POINTS;
+    inout_score->total += payload.is_power_pellet ? SCORE_POWER_PELLET_POINTS : SCORE_PELLET_POINTS;
 }
 
 static void prv_handle_msg(void* inout_context, const msg_t* in_msg)
@@ -50,9 +48,7 @@ static void prv_handle_msg(void* inout_context, const msg_t* in_msg)
 
     switch (in_msg->id)
     {
-        case MSG_GAME_PELLET_EATEN:
-            prv_handle_pellet_eaten(score, in_msg);
-            break;
+        case MSG_GAME_PELLET_EATEN: prv_handle_pellet_eaten(score, in_msg); break;
 
         case MSG_GAME_GHOST_EATEN:
             score->total += prv_get_ghost_points(score->ghost_chain_index);
@@ -87,8 +83,8 @@ void score_init(score_t* inout_score, msg_broker_t* inout_broker)
     inout_score->total = 0U;
     inout_score->ghost_chain_index = 0U;
 
-    active_object_init(&inout_score->object, SCORE_OBJECT_NAME, inout_score->inbox,
-                       SCORE_INBOX_CAPACITY, prv_handle_msg, inout_score);
+    active_object_init(&inout_score->object, SCORE_OBJECT_NAME, inout_score->inbox, SCORE_INBOX_CAPACITY,
+                       prv_handle_msg, inout_score);
 
     active_object_subscribe(&inout_score->object, inout_broker, MSG_GAME_PELLET_EATEN);
     active_object_subscribe(&inout_score->object, inout_broker, MSG_GAME_GHOST_EATEN);

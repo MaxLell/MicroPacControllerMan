@@ -39,14 +39,14 @@ typedef bool (*ott_setup_fn)(int in_argument_count, char* in_arguments[], uint8_
  * \param[in]       in_reason_size: size of `out_reason` in bytes
  * \return          `true` when the test passed
  */
-typedef bool (*ott_run_fn)(const uint8_t* in_parameter, uint32_t in_parameter_size,
-                           char* out_reason, size_t in_reason_size);
+typedef bool (*ott_run_fn)(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
+                           size_t in_reason_size);
 
 typedef struct
 {
-    const char* name;                           /*!< Name typed on the console                */
-    ott_setup_fn setup_fn;                      /*!< May be `NULL` for a test without arguments */
-    ott_run_fn run_fn;                          /*!< Never `NULL`                             */
+    const char* name;      /*!< Name typed on the console                */
+    ott_setup_fn setup_fn; /*!< May be `NULL` for a test without arguments */
+    ott_run_fn run_fn;     /*!< Never `NULL`                             */
 } ott_scenario_t;
 
 /* ==========================================================================
