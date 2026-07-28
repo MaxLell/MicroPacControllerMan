@@ -132,10 +132,25 @@ if(PACMAN_HOST_BUILD)
     target_compile_definitions(pacman_host PUBLIC PACMAN_HOST_BUILD)
     target_compile_options(pacman_host PRIVATE -Wall -Wextra -g)
 
+    # The playable host application (CON-103 / FR-104, VT-INT-008): the same library
+    # above, plus an SDL window. Optional on purpose — the library and the unit tests
+    # must still build on a machine without SDL, so a missing SDL2 is a message rather
+    # than a configure error.
+    #
     # Unit tests are NOT built here — they run under Ceedling, which does its own
     # compilation with mocked dependencies: `ceedling test:all` (see project.yml).
-    # This build exists for the host *application* (SDL, CON-103 / FR-104), which is
-    # what will link pacman_host once M3 provides it.
+    find_package(SDL2 QUIET)
+
+    if(SDL2_FOUND)
+        add_executable(pacman_host_app App/host_main.c)
+        target_link_libraries(pacman_host_app PRIVATE pacman_host SDL2::SDL2)
+        target_compile_options(pacman_host_app PRIVATE -Wall -Wextra -g)
+    else()
+        message(STATUS
+            "SDL2 not found — skipping pacman_host_app. "
+            "Install libsdl2-dev to build the playable host application.")
+    endif()
+
     return()
 endif()
 

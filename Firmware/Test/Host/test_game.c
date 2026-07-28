@@ -93,6 +93,30 @@ static void prv_step_north(void)
     game_tick(&g_game, GAME_PACMAN_MOVE_PERIOD_MS);
 }
 
+/* Drop a run straight onto a level, rather than play the four before it. Everyone is
+ * replaced the way loading a level does it; the scatter/chase plan restarts from zero,
+ * which is enough for the timings these set up. */
+static void prv_jump_to_level(uint8_t in_level)
+{
+    g_game.level = in_level;
+
+    playfield_load_level(&g_game.playfield, in_level);
+    pacman_reset(&g_game.pacman, playfield_get_pacman_start(&g_game.playfield));
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index,
+                    playfield_get_pen_cell(&g_game.playfield,
+                                           (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
+    }
+
+    g_game.pacman_move_elapsed_ms = 0U;
+    g_game.ghost_move_elapsed_ms = 0U;
+    g_game.frightened_remaining_ms = 0U;
+    g_game.phase_index = 0U;
+    g_game.phase_remaining_ms = 0U;
+}
+
 /* Advance in small slices, the way the super-loop does, rather than in one huge jump — the
  * timers are meant to survive being fed real frame times. */
 static void prv_tick_for(uint32_t in_total_ms, uint32_t in_step_ms)
@@ -101,6 +125,89 @@ static void prv_tick_for(uint32_t in_total_ms, uint32_t in_step_ms)
     {
         game_tick(&g_game, in_step_ms);
     }
+}
+
+/* The maze differs per level, so "the way out" does too. Any neighbouring cell with a
+ * pellet on it will do — Pacman has to move to eat, and eating a cell that never held a
+ * pellet would put the maze's remaining count out of step with its contents. */
+static direction_e prv_find_a_way_out_with_a_pellet(void)
+{
+    static const direction_e k_directions[]
+        = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+    const cell_t cell = pacman_get_cell(&g_game.pacman);
+
+    for (uint8_t index = 0U; index < (sizeof(k_directions) / sizeof(k_directions[0])); ++index)
+    {
+        const cell_t neighbour = playfield_step(cell, k_directions[index]);
+
+        if (playfield_is_walkable(&g_game.playfield, neighbour)
+            && (playfield_get_pellet(&g_game.playfield, neighbour) != PLAYFIELD_PELLET_NONE))
+        {
+            return k_directions[index];
+        }
+    }
+
+    return DIRECTION_NONE;
+}
+
+/* Eat a power pellet on whatever level is loaded, then park Pacman where he landed so the
+ * only thing still running is the window itself. */
+static void prv_eat_a_power_pellet(void)
+{
+    const direction_e direction = prv_find_a_way_out_with_a_pellet();
+    cell_t target;
+
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, direction);
+
+    target = playfield_step(pacman_get_cell(&g_game.pacman), direction);
+    g_game.playfield.pellets[target.y][target.x] = PLAYFIELD_PELLET_POWER;
+
+    game_set_direction(&g_game, direction);
+    game_tick(&g_game, GAME_PACMAN_MOVE_PERIOD_MS);
+
+    pacman_reset(&g_game.pacman, pacman_get_cell(&g_game.pacman));
+}
+
+/* How long the ghosts stay edible on the level currently loaded. */
+static uint32_t prv_measure_frightened_ms(void)
+{
+    const uint32_t step_ms = 10U;
+    const uint32_t limit_ms = 60000U;
+    uint32_t elapsed_ms = 0U;
+
+    prv_eat_a_power_pellet();
+
+    while (game_is_frightened_active(&g_game) && (elapsed_ms < limit_ms))
+    {
+        game_tick(&g_game, step_ms);
+        elapsed_ms += step_ms;
+    }
+
+    return elapsed_ms;
+}
+
+/* How long a ghost takes to make its first step on the level currently loaded — its move
+ * period, observed rather than read out of the table it comes from. */
+static uint32_t prv_measure_ghost_period_ms(void)
+{
+    const cell_t start_cell = ghost_get_cell(&g_game.ghosts[GHOST_BLINKY]);
+    const uint32_t step_ms = 10U;
+    const uint32_t limit_ms = 1000U;
+    uint32_t elapsed_ms = 0U;
+
+    while (elapsed_ms < limit_ms)
+    {
+        game_tick(&g_game, step_ms);
+        elapsed_ms += step_ms;
+
+        if (!playfield_are_cells_equal(start_cell,
+                                       ghost_get_cell(&g_game.ghosts[GHOST_BLINKY])))
+        {
+            return elapsed_ms;
+        }
+    }
+
+    return 0U;
 }
 
 void setUp(void)
@@ -437,6 +544,90 @@ void test_the_last_level_has_no_frightened_window(void)
 
     /* Still worth the points, just no window to cash them in (§10.9). */
     TEST_ASSERT_EQUAL_UINT32(POWER_PELLET_POINTS, game_get_score(&g_game));
+    TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
+}
+
+/* --- the difficulty curve (§10.9, FR-026) -------------------------------- */
+
+void test_the_ghosts_get_faster_every_level(void)
+{
+    uint32_t previous_period_ms = 0U;
+
+    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
+    {
+        uint32_t period_ms;
+
+        game_start(&g_game);
+        prv_jump_to_level(level);
+
+        period_ms = prv_measure_ghost_period_ms();
+
+        TEST_ASSERT_NOT_EQUAL_UINT32(0U, period_ms);
+
+        if (level > PLAYFIELD_FIRST_LEVEL)
+        {
+            /* Measured by watching a ghost move, not read out of the table it comes from —
+             * so a typo there fails here rather than only showing up as a level that plays
+             * easier than the one before it. */
+            TEST_ASSERT_LESS_THAN_UINT32(previous_period_ms, period_ms);
+        }
+
+        previous_period_ms = period_ms;
+    }
+}
+
+void test_pacmans_speed_is_the_one_thing_that_does_not_change(void)
+{
+    /* §10.1: the levels get harder by speeding the ghosts up, never by slowing him down. */
+    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
+    {
+        cell_t start_cell;
+        direction_e direction;
+
+        game_start(&g_game);
+        prv_jump_to_level(level);
+
+        start_cell = pacman_get_cell(&g_game.pacman);
+        direction = prv_find_a_way_out_with_a_pellet();
+        game_set_direction(&g_game, direction);
+
+        game_tick(&g_game, A_TICK_SHORT_OF_A_MOVE_MS);
+        TEST_ASSERT_TRUE(playfield_are_cells_equal(start_cell, pacman_get_cell(&g_game.pacman)));
+
+        game_tick(&g_game, 1U);
+        TEST_ASSERT_FALSE(playfield_are_cells_equal(start_cell, pacman_get_cell(&g_game.pacman)));
+    }
+}
+
+void test_the_frightened_window_gets_shorter_every_level(void)
+{
+    uint32_t previous_duration_ms = 0U;
+
+    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level < PLAYFIELD_LEVEL_COUNT; ++level)
+    {
+        uint32_t duration_ms;
+
+        game_start(&g_game);
+        prv_jump_to_level(level);
+
+        duration_ms = prv_measure_frightened_ms();
+
+        TEST_ASSERT_NOT_EQUAL_UINT32(0U, duration_ms);
+
+        if (level > PLAYFIELD_FIRST_LEVEL)
+        {
+            TEST_ASSERT_LESS_THAN_UINT32(previous_duration_ms, duration_ms);
+        }
+
+        previous_duration_ms = duration_ms;
+    }
+
+    /* The last level has no window at all, which is the end of the same curve rather than
+     * an exception to it. */
+    game_start(&g_game);
+    prv_jump_to_level(PLAYFIELD_LEVEL_COUNT);
+    prv_eat_a_power_pellet();
+
     TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
 }
 

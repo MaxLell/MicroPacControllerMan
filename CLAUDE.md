@@ -41,7 +41,15 @@ silently working around a wart.
   `Services/sw_timer`; `retain_ram` reduced to a byte buffer with the `ott_spec`
   layout moved into `ott.c`; `lacheck`/`dispdiag` deleted; the coding standard
   applied tree-wide (`Firmware/.clang-format`).
-- **M3 Game — next.**
+- **M3 Game (Host) — the game is built and playable.** The whole Model/Control/View is in
+  (`playfield`, `agent`, `pacman`, `ghost`, `ghost_path`, `score`, `game`, `game_view`) on
+  top of the M3 infrastructure (`msg_broker`, `active_object`), with 256 host unit tests.
+  `App/host_main.c` gives the SDL application CON-103/FR-104 asks for: build the host
+  target and run `./build-host/pacman_host_app`. It blits back the frame the display
+  *port* was handed, so the window shows the exact 1-bpp buffer the panel would get.
+  See [11 DEC-016](Docu/PrePlanning/11-Decisions-and-As-Built.md). Still open before M3
+  can be called done: nothing runs the game **on the target** yet — `app_main()` is still
+  the M2 OTT loop, and the touchpad is not wired to `game_set_direction()`.
 
 ## Build · flash · test (all from `Firmware/`)
 

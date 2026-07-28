@@ -18,10 +18,27 @@ nothing else may depend on `App/`.
   3. print the boot banner (the harness looks for it, VT-INT-002).
   4. the nominal super-loop — today just the OTT console; later the FreeRTOS scheduler.
 
+- `host_main.c` — the *host* entry point (CON-103 / FR-104): an SDL window, the keyboard
+  in place of the touchpad, and the same super-loop shape as above. It is the host's
+  platform adapter, the counterpart of the CubeMX-generated `main()`, and therefore the
+  only file in this layer allowed to call SDL. It has no header — nothing calls it.
+
+- The game, one folder per module, as [Milestone
+  3](../../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md) requires:
+  `playfield/` (the five mazes and the cell arithmetic), `agent/` (what Pacman and a ghost
+  have in common), `pacman/`, `ghost/` (the four personalities and their targeting),
+  `ghost_path/` (the stateless step-finding algorithm they share), `score/` (reached only
+  by messages), `game/` (owns the Model, advances the tick, owns the game-internal broker)
+  and `game_view/` (draws a frame, and nothing else).
+
+  The split worth knowing: **`game` is the Control, `game_view` is the View, and everything
+  else is the Model** ([03 §3.1](../../Docu/PrePlanning/03-Architecture.md)). `game_view`
+  reads a `game_snapshot_t` and writes a `framebuffer_t`, so the same code produces the
+  picture on the host and on the panel.
+
 **What goes here next** — one folder per application module,
 `App/<module>/<module>.c`/`.h` (mirroring the reference's `App/app/`,
-`App/clockwork/`). The Pacman game modules land here during
-[Milestone 3](../../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md).
+`App/clockwork/`).
 
 Note that the `app_main()` call in the generated `main.c` is one of the two things a
 CubeMX re-generation drops and that must be re-applied by hand (the other is the

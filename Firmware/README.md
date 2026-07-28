@@ -45,9 +45,26 @@ cmake --build build-host -j
 
 `PACMAN_HOST_BUILD=ON` skips the cross-toolchain block entirely and builds
 `pacman_host`, a static library of the modules that are genuinely hardware-independent
-— today `Services/delay` and `Services/sw_timer`, plus the tick source through its host
-implementation. It is what the SDL application (CON-103 / FR-104) will link against, and
-it grows as more platform seams are cut (RF-003).
+— the whole game plus the services under it, with the tick source and the display port
+through their host implementations. It grows as more platform seams are cut (RF-003).
+
+**Playing it on the host** (CON-103 / FR-104, VT-INT-008). The same build produces
+`pacman_host_app` when SDL2 is present (`sudo apt-get install -y libsdl2-dev`; without
+it CMake says so and builds the library alone):
+
+```
+./build-host/pacman_host_app                  # arrows/WASD steer, space (re)starts, escape quits
+SDL_VIDEODRIVER=dummy ./build-host/pacman_host_app --frames 1   # VT-INT-008: exit 0 = a frame rendered
+```
+
+The window is not a second renderer. The game draws through the ordinary
+`display_present()` port and the application blits back what the driver was handed
+(`display_host_get_last_frame()`), scaled ×5 — so what you see is the exact 1-bpp buffer
+the Sharp panel gets, and a layout bug looks identical in both places. Frames are paced
+by a `Services/sw_timer` re-armed from its own callback and the game is advanced by a
+fixed 16 ms slice, so a run plays out the same whatever the host was busy with.
+`App/host_main.c` is the only App file allowed to call SDL: it is the host's platform
+adapter, the counterpart to the CubeMX-generated `main()`.
 
 **Unit tests** run under Ceedling, which does its own compilation with mocked
 dependencies — not through CMake:
@@ -134,7 +151,16 @@ source of truth in
 
 | Module | What |
 |---|---|
-| `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
+| `App/app_main.c` | Target entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
+| `App/host_main.c` | Host entry point: the SDL window, the keyboard, and the same super-loop shape. The only App file that may call SDL. |
+| `App/playfield/` | The maze: five levels, walls, pellets, tunnels, and the cell arithmetic everything else uses. |
+| `App/agent/` | What Pacman and a ghost have in common — a cell, a facing, and a step that respects walls. |
+| `App/pacman/` | The player: an intended direction that is taken up at the first junction that allows it. |
+| `App/ghost/` | A ghost's data and its **targeting** — the four personalities of §10.4 and the modes of §10.5. |
+| `App/ghost_path/` | The stateless step-finding **algorithm**, shared by all four ghosts. Swappable for A* without touching `ghost`. |
+| `App/score/` | Pellets and the doubling ghost-bonus chain. Reached only by messages: no maze, no positions. |
+| `App/game/` | Owns the Model, advances the tick, settles what it meant, and publishes a frame. Owns the game-internal broker (FR-110). |
+| `App/game_view/` | Draws a `game_snapshot_t` into a frame buffer. The View of the MVP split; platform-independent, so host and panel show the same picture. |
 | `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
 | `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
 | `Bsp/i2c_bsp/` | Blocking I2C master, device-agnostic, timeout-bounded, status enum. |
