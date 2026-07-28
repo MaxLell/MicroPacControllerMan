@@ -87,6 +87,8 @@ endif()
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         App/agent/agent.c
+        App/game/game.c
+        App/game_view/game_view.c
         App/ghost/ghost.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
@@ -98,8 +100,7 @@ if(PACMAN_HOST_BUILD)
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
         Services/active_object/active_object.c
-        Services/active_object/active_object.c
-    Services/circular_buffer/circular_buffer.c
+        Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
         Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
@@ -107,6 +108,8 @@ if(PACMAN_HOST_BUILD)
 
     target_include_directories(pacman_host PUBLIC
         App/agent
+        App/game
+        App/game_view
         App/ghost
         App/ghost_path
         App/pacman
@@ -152,6 +155,8 @@ add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/agent/agent.c
     App/app_main.c
+    App/game/game.c
+    App/game_view/game_view.c
     App/ghost/ghost.c
     App/ghost_path/ghost_path.c
     App/pacman/pacman.c
@@ -191,6 +196,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     App/agent
+    App/game
+    App/game_view
     App/ghost
     App/ghost_path
     App/pacman
