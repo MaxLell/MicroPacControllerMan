@@ -75,6 +75,35 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ==============================================================================
+# Formatting (NFR-102)
+#
+#   cmake --build build --target format         rewrite the tree to the standard
+#   cmake --build build --target format-check   report offenders, fail if any
+#
+# Deliberately NOT attached to the default target. A build that rewrites its own
+# sources changes files the compiler has already stamped, which makes the next
+# incremental build non-deterministic, fights the editor over a file you have
+# open, and quietly rewrites work you have not yet read. The convention is the
+# other way round: the *build* only ever checks, and the rewriting happens in an
+# editor's format-on-save or in the pre-commit hook
+# (`./format.sh --install-hook`). Wire `format-check` into CI, not `format`.
+#
+# Both targets are just the script, so there is one definition of what
+# "formatted" means whichever way it is invoked.
+# ==============================================================================
+add_custom_target(format
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/format.sh
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Formatting the source tree (clang-format, .clang-format)"
+    USES_TERMINAL VERBATIM)
+
+add_custom_target(format-check
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/format.sh --check
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Checking the source tree against the coding standard"
+    USES_TERMINAL VERBATIM)
+
+# ==============================================================================
 # Host build
 #
 # Only the modules that are already free of the HAL take part. `pacman_host` is the
