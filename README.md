@@ -39,7 +39,8 @@ python3 Test/run_ott.py touchpad        # live x/y/touch over the console
 python3 Test/run_ott.py touchdot        # a dot on the LCD follows your finger
 ```
 
-`./m2.sh all` does build + flash + all four in sequence.
+`./dev.sh all` does build + flash + all four in sequence. `./dev.sh` is the umbrella for
+everything else too — `play` (the SDL host build), `test`, `format`, `check`.
 
 ## How the firmware is organised
 

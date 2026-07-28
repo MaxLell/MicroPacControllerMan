@@ -56,6 +56,19 @@ silently working around a wart.
 
 ## Build · flash · test (all from `Firmware/`)
 
+**`./dev.sh` is the umbrella** — prefer it over retyping the steps below:
+
+```bash
+./dev.sh play        # build the SDL host application and play it
+./dev.sh test        # host unit tests
+./dev.sh check       # formatting + unit tests + both builds, writes nothing
+./dev.sh format      # format the tree to the coding standard
+./dev.sh all         # build + flash + the four interactive OTTs
+./dev.sh help        # every subcommand
+```
+
+It is a thin wrapper, not a second implementation; the underlying commands are:
+
 ```bash
 # Build (arm-none-eabi-gcc + CMake; STM32CubeMX + STM32 HAL under ThirdParty — see 11 DEC-012).
 # The cross-toolchain lives in CMakeLists.txt above project(), so no -DCMAKE_TOOLCHAIN_FILE.
@@ -68,13 +81,16 @@ openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
 python3 Test/run_ott.py --suite                          # enumeration + boot banner
 python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS; also display/touchpad/touchdot
-./m2.sh all                                              # build + flash + all four, interactively
 
-# Host build — no hardware, no cross-toolchain
+# Host build — no hardware, no cross-toolchain. Also produces build-host/pacman_host_app
+# (the playable SDL application) when libsdl2-dev is installed.
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all
+
+# Coding standard (NFR-102). Never part of the default build — see Firmware/README.md.
+./format.sh                                              # rewrite; --check reports and exits 1
 ```
 
 - **What gets a unit test: everything above the BSP.** The BSP is the *mocking*

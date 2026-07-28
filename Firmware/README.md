@@ -94,7 +94,8 @@ clang-format 14 or newer (`sudo apt-get install -y clang-format`; verified on 18
 ./format.sh --install-hook  # pre-commit hook: format staged files, re-stage them
 ```
 
-CMake exposes the same two things, so there is one definition of "formatted":
+`./dev.sh format` and the two CMake targets are the same script, so there is one
+definition of "formatted" whichever way it is invoked:
 
 ```
 cmake --build build --target format
@@ -223,6 +224,7 @@ source of truth in
 | `openocd.cfg` | ST-LINK V3 + STM32G4 flash/debug. |
 | `.clang-format` | The [c-code-style](https://github.com/MaxLell/c-code-style) config (NFR-102). |
 | `format.sh` | Applies that config to the tree. `--check` for CI, `--staged` for a hook. |
+| `dev.sh` | The umbrella over every routine job — `play`, `test`, `check`, `format`, `flash`, the OTTs. Wraps the others; never reimplements them. |
 
 ### Conventions worth knowing before editing
 
@@ -299,9 +301,9 @@ when slot 1 moved to ST-Morpho, but the LED test was retired with the M2 pivot.
 
 ## M2 hardware-verification checklist
 
-Shortcut: **`./m2.sh all`** builds, flashes once, and walks through the four
-interactive tests in sequence (or `./m2.sh user_button|display|touchpad|touchdot|suite`
-for one). Set the port with `PORT=/dev/ttyACMx ./m2.sh …`. The manual steps below are
+Shortcut: **`./dev.sh all`** builds, flashes once, and walks through the four
+interactive tests in sequence (or `./dev.sh user_button|display|touchpad|touchdot|suite`
+for one). Set the port with `PORT=/dev/ttyACMx ./dev.sh …`. The manual steps below are
 the same thing spelled out.
 
 1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).

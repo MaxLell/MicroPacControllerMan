@@ -11,6 +11,9 @@
 #   ./format.sh --install-hook  # install a pre-commit hook that runs --staged
 #   ./format.sh --remove-hook   # take that hook back out
 #
+# `./dev.sh format` and the CMake `format` / `format-check` targets are this script; it
+# is the single definition of what "formatted" means, so the hook and CI call it directly.
+#
 # The style is Firmware/.clang-format, vendored from https://github.com/MaxLell/c-code-style.
 # It is the standard itself, so it is not edited here — a change to it goes via a PR to that
 # repo, with the owner's prior approval.
