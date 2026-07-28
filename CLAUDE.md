@@ -47,9 +47,12 @@ silently working around a wart.
   `App/host_main.c` gives the SDL application CON-103/FR-104 asks for: build the host
   target and run `./build-host/pacman_host_app`. It blits back the frame the display
   *port* was handed, so the window shows the exact 1-bpp buffer the panel would get.
-  See [11 DEC-016](Docu/PrePlanning/11-Decisions-and-As-Built.md). Still open before M3
-  can be called done: nothing runs the game **on the target** yet — `app_main()` is still
-  the M2 OTT loop, and the touchpad is not wired to `game_set_direction()`.
+  See [11 DEC-016](Docu/PrePlanning/11-Decisions-and-As-Built.md). Running it on the
+  target is M4's job by design — `app_main()` is still the M2 OTT loop. One real M3 gap
+  remains: [VT-INT-014](Docu/PrePlanning/06-Verification-and-Validation.md) and VT-INT-017
+  also want the run to end on a **score screen** and return to a **menu** (FR-023); today
+  `game` reports `GAME_STATE_OVER`/`WON` and stops there, because the menu belongs to the
+  System module ([03 §3.6](Docu/PrePlanning/03-Architecture.md)), which does not exist yet.
 
 ## Build · flash · test (all from `Firmware/`)
 
