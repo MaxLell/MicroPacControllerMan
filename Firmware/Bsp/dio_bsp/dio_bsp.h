@@ -15,11 +15,8 @@
 typedef enum
 {
     DIO_BSP_PIN_NONE = 0,
-    DIO_BSP_PIN_USER_BUTTON,      /* PC13 - on-board user button B1, active HIGH  */
-    DIO_BSP_PIN_DISPLAY_CS,       /* PB12 - LCD Mono Click SCS, active HIGH       */
-    DIO_BSP_PIN_DISPLAY_DISP,     /* PB4  - LCD Mono Click panel enable           */
-    DIO_BSP_PIN_DISPLAY_EXTCOMIN, /* PC8  - LCD Mono Click external VCOM clock    */
-    DIO_BSP_PIN_TOUCHPAD_RESET,   /* PA4  - Touchpad Click reset, active LOW      */
+    DIO_BSP_PIN_USER_BUTTON, /* PC13 - on-board user button B1, active HIGH */
+    DIO_BSP_PIN_LED_GREEN,   /* PA5  - on-board LED LD2, active HIGH        */
     DIO_BSP_PIN_LAST
 } dio_bsp_pin_e;
 

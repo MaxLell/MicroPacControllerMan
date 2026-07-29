@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 #
-# One-shot M2 bring-up helper: build + flash + run an OTT, so you don't type the
-# cmake/openocd/python steps by hand. Run it from anywhere.
+# One-shot bring-up helper: build + flash + run an OTT, so you don't type the
+# cmake/programmer/python steps by hand. Run it from anywhere.
 #
-#   ./m2.sh all         # build, flash once, then run the 4 interactive tests in a row
-#   ./m2.sh display     # build + flash + run just the display test
-#   ./m2.sh touchpad    # build + flash + run just the touchpad test
-#   ./m2.sh touchdot    # build + flash + run just the touch-dot test
+#   ./m2.sh all         # build, flash once, then run the interactive tests in a row
 #   ./m2.sh user_button # build + flash + run just the user-button test
 #   ./m2.sh suite       # build + flash + run the automatic suite (enum + banner)
 #   ./m2.sh flash        # build + flash only (no test)
 #   ./m2.sh build        # build only
 #
-# Override the serial port with PORT=/dev/ttyACMx ./m2.sh display
+# Override the serial port with PORT=/dev/ttyACMx ./m2.sh user_button
 #
 set -euo pipefail
 
@@ -33,6 +30,11 @@ PORT="${PORT:-$(detect_port)}"
 BUILD_DIR="build"
 ELF="$BUILD_DIR/pacman.elf"
 
+# STM32CubeProgrammer, not openocd: openocd 0.12.0 attaches to this part but its
+# flash driver does not know device ID 0x455 (STM32U535/U545), so `program` fails.
+# See openocd.cfg. Override with PROGRAMMER=/path/to/STM32_Programmer_CLI.
+PROGRAMMER="${PROGRAMMER:-STM32_Programmer_CLI}"
+
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 
 do_build() {
@@ -46,7 +48,7 @@ do_build() {
 do_flash() {
     do_build
     step "Flash over ST-LINK"
-    openocd -f openocd.cfg -c "program $ELF verify reset exit"
+    "$PROGRAMMER" -c port=SWD -w "$ELF" -v -rst
 }
 
 run_test() {
@@ -63,13 +65,13 @@ cmd="${1:-all}"
 case "$cmd" in
     build) do_build ;;
     flash) do_flash ;;
-    suite | display | touchpad | touchdot | user_button)
+    suite | user_button)
         do_flash
         run_test "$cmd"
         ;;
     all)
         do_flash
-        for t in user_button display touchpad touchdot; do
+        for t in user_button; do
             printf '\n\033[1;33m--- Next test: %s. Get ready at the board; press ENTER to start ---\033[0m\n' "$t"
             read -r _
             run_test "$t"
@@ -80,7 +82,7 @@ case "$cmd" in
         sed -n '2,20p' "$0"
         ;;
     *)
-        echo "Unknown command: $cmd (try: all | user_button | display | touchpad | touchdot | suite | flash | build)" >&2
+        echo "Unknown command: $cmd (try: all | user_button | suite | flash | build)" >&2
         exit 2
         ;;
 esac

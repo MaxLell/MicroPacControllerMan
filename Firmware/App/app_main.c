@@ -1,9 +1,7 @@
 #include "app_main.h"
 
 #include "dio_bsp.h"
-#include "i2c_bsp.h"
 #include "ott.h"
-#include "spi_bsp.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
 #include "uart_bsp.h"
@@ -14,7 +12,7 @@
  * ========================================================================= */
 
 #define APP_MAIN_BOOT_BANNER \
-    "\r\nMicroPacControllerMan booted (M2 HAL bring-up). Type 'ott' for tests.\r\n"
+    "\r\nMicroPacControllerMan booted (M1 U545RE bring-up). Type 'ott' for tests.\r\n"
 
 static void prv_on_systick(void)
 {
@@ -26,8 +24,6 @@ static void prv_init_platform(void)
     systick_bsp_init();
     dio_bsp_init();
     uart_bsp_init();
-    i2c_bsp_init();
-    spi_bsp_init();
     sw_timer_init();
     user_button_init();
 

@@ -1,7 +1,7 @@
 # MicroPacControllerMan — agent guide
 
-Standalone embedded **Pacman** on an **STM32G431RB Nucleo-64**: touchpad input,
-128×128 monochrome LCD, single NVM high score. Secondary goal: probe how far an
+Standalone embedded **Pacman** on an **STM32U545RE-Q Nucleo-64**: joystick input,
+240×320 colour LCD, single NVM high score. Secondary goal: probe how far an
 AI agent can carry a disciplined embedded project. See `Docu/Idea.md` for origin.
 
 ## Source of truth — read before coding
@@ -16,6 +16,10 @@ Start at **[`Docu/PrePlanning/Index.md`](Docu/PrePlanning/Index.md)**. Most-used
 - **[09 OTT Mechanism](Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md)** — the reset-based on-target-test flow.
 - **[11 Decisions & As-Built](Docu/PrePlanning/11-Decisions-and-As-Built.md)** — what was actually built and why (deviations from the intended design).
 
+Each milestone also gets its own **design document** under **[`Docu/Design/`](Docu/Design/)**
+carrying the *how* — pin assignments, clock settings, transfer budgets, tool choices. The
+requirements deliberately carry none of that: keep hardware detail out of `02` and put it there.
+
 Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
 Known work deliberately left undone is tracked in
@@ -25,23 +29,19 @@ silently working around a wart.
 
 ## Status
 
-- **M1 Toolchain Bring-Up — done & merged.** Build/flash/run proven end-to-end +
-  the OTT CLI framework with the retained-RAM/reset flow, on real hardware.
-- **M2 Board Bring-Up — done, display + touchpad verified on hardware; R-001 closed.**
-  The mikroBUS pin map ([02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001))
-  is HW-confirmed with a logic analyzer: the Click Shield for Nucleo-64 routes
-  slot 1 via the **ST-Morpho** headers, so SPI1 is **SCK=PB3 / MOSI=PB5 /
-  DISP=PB4 / CS=PB12 / EXTCOMIN=PC8** — not the Arduino-header PA5/PA6/PA7, whose
-  mismatch was the blank-display root cause. `user_button`, `display`, `touchpad`
-  and `touchdot` all pass; `run_ott.py` has an automatic suite. On-target
-  checklist in [`Firmware/README.md`](Firmware/README.md#m2-hardware-verification-checklist).
-- **Post-M2 structural refactor — landed ([11 DEC-013](Docu/PrePlanning/11-Decisions-and-As-Built.md)).**
-  BSP renamed to the `*_bsp` suffix; new `dio_bsp` owns **all** GPIO; `button` →
-  `switch` + `user_button`; `millis()` replaced by `Services/delay` +
-  `Services/sw_timer`; `retain_ram` reduced to a byte buffer with the `ott_spec`
-  layout moved into `ott.c`; `lacheck`/`dispdiag` deleted; the coding standard
-  applied tree-wide (`Firmware/.clang-format`).
-- **M3 Game — next.**
+- **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
+  boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
+  (7.4 %), RAM 3.5 kB (1.3 %), `.noinit` present for the retained-RAM reset flow.
+  Current branch: `feat/m1-u545-bring-up`.
+- **Requirements re-baselined** for the new hardware — [02 Requirements](Docu/PrePlanning/02-Requirements.md)
+  is current; the rest of the doc set still lags in places.
+- **M2 Board Bring-Up — next.** ILI9341 display + joystick on the GFX01M2. **Blocker:**
+  the Morpho→STM32 pin map is *not* derived yet ([R-009](Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md#51-risks)),
+  and display CS may collide with the console on PA9. Confirm with a logic analyzer
+  before writing a driver — an assumed pin map is what cost the previous bring-up.
+- **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
+  until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
+  Active Objects) is agreed in outline but not settled.
 
 ## Build · flash · test (all from `Firmware/`)
 
@@ -51,13 +51,13 @@ silently working around a wart.
 cmake -B build -G "Unix Makefiles"
 cmake --build build -j                                   # -> build/pacman.elf, warning-free
 
-# Flash over ST-LINK V3
-openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
+# Flash over ST-LINK V3E. NOT openocd — see "Hardware facts" below.
+STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
 python3 Test/run_ott.py --suite                          # enumeration + boot banner
-python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS; also display/touchpad/touchdot
-./m2.sh all                                              # build + flash + all four, interactively
+python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS
+./m2.sh all                                              # build + flash + the interactive tests
 
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
@@ -77,24 +77,42 @@ ceedling test:all
   a precondition fires via `Test/support/assert_probe.h`.
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
-(`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`).
-After installing openocd, **unplug/replug the board once** so a non-root user can flash.
+(debug only), **STM32CubeProgrammer 2.23.0** (flashing).
+`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`, plus
+CubeProgrammer from st.com. After installing openocd, **unplug/replug the board once**
+so a non-root user can reach SWD — openocd ships the udev rules even though it cannot
+program this part.
 
 ## Hardware facts
 
-- STM32G431RB Nucleo-64; on-board **ST-LINK V3** = SWD debug **+** virtual COM port.
-- **SYSCLK 170 MHz** (PLL, `HSI/4 × 85` — the part's maximum), 1 kHz SysTick. Owned by
-  the CubeMX `.ioc`; see [02 §2.3.4](Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
-  Consequence: never express a delay as a spin count — at this clock it is ~10× shorter
-  than the 16 MHz the project started on. Use `Services/delay` / `Services/sw_timer`.
-- Serial console: **LPUART1 on PA2/PA3**, **115200 8N1**, at **`/dev/ttyACM0`**.
+- **STM32U545RE-Q Nucleo-64**, Cortex-M33, TrustZone **off** (`CORTEX_M33_NS`).
+  On-board **ST-LINK V3E** = SWD debug **+** virtual COM port.
+- **512 kB flash, 274 kB SRAM** — 256 kB contiguous at `0x20000000` plus 16 kB SRAM4 at
+  `0x28000000`. That headroom is *why* the MCU changed: a 240×320 RGB565 frame buffer is
+  153.6 kB and the G431RB had 32 kB in total.
+- **SYSCLK 160 MHz** (PLL1 from **MSIS 48 MHz**: `M=3 → 16 MHz × N=10 → 160 MHz, R=1`),
+  1 kHz SysTick. Owned by the CubeMX `.ioc`; see
+  [M2 Board Bring-Up §2](Docu/Design/M2-Board-Bring-Up.md).
+  Never express a delay as a spin count — use `Services/delay` / `Services/sw_timer`.
+- Serial console: **USART1 on PA9/PA10**, **115200 8N1**, at **`/dev/ttyACM0`**.
   The VCP is on the ST-LINK side, so it **stays enumerated across a target reset** —
   that is what makes the OTT reset flow work on one serial handle.
-- LCD Mono Click (Sharp LS013B7DH03, SPI) in slot 1; Touchpad Click (MTCH6102, I2C)
-  in slot 2. The Click Shield for Nucleo-64 mates with the **ST-Morpho** headers,
-  so slot-1 SPI1 = **SCK PB3 / MOSI PB5 / DISP PB4 / CS PB12 / EXTCOMIN PC8**, slot-2
-  I2C1 = **PB8/PB9** (HW-confirmed, R-001 closed — see [02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001)).
-  Set the shield's **VLS switch to 3V3**.
+- **User button B1 = PC13, active HIGH** (idle low). Measured, not assumed: read
+  `GPIOC->IDR` over SWD with the button released. **LED LD2 = PA5** (also Arduino SPI1 SCK).
+- **Flashing needs STM32CubeProgrammer, not openocd.** openocd 0.12.0 attaches fine and
+  is the gdb server, but its flash driver only knows `STM32U57/U58xx` (device ID 0x482)
+  while this board reports **0x455** (STM32U535/U545), so `program` fails with
+  `auto_probe failed`. Reasoning is in `Firmware/openocd.cfg`.
+- **Reading target registers over SWD is a cheap way to settle a hardware question**
+  without anyone at the board: `openocd -f openocd.cfg -c "init; halt; puts [format 0x%08X
+  [mrw 0x42020810]]; resume; shutdown"` is `GPIOC->IDR` (GPIO on AHB2, `0x42020000` +
+  `0x400` per port, IDR at `+0x10`). Always take a control reading from a pin whose level
+  you already know — an all-zero register looks the same as a disabled clock.
+- **X-NUCLEO-GFX01M2** (ILI9341, 240×320 colour, 5-GPIO joystick, plus a 64-Mbit SPI
+  flash we deliberately do not use): physically present, **not wired up yet**. The
+  Morpho→STM32 pin map is still TBD and is
+  [R-009](Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md#51-risks) —
+  see [M2 Board Bring-Up §1](Docu/Design/M2-Board-Bring-Up.md).
 
 ## Conventions
 

@@ -97,7 +97,7 @@ breaks.)
 
 `DISPLAY_CHIP_SELECT_SETTLE_LOOPS` in `Drivers/display/display.c` is a busy loop, so it
 scales inversely with the core clock. It was tuned at 16 MHz, and the move to 170 MHz
-([02 §2.3.4](PrePlanning/02-Requirements.md#234-clock-configuration-as-configured))
+([M2 Board Bring-Up §2](Design/M2-Board-Bring-Up.md))
 shortened it by ~10× to an estimated 6–11 µs against the panel's ~6 µs setup
 requirement — it was raised to restore margin, but the value is still empirical and
 will drift again on any clock or compiler change.
@@ -195,7 +195,7 @@ file and line over the console, then halt or reset — and the choice is recorde
 
 The Click Shield routes slot-2 `RST` to **PD2**, but the firmware configures and drives
 **PA4** ([DEC-008](PrePlanning/11-Decisions-and-As-Built.md),
-[02 §2.3.3](PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001)).
+[M2 Board Bring-Up §1](Design/M2-Board-Bring-Up.md)).
 The MTCH6102 boots without an explicit reset, so the touchpad works regardless — the
 reset pulse simply goes to an unconnected pin.
 

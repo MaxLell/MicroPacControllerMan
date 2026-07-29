@@ -21,7 +21,7 @@ option(PACMAN_HOST_BUILD "Build the hardware-independent code for the host inste
 #
 # The MCU flags are set through the *_INIT variables so they also apply to the
 # STM32CubeMX-generated HAL/CMSIS objects and the startup assembly, which must be
-# built with the same Cortex-M4F ABI as our own code.
+# built with the same Cortex-M33 ABI as our own code.
 #
 # Guarded, because setting CMAKE_SYSTEM_NAME / CMAKE_C_COMPILER unconditionally is
 # exactly what made a host build impossible before (RF-001).
@@ -44,7 +44,7 @@ set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
 # runtime to link against on a bare-metal target.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 
-set(MCU_FLAGS "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard")
+set(MCU_FLAGS "-mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard")
 set(CMAKE_C_FLAGS_INIT   "${MCU_FLAGS} -ffunction-sections -fdata-sections")
 set(CMAKE_ASM_FLAGS_INIT "${MCU_FLAGS} -x assembler-with-cpp")
 # newlib-nano; the syscall stubs come from the generated syscalls.c / sysmem.c, so
@@ -61,7 +61,7 @@ endif()
 #
 # The project name must equal the executable target the STM32CubeMX interface
 # library appends its generated sources to — see
-# ThirdParty/STM32_G431RB_HAL/cmake/stm32cubemx/CMakeLists.txt, which does
+# ThirdParty/STM32_U545RE_HAL/cmake/stm32cubemx/CMakeLists.txt, which does
 # target_sources(${CMAKE_PROJECT_NAME} ...).
 # ==============================================================================
 set(CMAKE_PROJECT_NAME pacman)
@@ -92,8 +92,7 @@ if(PACMAN_HOST_BUILD)
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
         Services/active_object/active_object.c
-        Services/active_object/active_object.c
-    Services/circular_buffer/circular_buffer.c
+        Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
         Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
@@ -126,13 +125,13 @@ endif()
 
 # Root of the STM32CubeMX / HAL export. It owns the HAL + CMSIS, the Cortex
 # startup, the linker script, and the clock + peripheral init (main.c, gpio.c,
-# i2c.c, spi.c, usart.c, MSP, IRQ handlers). It is regenerated from CubeMX; we only
+# icache.c, usart.c, MSP, IRQ handlers). It is regenerated from CubeMX; we only
 # edit the USER CODE blocks of its main.c (to call app_main()).
-set(CUBE ${CMAKE_SOURCE_DIR}/ThirdParty/STM32_G431RB_HAL)
+set(CUBE ${CMAKE_SOURCE_DIR}/ThirdParty/STM32_U545RE_HAL)
 
 # Create the executable first, then pull in the generated HAL. The CubeMX
 # interface lib (target `stm32cubemx`, INTERFACE) carries the HAL/CMSIS include
-# dirs + the USE_HAL_DRIVER/STM32G431xx defines, builds the HAL sources into an
+# dirs + the USE_HAL_DRIVER/STM32U545xx defines, builds the HAL sources into an
 # object lib, and appends Core/Src/*.c + the startup to this executable.
 add_executable(${CMAKE_PROJECT_NAME})
 add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
@@ -140,15 +139,11 @@ add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
     Bsp/dio_bsp/dio_bsp.c
-    Bsp/i2c_bsp/i2c_bsp.c
     Bsp/retain_ram/retain_ram.c
-    Bsp/spi_bsp/spi_bsp.c
     Bsp/switch/switch.c
     Bsp/systick_bsp/systick_bsp.c
     Bsp/uart_bsp/uart_bsp.c
     Bsp/user_button/user_button.c
-    Drivers/display/display.c
-    Drivers/touchpad/touchpad.c
     Services/delay/delay.c
     Services/framebuffer/framebuffer.c
     Services/gfx/gfx.c
@@ -159,9 +154,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
-    Test/Target/scripts/ott_display.c
-    Test/Target/scripts/ott_touchdot.c
-    Test/Target/scripts/ott_touchpad.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c
     ThirdParty/embedded_utils/custom_assert.c)
@@ -173,15 +165,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     Bsp/dio_bsp
-    Bsp/i2c_bsp
     Bsp/retain_ram
-    Bsp/spi_bsp
     Bsp/switch
     Bsp/systick_bsp
     Bsp/uart_bsp
     Bsp/user_button
-    Drivers/display
-    Drivers/touchpad
     Services/delay
     Services/framebuffer
     Services/gfx
@@ -207,7 +195,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -Og -g3)
 # OTT retained-RAM reset flow (added just after .bss) — that block is marked
 # NON-GENERATED in the .ld and must be re-added after any CubeMX regeneration.
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
-    -T${CUBE}/STM32G431xx_FLASH.ld
+    -T${CUBE}/STM32U545xx_FLASH.ld
     -Wl,--gc-sections
     -Wl,-Map=${CMAKE_BINARY_DIR}/pacman.map
     -Wl,--print-memory-usage)

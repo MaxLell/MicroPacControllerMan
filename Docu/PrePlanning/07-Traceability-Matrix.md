@@ -60,7 +60,6 @@ A few items are structural/process requirements rather than automatically observ
 | FR-106 | On-Target Test (OTT) Framework | VT-INT-005, VT-INT-009, VT-INT-015 (each exercises an OTT command) |
 | FR-107 | OTT Result Reporting | VT-INT-005, VT-INT-009, VT-INT-015 |
 | FR-108 | Dedicated Message-Broker Task | VT-UNIT-001, VT-INT-009 |
-| FR-109 | Active-Object Modules | VT-INT-009 (task-per-module observable); run-to-completion / no-shared-state by code review — see gap note above |
 | FR-110 | Pacman Internal Message Bus | VT-UNIT-001, VT-INT-010 |
 | FR-111 | Fatal-Error Halt | Manual fault-injection / code review (no automated `VT-*` test — see gap note above) |
 | NFR-101 | Unit Testability | VT-UNIT-002 |
@@ -77,4 +76,4 @@ A few items are structural/process requirements rather than automatically observ
 
 - Every `FR-*` / `NFR-*` requirement has at least one verifying test. No orphaned requirements found.
 - Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
-- Known gap: CON-101, NFR-102, the non-observable aspects of FR-109, and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
+- Known gap: CON-101, NFR-102 and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.

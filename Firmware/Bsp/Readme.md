@@ -27,7 +27,7 @@ Note the deliberate split between a **generic primitive** (`switch`) and its
 **concrete instance** (`user_button`). Expect the same shape for the game's inputs.
 
 Pin assignments follow the HW-confirmed mikroBUS map — see
-[02 §2.3.3](../../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
+[M2 Board Bring-Up §1](../../Docu/Design/M2-Board-Bring-Up.md).
 They are configured by CubeMX (`MX_GPIO_Init` and friends) before `app_main()`, so a
 `*_bsp_init()` here usually only resets module state.
 

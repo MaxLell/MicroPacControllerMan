@@ -11,10 +11,10 @@
  * uart_bsp - private
  * ========================================================================= */
 
-/* The console instance. LPUART1 (PA2/PA3) is the NUCLEO-G431RB ST-LINK virtual
- * COM port; the handle itself is brought up by the CubeMX MX_LPUART1_UART_Init().
- * Point this at another handle to move the console. */
-#define UART_BSP_HANDLE (hlpuart1)
+/* The console instance. USART1 (PA9/PA10) is the NUCLEO-U545RE-Q ST-LINK V3E
+ * virtual COM port; the handle itself is brought up by the CubeMX
+ * MX_USART1_UART_Init(). Point this at another handle to move the console. */
+#define UART_BSP_HANDLE (huart1)
 
 /* The console contract the host tools rely on (Test/run_ott.py, Test/console.py)
  * is 115200 8N1. Pinning the rate here rather than in the .ioc makes this the

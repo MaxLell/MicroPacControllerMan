@@ -10,9 +10,6 @@
  * user_button - private
  * ========================================================================= */
 
-/* The NUCLEO-G431RB wires B1 ACTIVE-HIGH: idle low through the board's
- * pull-down, pressing drives PC13 to VDD (measured 3.3 V). CubeMX cannot
- * express that polarity, so it lives here. */
 #define USER_BUTTON_IS_ACTIVE_LOW (false)
 
 static volatile bool g_is_initialized = false;

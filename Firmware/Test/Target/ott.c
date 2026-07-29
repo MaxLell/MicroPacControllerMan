@@ -9,7 +9,7 @@
 #include "custom_assert.h"
 #include "ott_scenarios.h"
 #include "retain_ram.h"
-#include "stm32g4xx.h"
+#include "stm32u5xx.h"
 #include "uart_bsp.h"
 
 /* ==========================================================================

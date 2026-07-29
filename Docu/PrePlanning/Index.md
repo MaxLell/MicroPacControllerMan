@@ -1,6 +1,6 @@
 # MicroPacControllerMan — Pre-Planning Documentation
 
-This is the entry point into the Pre-Planning documentation set for the MicroPacControllerMan project (Pacman on an STM32G431RB Nucleo board with a monochrome Click display and a capacitive touchpad).
+This is the entry point into the Pre-Planning documentation set for the MicroPacControllerMan project (Pacman on an STM32U545RE-Q Nucleo board with a 240 × 320 colour display and a joystick).
 
 This document set is the **source of truth** for the project going forward. The original idea capture, [Idea.md](../Idea.md), remains only as historical context for how the project started.
 
@@ -17,6 +17,14 @@ This document set is the **source of truth** for the project going forward. The 
 9. [09 OTT Mechanism & Reset Flow](09-OTT-Mechanism-and-Reset-Flow.md) — How the OTT retained-RAM/reset mechanism actually works in the reference firmware, and the corrected flow this project should adopt.
 10. [10 Pacman Game Design](10-Pacman-Game-Design.md) — The concrete game rules for implementation: maze layout, movement/tick model, ghost behaviour, power pellets, scoring, and end conditions.
 11. [11 Decisions & As-Built](11-Decisions-and-As-Built.md) — Implementation decisions actually taken and where the built firmware deviates from the intended design (as-built vs. planned).
+
+### Design documents (one per milestone)
+
+The Pre-Planning set says *what* the system must do. Each milestone gets its own design
+document under [`Docu/Design/`](../Design/) carrying the *how* — pin assignments, clock
+settings, transfer budgets, tool choices, and the questions that milestone must answer.
+
+- [M2 Board Bring-Up](../Design/M2-Board-Bring-Up.md) — display and joystick on the X-NUCLEO-GFX01M2.
 
 ### See also (not part of the spec set)
 
@@ -39,4 +47,4 @@ This document set is the **source of truth** for the project going forward. The 
 
 ## Status
 
-Produced during Milestone 3.1 (Pre-Planning) of [04 Implementation Phases & Milestones](04-Implementation-Phases-and-Milestones.md). Not yet validated against real hardware — several items are explicitly flagged as open risks/assumptions in [05 Risks, Assumptions & Dependencies](05-Risks-Assumptions-and-Dependencies.md) pending Board Bring-Up.
+[02 Requirements](02-Requirements.md) and [05 Risks, Assumptions & Dependencies](05-Risks-Assumptions-and-Dependencies.md) are current for the STM32U545RE-Q and the X-NUCLEO-GFX01M2. Documents 03, 04, 06, 07, 08, 10 and 11 still describe the earlier hardware in places and are being brought up to date.

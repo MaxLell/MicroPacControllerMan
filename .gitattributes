@@ -1,0 +1,11 @@
+# Vendored code: not ours to review.
+#
+# `linguist-generated` collapses these files by default in pull-request diffs and
+# keeps them out of the repository's language statistics. They are still tracked
+# and still built — the STM32CubeMX export in particular is deliberately committed
+# rather than generated at build time (see 11 Decisions & As-Built, DEC-012).
+#
+# Without this, the CubeMX HAL export alone is 112 files and ~179k added lines,
+# which buries the 30-odd files a reviewer actually needs to look at and pushes the
+# diff past GitHub's 20k-line rendering limit.
+Firmware/ThirdParty/** linguist-generated=true
