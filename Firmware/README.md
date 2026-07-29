@@ -1,8 +1,8 @@
 # Firmware — MicroPacControllerMan
 
-STM32G431RB Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** against the
-**STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with **OpenOCD** over
-ST-LINK V3.
+STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** against the
+**STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
+**STM32CubeProgrammer** over ST-LINK V3E.
 
 ## Toolchain
 
@@ -10,14 +10,25 @@ ST-LINK V3.
 sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
 ```
 
-The `openocd` package also installs the ST-LINK udev rules; after installing,
-**unplug/replug the board once** so a non-root user can flash over SWD (the serial
-VCP already works without it).
+Plus **STM32CubeProgrammer** for flashing, from
+[st.com](https://www.st.com/en/development-tools/stm32cubeprog.html) (an ST account is
+needed for the download). Its `STM32_Programmer_CLI` must be on `PATH` — symlinking it
+into `~/.local/bin` is enough. Override the location with
+`PROGRAMMER=/path/to/STM32_Programmer_CLI`.
 
-> Verified with gcc-arm-none-eabi 13.2.1, cmake 3.28, openocd 0.12.0. A local,
-> no-root install via xPack/Kitware tarballs to `~/.local/opt` also works if apt is
-> unavailable. STM32CubeMX itself is only needed to *change* the pin configuration —
-> its output is committed.
+`openocd` is still installed for two reasons: it provides the ST-LINK udev rules, and
+it is the gdb server for debugging. After installing it, **unplug/replug the board
+once** so a non-root user can reach SWD (the serial VCP already works without it).
+
+**Why not flash with openocd?** It attaches to this part fine, but openocd 0.12.0 —
+the newest Ubuntu noble ships — only knows `STM32U57/U58xx` (device ID 0x482) in its
+flash driver. This board reports **0x455** (STM32U535/U545), so `program` fails with
+`auto_probe failed`. U535/U545 support landed after 0.12.0. Details in `openocd.cfg`.
+
+> Verified with gcc-arm-none-eabi 13.2.1, cmake 3.28, openocd 0.12.0 (debug only),
+> STM32CubeProgrammer 2.23.0. A local, no-root install via xPack/Kitware tarballs to
+> `~/.local/opt` also works if apt is unavailable. STM32CubeMX itself is only needed
+> to *change* the pin configuration — its output is committed.
 
 ## Build & flash
 
@@ -28,11 +39,11 @@ One tree, two builds ([03 §3.8](../Docu/PrePlanning/03-Architecture.md#38-build
 ```
 cmake -B build -G "Unix Makefiles"
 cmake --build build -j
-openocd -f openocd.cfg -c "program build/pacman.elf verify reset exit"
+STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 ```
 
 There is **no `-DCMAKE_TOOLCHAIN_FILE`**: the cross-compilation setup (target,
-compiler, Cortex-M4F flags, `.elf` suffix) sits at the top of `CMakeLists.txt`, above
+compiler, Cortex-M33 flags, `.elf` suffix) sits at the top of `CMakeLists.txt`, above
 `project()`, which is when CMake reads it. One file describes the whole build. It
 produces `build/pacman.elf` plus `.bin`/`.hex` and prints the flash/RAM usage.
 
@@ -75,8 +86,8 @@ process has.
 
 ## On-Target Tests (OTT)
 
-The firmware serves a command line on the ST-LINK virtual COM port (**LPUART1,
-PA2/PA3, 115200 8N1**, usually `/dev/ttyACM0`), built on the vendored
+The firmware serves a command line on the ST-LINK virtual COM port (**USART1,
+PA9/PA10, 115200 8N1**, usually `/dev/ttyACM0`), built on the vendored
 **EmbeddedCli**. Each test prints a machine-parseable verdict with no debugger
 attached (FR-106 / FR-107):
 
@@ -105,18 +116,15 @@ Run them from the host with the harness (stdlib Python, no pyserial):
 ```
 python3 Test/run_ott.py --suite         # automatic: enumeration (VT-INT-001) + boot banner (VT-INT-002)
 python3 Test/run_ott.py user_button     # interactive; exit 0 = PASS, 1 = FAIL, 2 = timeout
-python3 Test/run_ott.py display         # interactive: streams live, confirm on the board, press B1
 ```
 
-The four current scenarios are all **interactive** by design — the firmware
-renders/prints and waits for you to confirm with B1, with a safety cap (30 s for
-`user_button`, 120 s for the rest) so the board always returns to nominal mode:
+The scenarios are **interactive** by design — the firmware renders/prints and waits
+for you to confirm with B1, with a safety cap (30 s for `user_button`) so the board
+always returns to nominal mode. Only one exists right now; the display and joystick
+tests arrive with the GFX01M2 shield in M2:
 
 ```
 ott user_button  # live button state + every debounced press; passes after 3 presses
-ott display      # geometric GFX patterns — confirm on the LCD (VT-INT-006)
-ott touchpad     # live x/y + touch-present on the console (VT-INT-007)
-ott touchdot     # a dot on the LCD follows your finger — display + touchpad together
 ```
 
 **Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a setup and
@@ -137,14 +145,11 @@ source of truth in
 | `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
 | `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
 | `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
-| `Bsp/i2c_bsp/` | Blocking I2C master, device-agnostic, timeout-bounded, status enum. |
-| `Bsp/spi_bsp/` | Blocking transmit-only SPI master. Chip-select belongs to the device driver. |
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
 | `Bsp/switch/` | Reusable debounced-GPIO input primitive (32-sample history). |
 | `Bsp/user_button/` | This board's B1 (PC13) instance of `switch`, incl. a latched press edge. |
 | `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
-| `Drivers/display/` | The display **port**: shows a `framebuffer_t`. `display.c` = LS013B7DH03 panel over SPI, `display_host.c` = headless host. Owns the panel's inverted bit sense and its COM inversion. |
-| `Drivers/touchpad/` | Touchpad Click (MTCH6102): a `touchpad_reading_t` per read. Not yet a port (RF-003). |
+| `Drivers/display/` | The display **port** only: shows a `framebuffer_t`. `display_host.c` is the headless host implementation; the target implementation is gone with the Sharp panel and returns with the ILI9341 in M2. |
 | `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
 | `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
@@ -158,15 +163,15 @@ source of truth in
 | `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
-| `ThirdParty/STM32_G431RB_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. |
+| `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
 | `CMakeLists.txt` | The whole build, cross-toolchain included. |
-| `openocd.cfg` | ST-LINK V3 + STM32G4 flash/debug. |
+| `openocd.cfg` | ST-LINK V3E + STM32U5 **debug only** — flashing is STM32CubeProgrammer's job. |
 | `.clang-format` | The [c-code-style](https://github.com/MaxLell/c-code-style) config (NFR-102). |
 
 ### Conventions worth knowing before editing
 
 - **All GPIO goes through `dio_bsp`.** To add a pin: give it a name in
-  `dio_bsp_pin_e` and one row in `k_pin_map`. Do not call `HAL_GPIO_*` elsewhere.
+  `dio_bsp_pin_e` and one row in `g_pin_map`. Do not call `HAL_GPIO_*` elsewhere.
 - **No tick arithmetic.** Use `delay_ms()` when blocking is fine, `sw_timer` when it
   is not. There is no `millis()`; `systick_bsp_get_tick()` exists for `delay` and
   `sw_timer` and should not be needed above them.
@@ -175,26 +180,23 @@ source of truth in
   no non-blocking single-character read.
 - **Named constants, no bare literals**, and no abbreviations in identifiers
   (`in_length`, not `len`; `in_memory_address`, not `mem_addr`).
-- `prv_` prefixes module-private functions, `g_` prefixes globals, `k_` prefixes
-  file-scope constant tables, and pointer parameters carry `in_` / `out_` / `inout_`.
+- `prv_` prefixes module-private functions, `g_` prefixes globals **and file-scope
+  statics including const lookup tables**, and pointer parameters carry `in_` /
+  `out_` / `inout_`.
 
 ### Two things that survive a CubeMX re-generation only if you re-apply them
 
-1. The **`.noinit` section** in `ThirdParty/STM32_G431RB_HAL/STM32G431xx_FLASH.ld`
+1. The **`.noinit` section** in `ThirdParty/STM32_U545RE_HAL/STM32U545xx_FLASH.ld`
    (just after `.bss`). It is marked NON-GENERATED in the script; without it the OTT
    reset flow silently stops working.
 2. The **`app_main()` call** in the USER CODE block of the generated `Core/Src/main.c`.
 
 The 1 ms tick hook is deliberately *not* on that list: `systick_bsp.c` provides a
 strong `HAL_IncTick()`, overriding the HAL's `__weak` one, so the generated
-`stm32g4xx_it.c` stays untouched and a re-generation cannot drop the hook.
-
-One cosmetic item: `Core/Src/gpio.c` carries hand-added explanations on the generated
-comments (`… : DISPLAY_DISP (PB4) high = panel on`). A re-generation drops those, but
-the *code* it emits is identical, so nothing breaks — only the reading aid is lost.
+`stm32u5xx_it.c` stays untouched and a re-generation cannot drop the hook.
 
 **Editing the `.ioc` by hand** is fine for a pin *label*, which is what
-`TOUCHPAD_RESET` was: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
+`USER_BUTTON` and `LED_GREEN` are: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
 rename to the `<label>_Pin` / `<label>_GPIO_Port` macros in `Core/Inc/main.h` and
 their uses in `Core/Src/gpio.c`, and the result is byte-identical to what CubeMX
 would generate. Do **not** hand-edit peripheral *settings* that way (clock tree,
@@ -204,52 +206,42 @@ leaving the setting alone. Open CubeMX for those.
 
 ## Hardware notes
 
-The Click Shield for Nucleo-64 (MIKROE-5193) mates with the **ST-Morpho** headers,
-not the Arduino headers — that mismatch was the original blank-display cause. The
-map is **HW-confirmed** with a logic analyzer (R-001 closed) and recorded in
-[02 §2.3.3](../Docu/PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001).
+**STM32U545RE-Q Nucleo-64**, Cortex-M33 at **160 MHz**, TrustZone off
+(`CORTEX_M33_NS`). 512 KB flash; RAM is **256 KB contiguous** at `0x20000000` plus a
+separate **16 KB SRAM4** at `0x28000000`. That headroom is the reason for the MCU
+choice: a 240x320 RGB565 frame buffer is 153.6 kB and did not fit the 32 kB of the
+STM32G431RB this project started on.
 
-The clock tree is owned by the `.ioc` too: **SYSCLK 170 MHz** (PLL, `HSI/4 × 85`, the
-part's maximum) with a **1 kHz SysTick**. Full table in
-[02 §2.3.4](../Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
-One consequence is worth internalising: a delay written as a *spin count* is ~10×
-shorter at 170 MHz than at the 16 MHz this project started on, which is why the only
-such delay left (the display's chip-select settle loop) carries a comment saying so.
-Everything else uses `Services/delay` or `Services/sw_timer`, which are
-clock-independent.
+The clock tree is owned by the `.ioc`: PLL1 from **MSIS at 48 MHz** (`M=3, N=10,
+R=1`) to 160 MHz SYSCLK, with a **1 kHz SysTick**. Never express a delay as a spin
+count — use `Services/delay` or `Services/sw_timer`, which are clock-independent.
 
 | Signal | Pin | Note |
 |---|---|---|
-| SPI1 SCK / MOSI | PB3 / PB5 | mikroBUS slot 1, mode 0, LSB-first, ~0.66 MHz |
-| Display CS | PB12 | **active HIGH** |
-| Display DISP | PB4 | the Click reuses the idle MISO line as the panel enable |
-| Display EXTCOMIN | PC8 | mikroBUS PWM1, external VCOM clock |
-| I2C1 SCL / SDA | PB8 / PB9 | mikroBUS slot 2, MTCH6102 at address **0x25** |
-| Touchpad reset | PA4 | mikroBUS signal `RST`; `.ioc` label `TOUCHPAD_RESET`, active LOW |
-| User button B1 | PC13 | **active HIGH** on this board (external pull-down) |
-| Console | PA2 / PA3 | LPUART1 → ST-LINK VCP, 115200 8N1 |
+| Console | PA9 / PA10 | USART1 -> ST-LINK V3E VCP, 115200 8N1 |
+| User button B1 | PC13 | **active HIGH** — idle low, confirmed by reading `GPIOC->IDR` over SWD |
+| LED LD2 | PA5 | `.ioc` label `LED_GREEN`, active HIGH |
+| SWD | PA13 / PA14 | SWDIO / SWCLK |
 
-Also: set the shield's **VLS switch to 3V3**, and leave the LCD's JP1 at
-software-VCOM (EXTMODE low) — though the driver serves both modes on every
-`display_service_vcom()` call, so either setting works.
+No display and no direction input yet. The **X-NUCLEO-GFX01M2** (ILI9341, 240x320,
+plus a 5-GPIO joystick and a 64-Mbit SPI flash we do not use) arrives in M2, together
+with its pin map — which still has to be derived from UM2750 and confirmed on the
+board with a logic analyzer, the way R-001 was.
 
-Note there is no LD2 blink any more: PA5 is the Arduino-header SCK and was freed up
-when slot 1 moved to ST-Morpho, but the LED test was retired with the M2 pivot.
+## M1 verification — done on hardware
 
-## M2 hardware-verification checklist
+**`./m2.sh all`** builds, flashes and walks the interactive tests. Set the port with
+`PORT=/dev/ttyACMx ./m2.sh ...`. What has actually been confirmed on this board:
 
-Shortcut: **`./m2.sh all`** builds, flashes once, and walks through the four
-interactive tests in sequence (or `./m2.sh user_button|display|touchpad|touchdot|suite`
-for one). Set the port with `PORT=/dev/ttyACMx ./m2.sh …`. The manual steps below are
-the same thing spelled out.
-
-1. **Pre-power-on ([doc 08 §8.1](../Docu/PrePlanning/08-Troubleshooting-Guide.md)):** set each Click Shield socket's 3V3/5V switch to 3.3 V; seat LCD Mono in slot 1, Touchpad in slot 2; set LCD Mono JP1 to software-VCOM (EXTMODE=low).
-2. **Pin map (VT-INT-003/004): DONE** — confirmed on hardware with a logic analyzer (R-001 closed); see the table above.
-3. **Build & flash**, then `python3 Test/run_ott.py --suite` — expect PASS for enumeration and the boot banner.
-4. **`python3 Test/run_ott.py user_button`** — press B1 three times; the console echoes each press. If nothing changes, PC13 is stuck.
-5. **`python3 Test/run_ott.py display`** — watch the geometric patterns cycle on the LCD; press B1. If blank, see [doc 08 §8.4](../Docu/PrePlanning/08-Troubleshooting-Guide.md).
-6. **`python3 Test/run_ott.py touchpad`** — move your finger; the streamed x/y should track it; press B1. "not responding" → check the I2C map / RST.
-7. **`python3 Test/run_ott.py touchdot`** — the dot should follow your finger; press B1. If the axes are swapped or mirrored, flip `OTT_TOUCHDOT_SWAP_AXES` / `OTT_TOUCHDOT_INVERT_X` / `OTT_TOUCHDOT_INVERT_Y` in `ott_touchdot.c`.
+1. **Build** — target and host, warning-free. Flash 38.9 kB (7.4%), RAM 3.5 kB (1.3%).
+2. **`.noinit` present** in the ELF at `0x20000768`, right after `.bss`, so the OTT
+   reset flow has its retained RAM.
+3. **Flash + verify** with `STM32_Programmer_CLI` — it reports device ID `0x455`,
+   "STM32U535/STM32U545", and verifies the download.
+4. **Boot banner** over the VCP: `MicroPacControllerMan booted (M1 U545RE bring-up)`.
+5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists `user_button`.
+6. Still open: pressing B1 through `python3 Test/run_ott.py user_button` — that one
+   needs a person at the board.
 
 ## Milestone history
 
@@ -263,5 +255,9 @@ the same thing spelled out.
   also retired the register-level `blinky` OTT. The `lacheck` / `dispdiag`
   logic-analyzer diagnostics were removed once R-001 closed and the regular tests
   covered the same ground.
-- **M3 — Game: next.** The pub-sub broker, the Active-Object tasks and the Pacman
-  modules under `App/`.
+- **M3 — Game (host only).** The broker, the Active-Object base and the Pacman modules
+  under `App/`, playable on the host via SDL. Open as PR #10 and **parked**.
+- **Restart on new hardware (current).** After the PR #10 review the project went back
+  to M1 on the **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the
+  X-NUCLEO-GFX01M2 and Pacman going colour. The Sharp/MTCH6102 drivers and their OTTs
+  are gone; M2 brings the ILI9341 and the joystick.
