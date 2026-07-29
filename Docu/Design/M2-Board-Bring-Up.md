@@ -12,47 +12,81 @@ Requirements realised here: CON-002, CON-003, CON-004 (display, joystick, carrie
 FR-004 (directional control), FR-005 / FR-028 (colour rendering), NFR-002 (frame rate),
 NFR-003 (input latency).
 
-## 1. Pin mapping — open
+## 1. Pin mapping — derived from UM2750, not yet measured
 
-The shield's signals are known only by their **ST-Morpho header positions**, taken from
-the shield's published device-tree description. The translation to STM32U545RE port pins
-is not established, and the display SPI pins are not identified at all.
+Taken from **UM2750 Rev 3** (March 2022), tables 3, 6 and 9. The document's GPIO columns
+are per-board-family through footnotes, and **it lists no STM32U5 board at all** — the
+newest families it knows are G4, WB and WL. The assignments below are the ones it gives
+for the **NUCLEO-G431RB / G474RE / G491RE** group, which is the closest documented
+neighbour and, being Nucleo-64 ST-morpho, occupies the same header positions.
 
-| Function | ST-Morpho | STM32U545RE | Notes |
+That inference is exactly what has to be *measured* before it is trusted (§1.1).
+
+**Display (LCD1, "SPIA" in the manual)** — UM2750 table 3:
+
+| Function | Shield signal | STM32 pin | Notes |
 |---|---|---|---|
-| Display SCK | SPI, position to be identified | open | 4-wire SPI; the shield is specified up to 32 MHz |
-| Display MOSI | SPI, position to be identified | open | |
-| Display CS | CN10-21 | open | active LOW |
-| Display DC | CN10-25 | open | data/command select |
-| Display RESET | CN7-30 | open | active LOW |
-| Display TE | CN7-28 | open | tearing effect; optional |
-| Joystick Up | CN7-38 | open | active LOW, pull-up |
-| Joystick Down | CN10-27 | open | active LOW, pull-up |
-| Joystick Left | CN10-17 | open | active LOW, pull-up |
-| Joystick Right | CN7-34 | open | active LOW, pull-up |
-| Joystick Select | CN10-19 | open | active LOW, pull-up; reserved, unused |
-| SPI flash CS | CN10-23 | open | second SPI; unused — the high score lives in internal flash |
+| SCK | SPIA_SCK | PA5 | SPI1_SCK on this part |
+| MOSI | SPIA_MOSI (SDI) | PA7 | |
+| MISO | SPIA_MISO (SDO) | PA6 | display can be read back |
+| CS | SPIA_NCS | PA9 | **active HIGH** — the manual is explicit, and it is easy to get backwards |
+| DCX | SPIA_DCX (WR) | PB10 | data/command select |
+| RESET | DISP_NRESET | PA1 | active low |
+| TE | DISP_TE (FMARK) | PA0 | tearing effect, optional |
+
+Interface mode is fixed on the shield by strapping IM0..IM3: **4-line, 8-bit data SPI**.
+
+**Joystick (B1)** — UM2750 table 9. Five discrete keys, all **active low**, common to GND:
+
+| Key | STM32 pin |
+|---|---|
+| Left | PB6 |
+| Right | PB0 |
+| Up | PC0 |
+| Down | PB4 |
+| Centre | PC7 |
+
+**SPI NOR flash (U1)** — UM2750 table 6, default dual-SPI configuration (solder bridges
+SB4/SB5/SB6 fitted). Unused here, but the pins are occupied and must be left alone:
+CS# **PA8**, SCK **PB13**, MISO **PB14**, MOSI **PB15**.
 
 ### 1.1 How it gets settled
 
-Derive the map from UM2750 (the shield's user manual) together with the NUCLEO-U545RE-Q
-board manual, then **confirm every signal on the board with a logic analyzer before a
-single line of display driver is written.**
+**Confirm every signal on the board with a logic analyzer before a single line of display
+driver is written.** The table above is an inference from a neighbouring board family in a
+document that predates this microcontroller — it is a starting point, not a fact.
 
 That order is not bureaucracy. On the previous hardware an *assumed* pin map was the root
 cause of a display that stayed blank, and the mistake survived several days of looking for
 software faults. Measuring first is cheaper than debugging afterwards.
 
-### 1.2 Suspected conflict: display CS against the console
+### 1.2 Two confirmed pin conflicts
 
-The serial console occupies **PA9/PA10** (§2). A provisional reading of the Morpho map puts
-**display CS (CN10-21) on PA9** — the console's transmit line.
+Both are real, and both were found by reading the manual rather than by debugging.
 
-If that holds, the display and the serial console cannot coexist as currently configured,
-and one of the two has to move. This is the first thing to check, because it decides whether
-the CubeMX configuration needs reworking before any driver work starts. Both escape routes
-exist: the console can move to another USART, or the display CS can be reassigned if the
-shield allows it.
+**Display CS collides with the console.** CS is on **PA9**, which is **USART1_TX** — the
+ST-LINK virtual COM port this project's console and its whole OTT mechanism run on. This is
+not a theoretical clash: the console demonstrably works on PA9/PA10 today. CS cannot move,
+because the shield hardwires it to a fixed morpho position. So **the console has to move, or
+the display cannot be driven.**
+
+Worse than an ordinary conflict: CS is active *high*, so if PA9 stays a UART transmit line
+its level would follow serial traffic and select/deselect the display in the middle of
+transfers.
+
+Open question for this: whether the NUCLEO-U545RE-Q lets the ST-LINK VCP be re-routed to
+another USART via solder bridges. That needs the board's own user manual. If it cannot be
+moved, the options narrow to giving up the on-board VCP for an external USB-serial adapter
+on free pins, or cutting the shield's CS trace and jumpering CS elsewhere.
+
+**Display SCK collides with the LED.** SCK is on **PA5**, which is also **LD2** — the green
+user LED. That is a property of the Nucleo-64 boards themselves, where LD2 shares PA5 with
+the Arduino-header SPI clock, so it cannot be designed away.
+
+Consequence: once SPI1 drives PA5, LD2 stops being an independent output and becomes an
+activity indicator that flickers with the display clock. The **`blinky` OTT drives PA5 and
+will therefore have to change or be retired in M2** — it currently verifies the pin by
+driving it and reading it back, which the SPI peripheral will no longer permit.
 
 ## 2. Clock and core configuration (as configured)
 
@@ -123,14 +157,29 @@ disabled clock.
 
 ## 5. Open questions for M2
 
-1. **The pin map** (§1) — derive, then confirm with a logic analyzer.
-2. **The PA9 conflict** (§1.2) — does display CS collide with the console's TX, and if so,
-   which of the two moves?
-3. **Display SPI bit rate** — what the ILI9341 and the shield's routing actually sustain,
+1. **The pin map** (§1) — derived from UM2750; still to be confirmed with a logic analyzer.
+2. **The PA9 conflict** (§1.2) — confirmed to exist. Open: can the ST-LINK VCP be re-routed
+   off USART1 by solder bridge on this board? Needs the NUCLEO-U545RE-Q user manual. This
+   blocks all display work, so it goes first.
+3. **Display SPI bit rate** — what the controller and the shield's routing actually sustain,
    which sets the frame budget in §3.
-4. **Colour format** — RGB565 is assumed throughout; confirm the ILI9341 is driven in
+4. **Which display controller is on our board.** UM2750 §6.3 shows the GFX01M2 shipped
+   with **two different LCDs**, and the driver has to match:
+
+   | Product identification | Board | LCD | Driver IC |
+   |---|---|---|---|
+   | `XNGFX01M2$AZ1` | MB1642-TCXD022IB5-D01 | TCXD022IBLON-5 | **ST7789V** |
+   | `XNGFX01M2$AZ2` | MB1642-DT022CTFT-D01 | DT022CTFT | **ILI9341V** |
+
+   Read it off the stickers on the PCB — the first sticker's second line is the product
+   identification, the second sticker's first line the board reference. Both controllers can
+   also report an ID over SPI, so the driver can verify at run time once it talks at all.
+   Note that earlier project notes claimed ILI9341 outright; that was one of the two
+   possibilities, not established fact.
+
+5. **Colour format** — RGB565 is assumed throughout; confirm the controller is driven in
    16-bit pixel mode and that the byte order matches.
-5. **Frame buffer placement** — 153.6 kB of the 256 kB contiguous SRAM. Decide whether a
+6. **Frame buffer placement** — 153.6 kB of the 256 kB contiguous SRAM. Decide whether a
    single buffer suffices or the render path needs two, which would not fit.
-6. **Joystick debouncing** — the existing `Bsp/switch` primitive already debounces a GPIO
+7. **Joystick debouncing** — the existing `Bsp/switch` primitive already debounces a GPIO
    over a 32-sample history; confirm it serves five keys without change.
