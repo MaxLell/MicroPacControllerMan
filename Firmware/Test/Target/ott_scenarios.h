@@ -22,25 +22,25 @@
 /*! \brief Setup step: validate the console arguments and pack them into the
  *         parameter blob that survives the reset. Runs before the reset.
  *
+ * The blob is always #OTT_PARAMETER_MAX_SIZE bytes and travels whole, so a
+ * scenario that needs a length encodes it in the blob itself.
+ *
  * \param[in]       in_argument_count: number of console arguments
  * \param[in]       in_arguments: console arguments, `in_arguments[0]` is the test name
  * \param[out]      out_parameter: buffer of #OTT_PARAMETER_MAX_SIZE bytes
- * \param[out]      out_parameter_size: number of bytes written to `out_parameter`
  * \return          `true` when the arguments were accepted
  */
-typedef bool (*ott_setup_fn)(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
-                             uint32_t* out_parameter_size);
+typedef bool (*ott_setup_fn)(int in_argument_count, char* in_arguments[], uint8_t* out_parameter);
 
 /*! \brief Run step: perform the test and judge the outcome. Runs after the reset.
  *
- * \param[in]       in_parameter: blob produced by the setup step
- * \param[in]       in_parameter_size: number of valid bytes in `in_parameter`
+ * \param[in]       in_parameter: blob produced by the setup step,
+ *                      #OTT_PARAMETER_MAX_SIZE bytes
  * \param[out]      out_reason: receives a short failure reason when returning `false`
  * \param[in]       in_reason_size: size of `out_reason` in bytes
  * \return          `true` when the test passed
  */
-typedef bool (*ott_run_fn)(const uint8_t* in_parameter, uint32_t in_parameter_size,
-                           char* out_reason, size_t in_reason_size);
+typedef bool (*ott_run_fn)(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size);
 
 typedef struct
 {

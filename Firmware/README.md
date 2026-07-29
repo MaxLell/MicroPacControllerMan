@@ -114,21 +114,29 @@ buffer it lives in and knows nothing about its contents.
 Run them from the host with the harness (stdlib Python, no pyserial):
 
 ```
-python3 Test/run_ott.py --suite         # automatic: enumeration (VT-INT-001) + boot banner (VT-INT-002)
+python3 Test/run_ott.py --suite         # automatic: enumeration, boot banner, and every self-judging test
 python3 Test/run_ott.py user_button     # interactive; exit 0 = PASS, 1 = FAIL, 2 = timeout
 ```
 
-The scenarios are **interactive** by design — the firmware renders/prints and waits
-for you to confirm with B1, with a safety cap (30 s for `user_button`) so the board
-always returns to nominal mode. Only one exists right now; the display and joystick
-tests arrive with the GFX01M2 shield in M2:
-
 ```
+ott blinky       # drives LD2 (PA5) and reads the pin back — automatic
 ott user_button  # live button state + every debounced press; passes after 3 presses
 ```
 
-**Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a setup and
-a run function, add one row to the table in `ott_scenarios.c`, and add the source to
+`blinky` is **automatic**: it writes the pin and reads it back through `dio_bsp`, so the
+firmware judges itself and `run_ott.py --suite` can run it unattended. The read is a real
+measurement rather than an echo of what was written — `HAL_GPIO_ReadPin` reads `IDR`, the
+input register, which reflects the level actually present on the pad even for a push-pull
+output. On success it blinks the LED five times in a second, so a person watching gets a
+confirmation too.
+
+`user_button` is **interactive**: the firmware streams the live state and waits for you to
+press B1, with a 30 s safety cap so the board always returns to nominal mode. The display
+and joystick tests arrive with the GFX01M2 shield in M2.
+
+**Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a run function
+— plus a setup function only if the test takes console arguments, otherwise the table
+carries `NULL` — add one row to the table in `ott_scenarios.c`, and add the source to
 `CMakeLists.txt`. Nothing in the OTT core or the CLI changes.
 
 ## Layout
@@ -239,9 +247,10 @@ board with a logic analyzer, the way R-001 was.
 3. **Flash + verify** with `STM32_Programmer_CLI` — it reports device ID `0x455`,
    "STM32U535/STM32U545", and verifies the download.
 4. **Boot banner** over the VCP: `MicroPacControllerMan booted (M1 U545RE bring-up)`.
-5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists `user_button`.
-6. Still open: pressing B1 through `python3 Test/run_ott.py user_button` — that one
-   needs a person at the board.
+5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists the scenarios.
+6. **`ott blinky` passes** — drives PA5 both ways, verifies each level by reading the pin
+   back, and blinks the LED. `python3 Test/run_ott.py --suite` exits 0.
+7. **`ott user_button` passes** with B1 pressed three times.
 
 ## Milestone history
 

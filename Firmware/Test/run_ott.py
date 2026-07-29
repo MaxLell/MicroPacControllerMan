@@ -30,8 +30,8 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"touchpad", "display", "touchdot", "user_button"}
-SUITE_AUTOMATIC = []  # no fully-automatic OTT yet; the suite checks enumeration + banner
+INTERACTIVE = {"user_button"}
+SUITE_AUTOMATIC = ["blinky"]  # judge themselves; no operator at the board needed
 
 
 def detect_port() -> str:

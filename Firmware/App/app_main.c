@@ -1,18 +1,18 @@
 #include "app_main.h"
 
+#include "Cli.h"
+#include "console.h"
 #include "dio_bsp.h"
 #include "ott.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
-#include "uart_bsp.h"
 #include "user_button.h"
 
 /* ==========================================================================
  * app_main - private
  * ========================================================================= */
 
-#define APP_MAIN_BOOT_BANNER \
-    "\r\nMicroPacControllerMan booted (M1 U545RE bring-up). Type 'ott' for tests.\r\n"
+#define APP_MAIN_BOOT_BANNER "MicroPacControllerMan booted (M1 U545RE bring-up). Type 'ott' for tests."
 
 static void prv_on_systick(void)
 {
@@ -23,7 +23,7 @@ static void prv_init_platform(void)
 {
     systick_bsp_init();
     dio_bsp_init();
-    uart_bsp_init();
+    console_init();
     sw_timer_init();
     user_button_init();
 
@@ -40,11 +40,13 @@ void app_main(void)
 {
     prv_init_platform();
 
-    ott_execute_pending();
-
-    uart_bsp_write_string(APP_MAIN_BOOT_BANNER);
-
+    /* The command line comes up first: it clears the screen, and everything below
+     * reports through it — including a pending test's verdict. */
     ott_init();
+
+    cli_print(APP_MAIN_BOOT_BANNER);
+
+    ott_execute_pending();
 
     for (;;)
     {

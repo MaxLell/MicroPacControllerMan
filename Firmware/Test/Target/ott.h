@@ -25,15 +25,19 @@
 /*! \brief Largest parameter blob a scenario may carry across the reset, in bytes. */
 #define OTT_PARAMETER_MAX_SIZE (32U)
 
+/*! \brief Register the console commands and bring the command line up.
+ *
+ * Call once before #ott_execute_pending, which reports its verdict through the
+ * command line.
+ */
+void ott_init(void);
+
 /*! \brief Run a test request left in retained RAM by a previous `ott` command.
  *
- * Call once early in start-up, after the console is up and before the application
- * starts. Does nothing on a normal, unscheduled boot.
+ * Call once early in start-up, after #ott_init and before the application starts.
+ * Does nothing on a normal, unscheduled boot.
  */
 void ott_execute_pending(void);
-
-/*! \brief Register the console commands. */
-void ott_init(void);
 
 /*! \brief Feed received console characters to the command line.
  *

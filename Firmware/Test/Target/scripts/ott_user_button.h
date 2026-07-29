@@ -5,6 +5,8 @@
  * console — a heartbeat every second plus every debounced press — so the operator
  * can see whether the pin actually toggles. Passes once the required number of
  * presses has been seen, fails on timeout with a diagnostic reason.
+ *
+ * Takes no arguments, so it has no setup step: the scenario table carries `NULL`.
  */
 
 #ifndef OTT_USER_BUTTON_H
@@ -18,10 +20,6 @@
  * ott_user_button - public API
  * ========================================================================= */
 
-bool ott_user_button_setup(int in_argument_count, char* in_arguments[], uint8_t* out_parameter,
-                           uint32_t* out_parameter_size);
-
-bool ott_user_button_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
-                         size_t in_reason_size);
+bool ott_user_button_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size);
 
 #endif /* OTT_USER_BUTTON_H */
