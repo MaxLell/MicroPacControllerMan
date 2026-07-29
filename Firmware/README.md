@@ -154,7 +154,7 @@ source of truth in
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
 | `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
-| `Services/active_object/` | The Active-Object template every module builds on (FR-109 / 03 §3.5). Enforces run-to-completion. |
+| `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-generic-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |

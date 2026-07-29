@@ -16,6 +16,10 @@ Start at **[`Docu/PrePlanning/Index.md`](Docu/PrePlanning/Index.md)**. Most-used
 - **[09 OTT Mechanism](Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md)** — the reset-based on-target-test flow.
 - **[11 Decisions & As-Built](Docu/PrePlanning/11-Decisions-and-As-Built.md)** — what was actually built and why (deviations from the intended design).
 
+Each milestone also gets its own **design document** under **[`Docu/Design/`](Docu/Design/)**
+carrying the *how* — pin assignments, clock settings, transfer budgets, tool choices. The
+requirements deliberately carry none of that: keep hardware detail out of `02` and put it there.
+
 Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
 Known work deliberately left undone is tracked in
@@ -24,11 +28,6 @@ before "fixing" something that was a conscious deferral, and add to it rather th
 silently working around a wart.
 
 ## Status
-
-> **Restarted 2026-07 on new hardware.** After the M3 review the project went back to
-> **M1** on the **STM32U545RE-Q**, with the two mikroBUS Clicks replaced by the
-> **X-NUCLEO-GFX01M2** and Pacman becoming a **colour** game. Everything below about
-> the G431RB, the Sharp panel and the touchpad is history.
 
 - **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
@@ -43,9 +42,6 @@ silently working around a wart.
 - **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
   until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
   Active Objects) is agreed in outline but not settled.
-- **History:** M1 and M2 were completed once on the STM32G431RB with the Click Shield,
-  LCD Mono Click and Touchpad Click; that pin map was HW-confirmed and R-001 closed.
-  Those drivers and their OTTs have been deleted.
 
 ## Build · flash · test (all from `Firmware/`)
 
@@ -96,7 +92,7 @@ program this part.
   153.6 kB and the G431RB had 32 kB in total.
 - **SYSCLK 160 MHz** (PLL1 from **MSIS 48 MHz**: `M=3 → 16 MHz × N=10 → 160 MHz, R=1`),
   1 kHz SysTick. Owned by the CubeMX `.ioc`; see
-  [02 §2.3.4](Docu/PrePlanning/02-Requirements.md#234-clock-configuration-as-configured).
+  [M2 Board Bring-Up §2](Docu/Design/M2-Board-Bring-Up.md).
   Never express a delay as a spin count — use `Services/delay` / `Services/sw_timer`.
 - Serial console: **USART1 on PA9/PA10**, **115200 8N1**, at **`/dev/ttyACM0`**.
   The VCP is on the ST-LINK side, so it **stays enumerated across a target reset** —
@@ -116,7 +112,7 @@ program this part.
   flash we deliberately do not use): physically present, **not wired up yet**. The
   Morpho→STM32 pin map is still TBD and is
   [R-009](Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md#51-risks) —
-  see [02 §2.3.3](Docu/PrePlanning/02-Requirements.md#233-x-nucleo-gfx01m2--stm32u545re-pin-mapping-con-004--r-009).
+  see [M2 Board Bring-Up §1](Docu/Design/M2-Board-Bring-Up.md).
 
 ## Conventions
 

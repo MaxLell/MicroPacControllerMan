@@ -10,10 +10,6 @@
  * user_button - private
  * ========================================================================= */
 
-/* The NUCLEO-U545RE-Q wires B1 ACTIVE-HIGH: idle low through the board's
- * pull-down, pressing drives PC13 to VDD. Confirmed on this board by reading
- * GPIOC->IDR over SWD with the button released — bit 13 is 0. CubeMX cannot
- * express that polarity, so it lives here. */
 #define USER_BUTTON_IS_ACTIVE_LOW (false)
 
 static volatile bool g_is_initialized = false;
