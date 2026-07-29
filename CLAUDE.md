@@ -64,8 +64,13 @@ silently working around a wart.
 ./dev.sh check       # formatting + unit tests + both builds, writes nothing
 ./dev.sh format      # format the tree to the coding standard
 ./dev.sh all         # build + flash + the four interactive OTTs
+./dev.sh install-hook # pre-commit: format the staged files, then run the unit tests
 ./dev.sh help        # every subcommand
 ```
+
+Run **`./dev.sh check`** before opening a PR. The pre-commit hook is the cheap subset of
+it (formatting + unit tests); the OTTs are never in either — they need the board and a
+person watching it, so they are run deliberately, not on every commit.
 
 It is a thin wrapper, not a second implementation; the underlying commands are:
 
