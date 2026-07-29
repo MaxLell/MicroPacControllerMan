@@ -88,6 +88,7 @@ if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
+        Services/crc/crc.c
         Services/delay/delay.c
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
@@ -101,6 +102,7 @@ if(PACMAN_HOST_BUILD)
     target_include_directories(pacman_host PUBLIC
         Bsp/systick_bsp
         Drivers/display
+        Services/crc
         Services/delay
         Services/framebuffer
         Services/gfx
@@ -144,6 +146,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/systick_bsp/systick_bsp.c
     Bsp/uart_bsp/uart_bsp.c
     Bsp/user_button/user_button.c
+    Services/console/console.c
+    Services/crc/crc.c
     Services/delay/delay.c
     Services/framebuffer/framebuffer.c
     Services/gfx/gfx.c
@@ -170,6 +174,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/systick_bsp
     Bsp/uart_bsp
     Bsp/user_button
+    Services/console
+    Services/crc
     Services/delay
     Services/framebuffer
     Services/gfx
