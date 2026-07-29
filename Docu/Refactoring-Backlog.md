@@ -195,7 +195,7 @@ file and line over the console, then halt or reset — and the choice is recorde
 
 The Click Shield routes slot-2 `RST` to **PD2**, but the firmware configures and drives
 **PA4** ([DEC-008](PrePlanning/11-Decisions-and-As-Built.md),
-[02 §2.3.3](PrePlanning/02-Requirements.md#233-mikrobus--stm32g431-pin-mapping-con-004--r-001)).
+[02 §2.3.3](PrePlanning/02-Requirements.md#233-x-nucleo-gfx01m2--stm32u545re-pin-mapping-con-004--r-009)).
 The MTCH6102 boots without an explicit reset, so the touchpad works regardless — the
 reset pulse simply goes to an unconnected pin.
 

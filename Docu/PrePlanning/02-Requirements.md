@@ -4,6 +4,12 @@
 
 Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitous / Event-driven / State-driven / Unwanted-behaviour / Optional-feature templates) and are grouped by feature/concern. This project does **not** separate "system" from "software" requirements — they all live here together. The `FR-0xx` / `FR-1xx` (and `NFR` / `CON`) numbers are stable identifiers only; the numbering carries no system-vs-software meaning.
 
+> **Hardware baseline changed (2026-07).** After the M3 review the project restarted at M1 on
+> the **STM32U545RE-Q** with the **X-NUCLEO-GFX01M2** display shield, and Pacman became a
+> **colour** game. The two mikroBUS Clicks (Sharp 128×128 mono LCD, MTCH6102 touchpad) are
+> gone. Requirements touched by that change are marked below; the reasoning is in
+> [11 Decisions & As-Built](11-Decisions-and-As-Built.md).
+
 ## 2.1 Functional Requirements
 
 ### 2.1.1 Boot & Menu
@@ -18,10 +24,20 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 
 | Unique-ID | Name | Description |
 |---|---|---|
-| FR-004 | Directional Control | While a game is in progress, when the user touches one of the four quadrants of an imaginary "Game-Control-Cross" overlaid on the touchpad surface (north/south/east/west of center), the system shall move Pacman in the corresponding direction. |
-| FR-005 | Game Rendering | While a game is in progress, the system shall render the current game state on the monochrome display. |
+| FR-004 | Directional Control | While a game is in progress, when the user presses one of the four directional keys of the joystick on the display shield, the system shall move Pacman in the corresponding direction. |
+| FR-005 | Game Rendering | While a game is in progress, the system shall render the current game state on the colour display. |
+| FR-028 | Colour Rendering | While a game is in progress, the system shall render walls, pellets, Pacman and the ghosts in distinguishable colours, with each of the four ghosts visually distinct from the other three. |
 
-FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture-detection API — see [R-003](05-Risks-Assumptions-and-Dependencies.md#51-risks). The touch surface is divided into four quadrants around its center point; a touch landing in a quadrant maps directly to that quadrant's direction. Exact quadrant boundaries (e.g. dead-zone size near the center) are to be tuned during Board Bring-Up.
+FR-004 reads four discrete, active-low GPIO keys — there is no touch surface, no quadrant
+geometry and no dead zone to tune. That removes the whole class of problem the old
+touchpad mapping carried (closing [R-003](05-Risks-Assumptions-and-Dependencies.md#51-risks)):
+a directional key is either pressed or it is not. The joystick's fifth, centre key is
+reserved and unused for now; FR-003 deliberately keeps the **Nucleo** user button as the
+game-start input, because that button is also what confirms the manual on-target tests.
+
+FR-028 is what the hardware change bought. On the previous 1-bpp panel every entity was the
+same colour and the four ghosts could only be told apart by position; the requirement was
+not expressible.
 
 ### 2.1.3 Maze, Pellets & Movement
 
@@ -30,7 +46,14 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
 | FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a tunnel opening at a maze edge, the system shall re-enter it through the opposite tunnel opening on the same row (horizontal tunnel) or same column (vertical tunnel). |
-| FR-022 | Playfield Size | Each level's maze shall be a reduced, display-fit layout with a fixed grid size that fits within the 128×128 display at a legible tile size. *(reduced maze decided — see [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks); exact dimensions set during Pacman Development)* |
+| FR-022 | Playfield Size | Each level's maze shall use a **28 × 31 cell** grid rendered at **8 × 8 pixels per cell**, in portrait orientation on the 240 × 320 display, leaving the remaining 240 × 72 pixel band for the HUD. |
+
+FR-022 is the classic arcade grid, at last affordable: 28 × 8 = 224 px wide and 31 × 8 = 248 px
+tall fits the display in portrait with 72 px to spare. The previous 128 × 128 panel forced a
+*reduced, display-fit* maze, which is what
+[R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks) was about — that risk is
+**superseded**: the constraint that caused it is gone. Landscape does not work (248 > 240),
+so the orientation is not a free choice.
 
 ### 2.1.4 Ghosts
 
@@ -70,6 +93,10 @@ FR-004 is based on raw touch position, not the Touchpad Click's built-in gesture
 | FR-008 | High Score Update | If the final score of a completed game exceeds the stored high score, then the system shall store the new value as the high score in NVM. |
 | FR-009 | High Score Persistence | The system shall retain the high score value in NVM across power cycles. |
 
+One 32-bit value, written only when it is beaten. The NVM is the microcontroller's own
+flash (CON-006) — the 64-Mbit SPI flash that happens to sit on the display shield stays
+unused, because a single word does not justify a second storage device and its driver.
+
 The concrete rules and values that realise these requirements — the maze layout, movement/tick model, ghost targeting algorithms, power-pellet/frightened behaviour, scoring and end conditions — are specified in [10 Pacman Game Design](10-Pacman-Game-Design.md). The numeric constants there remain tunable for game feel (see [A-006](05-Risks-Assumptions-and-Dependencies.md#52-assumptions)).
 
 ### 2.1.8 Software Structure & Messaging
@@ -84,7 +111,7 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | FR-104 | Host Buildability | The Model and Control components shall be buildable and executable unmodified on the host computer, using SDL to implement the View. |
 | FR-105 | FreeRTOS Task Separation | The firmware shall execute input handling, rendering, game-logic ticking, and persistence as separate FreeRTOS tasks. |
 | FR-108 | Dedicated Message-Broker Task | The firmware shall route inter-module messages through a single dedicated message-broker task whose sole responsibility is to move each published message from the broker's input queue into the output queue of every module subscribed to that message's topic. |
-| FR-109 | Active-Object Modules | Each firmware module shall be structured as an active object: exactly one owning FreeRTOS task, a single inbound message queue as its only external input, run-to-completion handling of each received message, and no application state shared directly with other modules. |
+| FR-109 | Active-Object Modules | *(**under revision** — the M3 review dropped the Active-Object pattern. The replacement, a Data-Pool that modules query by request/response message, is not settled yet; see [11 Decisions & As-Built](11-Decisions-and-As-Built.md). FR-103 and FR-110 are unaffected.)* Each firmware module shall be structured as an active object: exactly one owning FreeRTOS task, a single inbound message queue as its only external input, run-to-completion handling of each received message, and no application state shared directly with other modules. |
 | FR-110 | Pacman Internal Message Bus | The Pacman application shall exchange messages between its Model, View, and Control modules over its own internal message-bus instance, separate from the system-level message bus. |
 
 ### 2.1.9 On-Target Test (OTT) Framework
@@ -108,8 +135,22 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 |---|---|---|
 | NFR-001 | Loading Screen Duration | The loading screen shall be displayed for no more than 3 seconds before the menu is shown. *(default value — see [A-001](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-002 | Rendering Rate | While a game is in progress, the system shall refresh the display at a minimum of 30 frames per second. *(default value — see [A-002](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
-| NFR-003 | Input Latency | When a touch gesture occurs, the system shall reflect the corresponding movement on the display within 30 ms. *(default value — see [A-003](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
+| NFR-003 | Input Latency | When a joystick directional key is pressed, the system shall reflect the corresponding movement on the display within 30 ms. *(default value — see [A-003](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-005 | Logo Display Delay | Upon power-on, the system shall wait 200 ms before displaying the Pacman logo of the loading screen (FR-001). |
+
+**NFR-002 cannot be met by pushing whole frames, and the arithmetic is not close.** A
+240 × 320 frame at 16 bits per pixel is **153,600 bytes** — 1.23 Mbit over SPI for every
+frame. At 40 Mbit/s that is **≈31 ms**, i.e. ~32 FPS with the entire budget spent inside the
+display transfer and nothing left for the game; at 20 Mbit/s it is ≈61 ms, or 16 FPS. The
+bigger, colour display therefore made this budget *harder* than the old 2 kB monochrome
+frame did, even though the CPU is faster.
+
+What makes 30 FPS comfortable instead of impossible is that **almost nothing changes between
+two Pacman frames**: the maze is static, and only Pacman, four ghosts and the odd eaten
+pellet move. Redrawing six 8 × 8 cells is 768 bytes — under 0.2 ms. The requirement stays at
+30 FPS; *how* the rendering path exploits this belongs to
+[03 Architecture](03-Architecture.md), and the measurement obligation is carried by
+[R-004](05-Risks-Assumptions-and-Dependencies.md#51-risks).
 
 ### 2.2.2 Persistence
 
@@ -138,74 +179,80 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 
 | Unique-ID | Name | Description |
 |---|---|---|
-| CON-001 | Target Hardware | The system shall run on the STM32G431RB Nucleo-64 board. |
-| CON-002 | Display Hardware | The system shall use the LCD Mono Click (Sharp LS013B7DH03, 128×128 monochrome memory LCD) as its display. |
-| CON-003 | Input Hardware | The system shall use the Touchpad Click (Microchip MTCH6102 capacitive touch controller) as its directional input device. |
-| CON-004 | Carrier Hardware | The system shall use the MikroE Click Shield for Nucleo-64 to connect the display (mikroBUS slot 1) and touchpad (mikroBUS slot 2) to the Nucleo board. *(pin mapping derived in M2 — see §2.3.3 and [R-001](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
-| CON-005 | Debug Interface | The system shall use the on-board STLINK V3 for debugging (SWD) and serial console output. |
+| CON-001 | Target Hardware | The system shall run on the **STM32U545RE-Q Nucleo-64** board. |
+| CON-002 | Display Hardware | The system shall use the display of the **X-NUCLEO-GFX01M2** expansion board (2.2" TFT, **240 × 320**, colour, ILI9341 controller over SPI) as its display. |
+| CON-003 | Input Hardware | The system shall use the **joystick of the X-NUCLEO-GFX01M2** — four directional keys plus a centre key, as discrete active-low GPIO inputs — as its directional input device. |
+| CON-004 | Carrier Hardware | The display shield shall connect to the Nucleo board through the **ST-Morpho headers (CN7/CN10)**; no separate carrier board is used. *(pin mapping — see §2.3.3 and [R-009](05-Risks-Assumptions-and-Dependencies.md#51-risks))* |
+| CON-005 | Debug Interface | The system shall use the on-board **ST-LINK V3E** for debugging (SWD) and serial console output. |
+| CON-006 | Non-Volatile Storage | The high score shall be stored in the microcontroller's **internal flash**. The external SPI flash on the display shield shall not be used. |
 
-### 2.3.3 mikroBUS ↔ STM32G431 pin mapping (CON-004 / R-001)
+The MCU choice follows from CON-002 and FR-028 rather than the other way round: a 240 × 320
+RGB565 frame buffer is 153.6 kB, and the STM32G431RB this project started on has **32 kB** of
+SRAM in total. The STM32U545RE has **274 kB** (256 kB contiguous plus 16 kB SRAM4), so the
+frame buffer fits with room to spare. Colour Pacman on the old part was not a tuning
+problem, it was arithmetically impossible.
 
-**Status: confirmed on hardware (M2, logic analyzer) — [R-001](05-Risks-Assumptions-and-Dependencies.md#51-risks) closed.**
-Originally derived from the Click Shield / Nucleo / Click schematics and the
-LS013B7DH03 / MTCH6102 datasheets, then verified with a Saleae logic analyzer
-(slot 1) and the touchpad running (slot-1 I2C). **Key as-built correction:** the
-MikroE Click Shield for Nucleo-64 (MIKROE-5193) mates with the **ST-Morpho headers
-(CN7/CN10)**, *not* the Arduino header — so slot-1 SPI is on **PB3/PB4/PB5**, not
-the Arduino-SPI PA5/PA6/PA7 that was assumed until the M2 bring-up. The SPI
-(SCK/MISO/MOSI) and I2C (SCL/SDA) buses are shared between both slots; only
-CS / AN / RST / PWM / INT are per-slot. Set the shield's **VLS1/VLS2 level-select
-switch to 3V3** for the 3.3 V Clicks.
+### 2.3.3 X-NUCLEO-GFX01M2 ↔ STM32U545RE pin mapping (CON-004 / R-009)
 
-**Slot 1 — LCD Mono Click (SPI):**
+**Status: NOT confirmed — the STM32 pin column is still to be derived.**
+The shield's signals are known by their **ST-Morpho positions**, taken from the shield's
+published device-tree description. What is *not* yet established is the translation from
+those header positions to STM32U545RE port pins, and nothing here may be treated as
+as-built until it has been checked on the board with a logic analyzer — the same discipline
+that closed R-001 for the previous shield, and for the same reason: on that shield an
+assumed pin map was the root cause of a blank display.
 
-| Function | mikroBUS | STM32G431 | Peripheral / AF | Notes |
-|---|---|---|---|---|
-| SCK | SCK | PB3 | SPI1_SCK, AF5 | also SWO/TRACESWO (trace unused) |
-| MOSI | MOSI | PB5 | SPI1_MOSI, AF5 | display data (SI) |
-| CS | CS | PB12 | GPIO | **active-HIGH** (Sharp SCS) |
-| DISP | MISO | PB4 | GPIO out | Click routes DISP onto the MISO line; high = panel on |
-| EXTCOMIN | PWM | PC8 | GPIO out | VCOM inversion clock; EXTMODE set by shield jumper |
+| Function | ST-Morpho | STM32U545RE | Notes |
+|---|---|---|---|
+| Display SCK | *(SPI, position TBD)* | TBD | 4-wire SPI; the shield is specified up to 32 MHz |
+| Display MOSI | *(SPI, position TBD)* | TBD | |
+| Display CS | CN10-21 | TBD | active LOW |
+| Display DC | CN10-25 | TBD | data/command select |
+| Display RESET | CN7-30 | TBD | active LOW |
+| Display TE | CN7-28 | TBD | tearing effect; optional |
+| Joystick Up | CN7-38 | TBD | active LOW, pull-up |
+| Joystick Down | CN10-27 | TBD | active LOW, pull-up |
+| Joystick Left | CN10-17 | TBD | active LOW, pull-up |
+| Joystick Right | CN7-34 | TBD | active LOW, pull-up |
+| Joystick Select | CN10-19 | TBD | active LOW, pull-up; reserved, unused |
+| SPI flash CS | CN10-23 | TBD | second SPI; **unused** per CON-006 |
 
-**Slot 2 — Touchpad Click (I2C):**
+**Known conflict to resolve first.** The console occupies **PA9/PA10** (§2.3.4). A
+provisional reading of the Morpho map puts **display CS (CN10-21) on PA9** — the console's
+TX. If that holds, the display and the serial console cannot coexist as configured and one
+of the two must move. This must be settled before any display driver is written, because
+it is exactly the class of mistake that cost the previous bring-up its schedule.
 
-| Function | mikroBUS | STM32G431 | Peripheral / AF | Notes |
-|---|---|---|---|---|
-| SCL | SCL | PB8 | I2C1_SCL, AF4 | 100 kHz standard mode |
-| SDA | SDA | PB9 | I2C1_SDA, AF4 | MTCH6102 at 7-bit address 0x25 |
-| RST | RST | PA4 | GPIO out | drive high to release the controller |
-| INT | INT | PB3 | GPIO in | unused — position is polled |
+**As-built and confirmed on this board (M1):**
 
-**User button** B1 = **PC13** (active-low), used to confirm the manual OTT scenarios.
-
-Confirmed on hardware (logic analyzer, M2): slot-1 SCK/MOSI/DISP/CS/EXTCOMIN on
-PB3/PB5/PB4/PB12/PC8, the LCD's active-HIGH CS, and DISP on the MISO line; the
-display renders correctly. Slot-2 I2C (PB8/PB9) is confirmed by the touchpad
-running. **Open minor item:** the shield routes slot-2 RST to **PD2**, while the
-firmware currently drives PA4 — the MTCH6102 runs without an explicit reset, so
-this is cosmetic; re-check when convenient.
+| Function | Pin | Note |
+|---|---|---|
+| Console | PA9 / PA10 | USART1 → ST-LINK V3E VCP, 115200 8N1 |
+| User button B1 | PC13 | **active HIGH** — idle low, confirmed by reading `GPIOC->IDR` over SWD with the button released |
+| LED LD2 | PA5 | `.ioc` label `LED_GREEN`, active HIGH. Note PA5 is also the Arduino-header SPI1 SCK |
+| SWD | PA13 / PA14 | SWDIO / SWCLK |
 
 ### 2.3.4 Clock configuration (as configured)
 
-Owned by the STM32CubeMX `.ioc` ([DEC-012](11-Decisions-and-As-Built.md)) and applied
-by its generated `SystemClock_Config()` before `app_main()` is entered. This is the
-current, intended configuration — M1's HSI-16 MHz default ([DEC-004](11-Decisions-and-As-Built.md))
-is history.
+Owned by the STM32CubeMX `.ioc` ([DEC-012](11-Decisions-and-As-Built.md)) and applied by its
+generated `SystemClock_Config()` before the firmware entry point is reached.
 
 | Item | Value | Note |
 |---|---|---|
-| SYSCLK / HCLK | **170 MHz** | The STM32G431's maximum |
-| Source | PLL | `HSI (16 MHz) / PLLM 4 × PLLN 85` |
+| SYSCLK / HCLK | **160 MHz** | The STM32U545's maximum |
+| Source | PLL1 | from **MSIS at 48 MHz**: `PLLM 3 → 16 MHz × PLLN 10 → 160 MHz, PLLR 1` |
 | Time base | SysTick @ **1 kHz** | Owned by the HAL; `Bsp/systick_bsp` reads it and hangs the 1 ms input-debounce hook off it |
-| LPUART1 kernel clock | 170 MHz | Console rate is pinned to 115200 in firmware, not in the `.ioc` |
-| I2C1 kernel clock | 170 MHz | Timing word `0x40B285C2` (≈100 kHz) |
-| SPI1 bit rate | ≈664 kbit/s | `PCLK / 256`; the LS013B7DH03 tolerates ≈1.1 MHz max |
+| USART1 kernel clock | 160 MHz | Console rate is pinned to 115200 in firmware, not in the `.ioc` |
+| Security | TrustZone **off** | Single non-secure domain (`CORTEX_M33_NS`) |
+| Instruction cache | ICACHE enabled | Generated by CubeMX; wanted on this part |
+| Display SPI bit rate | TBD | Set once the display pin map (§2.3.3) is confirmed. See the NFR-002 note in §2.2.1 — this rate, not the CPU, decides the frame budget |
 
-**Consequence worth knowing:** any delay expressed as a *spin count* rather than a
-duration is ~10× shorter here than it was at 16 MHz. The one such delay in the
-firmware (the display's chip-select settle loop) was re-tuned for this clock — see
-[DEC-013](11-Decisions-and-As-Built.md). Prefer `Services/delay` or
-`Services/sw_timer`, which are clock-independent.
+CubeMX resolved the PLL source to MSIS rather than the HSI16 that was asked for. It is
+functionally equivalent here and the console runs correctly at 115200, so it stands as
+configured rather than being fought.
+
+**Consequence worth knowing:** never express a delay as a *spin count*. Use
+`Services/delay` or `Services/sw_timer`, which are clock-independent.
 
 ### 2.3.2 Software & Toolchain
 
@@ -215,3 +262,4 @@ firmware (the display's chip-select settle loop) was re-tuned for this clock —
 | CON-102 | Test Framework | Unit tests shall run under Ceedling/Unity. |
 | CON-103 | Host View Library | The host build's View shall use SDL. |
 | CON-104 | RTOS | The target firmware shall run on FreeRTOS. |
+| CON-105 | Flashing Tool | The firmware shall be flashed with **STM32CubeProgrammer**. OpenOCD 0.12.0 — the newest version the development host packages — attaches to this part but cannot program it: its flash driver knows only `STM32U57/U58xx` (device ID 0x482) while this board reports **0x455** (STM32U535/U545). OpenOCD remains in use as the gdb server and for the ST-LINK udev rules. |
