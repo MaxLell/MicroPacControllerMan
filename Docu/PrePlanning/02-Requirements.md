@@ -4,8 +4,6 @@
 
 Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitous / Event-driven / State-driven / Unwanted-behaviour / Optional-feature templates) and are grouped by feature/concern. This project does *not* separate "system" from "software" requirements — they all live here together. The `FR-0xx` / `FR-1xx` (and `NFR` / `CON`) numbers are stable identifiers only; the numbering carries no system-vs-software meaning.
 
-These requirements state *what* the system must do. How a given milestone realises them — pin assignments, clock settings, transfer budgets, tool choices — belongs in that milestone's design document under [`Docu/Design/`](../Design/).
-
 ## 2.1 Functional Requirements
 
 ### 2.1.1 Boot & Menu
