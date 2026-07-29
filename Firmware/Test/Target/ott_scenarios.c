@@ -5,9 +5,6 @@
 #include <string.h>
 
 #include "custom_assert.h"
-#include "ott_display.h"
-#include "ott_touchdot.h"
-#include "ott_touchpad.h"
 #include "ott_user_button.h"
 
 /* ==========================================================================
@@ -18,10 +15,9 @@
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
     {"user_button", ott_user_button_setup, ott_user_button_run},
-    {"touchpad", ott_touchpad_setup, ott_touchpad_run},
-    {"display", ott_display_setup, ott_display_run},
-    {"touchdot", ott_touchdot_setup, ott_touchdot_run},
 };
+
+#define OTT_SCENARIO_COUNT (sizeof(g_scenarios) / sizeof(g_scenarios[0]))
 
 /* ==========================================================================
  * ott_scenarios - public
@@ -29,30 +25,33 @@ static const ott_scenario_t g_scenarios[] = {
 
 size_t ott_scenarios_get_count(void)
 {
-    return sizeof(g_scenarios) / sizeof(g_scenarios[0]);
+    return OTT_SCENARIO_COUNT;
 }
 
 const ott_scenario_t* ott_scenarios_get(size_t in_index)
 {
-    ASSERT(in_index < ott_scenarios_get_count());
+    ASSERT(in_index < OTT_SCENARIO_COUNT);
 
     return &g_scenarios[in_index];
 }
 
 bool ott_scenarios_find(const char* const in_name, size_t* out_index)
 {
+    bool is_found = false;
+
     ASSERT(in_name != NULL);
     ASSERT(out_index != NULL);
 
-    for (size_t index = 0U; index < ott_scenarios_get_count(); ++index)
+    for (size_t index = 0U; index < OTT_SCENARIO_COUNT; ++index)
     {
         if (strcmp(in_name, g_scenarios[index].name) == 0)
         {
             *out_index = index;
+            is_found = true;
 
-            return true;
+            break;
         }
     }
 
-    return false;
+    return is_found;
 }
