@@ -3,8 +3,9 @@
 # One-shot bring-up helper: build + flash + run an OTT, so you don't type the
 # cmake/programmer/python steps by hand. Run it from anywhere.
 #
-#   ./m2.sh all         # build, flash once, then run the interactive tests in a row
-#   ./m2.sh user_button # build + flash + run just the user-button test
+#   ./m2.sh all         # build, flash, run the automatic suite then the interactive tests
+#   ./m2.sh blinky      # build + flash + run just the blinky test (automatic)
+#   ./m2.sh user_button # build + flash + run just the user-button test (needs you)
 #   ./m2.sh suite       # build + flash + run the automatic suite (enum + banner)
 #   ./m2.sh flash        # build + flash only (no test)
 #   ./m2.sh build        # build only
@@ -65,12 +66,14 @@ cmd="${1:-all}"
 case "$cmd" in
     build) do_build ;;
     flash) do_flash ;;
-    suite | user_button)
+    suite | blinky | user_button)
         do_flash
         run_test "$cmd"
         ;;
     all)
         do_flash
+        # Automatic first: it judges itself, so it needs nobody at the board.
+        run_test blinky
         for t in user_button; do
             printf '\n\033[1;33m--- Next test: %s. Get ready at the board; press ENTER to start ---\033[0m\n' "$t"
             read -r _
@@ -82,7 +85,7 @@ case "$cmd" in
         sed -n '2,20p' "$0"
         ;;
     *)
-        echo "Unknown command: $cmd (try: all | user_button | suite | flash | build)" >&2
+        echo "Unknown command: $cmd (try: all | blinky | user_button | suite | flash | build)" >&2
         exit 2
         ;;
 esac

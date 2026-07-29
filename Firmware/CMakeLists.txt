@@ -158,6 +158,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
+    Test/Target/scripts/ott_blinky.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c
     ThirdParty/embedded_utils/custom_assert.c)
