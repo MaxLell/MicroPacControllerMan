@@ -8,11 +8,11 @@
 #   ./format.sh --diff          # change nothing; print the diff that --check would fix
 #   ./format.sh App/game        # limit to a path (file or directory), repeatable
 #   ./format.sh --staged        # format only what is staged in git, and re-stage it
-#   ./format.sh --install-hook  # install a pre-commit hook that runs --staged
-#   ./format.sh --remove-hook   # take that hook back out
 #
-# `./dev.sh format` and the CMake `format` / `format-check` targets are this script; it
-# is the single definition of what "formatted" means, so the hook and CI call it directly.
+# `./dev.sh format` and the CMake `format` / `format-check` targets are this script; it is
+# the single definition of what "formatted" means. The pre-commit hook is installed from
+# `./dev.sh install-hook`, because it also runs the unit tests and so is more than a
+# formatting concern; `--staged` is the part of it that lives here.
 #
 # The style is Firmware/.clang-format, vendored from https://github.com/MaxLell/c-code-style.
 # It is the standard itself, so it is not edited here — a change to it goes via a PR to that
@@ -34,7 +34,6 @@ cd "$(dirname "$0")"
 
 # The layers of [03 §3.9]. A new top-level source folder has to be added here.
 readonly SOURCE_ROOTS=(App Bsp Drivers Services Test)
-readonly HOOK_PATH=../.git/hooks/pre-commit
 readonly MINIMUM_MAJOR_VERSION=14
 
 red() { printf '\033[1;31m%s\033[0m\n' "$*"; }
@@ -160,22 +159,6 @@ format_staged() {
     return 0
 }
 
-install_hook() {
-    cat >"$HOOK_PATH" <<'HOOK'
-#!/usr/bin/env bash
-# Installed by Firmware/format.sh --install-hook. Remove with --remove-hook.
-exec "$(git rev-parse --show-toplevel)/Firmware/format.sh" --staged
-HOOK
-
-    chmod +x "$HOOK_PATH"
-    green "Installed $HOOK_PATH — staged C sources are formatted on every commit."
-}
-
-remove_hook() {
-    rm -f "$HOOK_PATH"
-    green "Removed the pre-commit hook."
-}
-
 require_clang_format
 
 case "${1:-}" in
@@ -187,14 +170,8 @@ case "${1:-}" in
     --staged)
         format_staged
         ;;
-    --install-hook)
-        install_hook
-        ;;
-    --remove-hook)
-        remove_hook
-        ;;
     -h | --help)
-        sed -n '2,27p' "$0" | sed 's|^# \{0,1\}||'
+        sed -n '2,30p' "$0" | sed 's|^# \{0,1\}||'
         ;;
     *)
         format_in_place "$@"
