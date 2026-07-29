@@ -19,7 +19,7 @@ typedef struct
 
 /* The pin macros come from the STM32CubeMX export (Core/Inc/main.h), so the
  * physical mapping stays in the .ioc and this table only names it. */
-static const dio_bsp_pin_map_t k_pin_map[DIO_BSP_PIN_LAST] = {
+static const dio_bsp_pin_map_t g_pin_map[DIO_BSP_PIN_LAST] = {
     [DIO_BSP_PIN_NONE] = {NULL, 0U},
     [DIO_BSP_PIN_USER_BUTTON] = {USER_BUTTON_GPIO_Port, USER_BUTTON_Pin},
     [DIO_BSP_PIN_DISPLAY_CS] = {DISPLAY_CS_GPIO_Port, DISPLAY_CS_Pin},
@@ -35,9 +35,9 @@ static const dio_bsp_pin_map_t* prv_get_pin_map(dio_bsp_pin_e in_pin)
     ASSERT(g_is_initialized);
     ASSERT(in_pin > DIO_BSP_PIN_NONE);
     ASSERT(in_pin < DIO_BSP_PIN_LAST);
-    ASSERT(k_pin_map[in_pin].port != NULL);
+    ASSERT(g_pin_map[in_pin].port != NULL);
 
-    return &k_pin_map[in_pin];
+    return &g_pin_map[in_pin];
 }
 
 /* ==========================================================================

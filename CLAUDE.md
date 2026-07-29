@@ -104,7 +104,7 @@ After installing openocd, **unplug/replug the board once** so a non-root user ca
   matching [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw);
   a generic primitive and its instance are separate modules (`switch` vs. `user_button`).
 - **All GPIO goes through `dio_bsp`** — name the pin in `dio_bsp_pin_e` + one row in
-  `k_pin_map`. Do not call `HAL_GPIO_*` anywhere else.
+  `g_pin_map`. Do not call `HAL_GPIO_*` anywhere else.
 - **No tick arithmetic, no `millis()`.** `Services/delay` for blocking waits,
   `Services/sw_timer` for every timeout and periodic job.
 - **HAL over registers.** Direct register access needs a justifying comment; there is
@@ -114,7 +114,8 @@ After installing openocd, **unplug/replug the board once** so a non-root user ca
   in `ott_scenarios.c` + the source in `CMakeLists.txt`; nothing else changes.
 - **Coding standard:** [c-code-style](https://github.com/MaxLell/c-code-style)
   (NFR-102), vendored as `Firmware/.clang-format`: Allman braces, 4 spaces, 120
-  columns, `prv_` statics, `g_` globals, `k_` const tables, `in_`/`out_`/`inout_` on
+  columns, `prv_` static functions, `g_` for globals **and file-scope statics** (including
+  const lookup tables — there is no separate `k_` prefix), `in_`/`out_`/`inout_` on
   pointer parameters, named constants over literals, no abbreviations, `ASSERT` on
   public-function preconditions. Keep comments sparse — say *why*, not *what*.
   Fixes to the standard itself go via a separate PR to that repo, only with the

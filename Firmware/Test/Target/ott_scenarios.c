@@ -16,7 +16,7 @@
 
 /* To add a test: write ott_<name>.c/.h with a setup and a run function, add one
  * row here, and add the source to CMakeLists.txt. */
-static const ott_scenario_t k_scenarios[] = {
+static const ott_scenario_t g_scenarios[] = {
     {"user_button", ott_user_button_setup, ott_user_button_run},
     {"touchpad", ott_touchpad_setup, ott_touchpad_run},
     {"display", ott_display_setup, ott_display_run},
@@ -29,14 +29,14 @@ static const ott_scenario_t k_scenarios[] = {
 
 size_t ott_scenarios_get_count(void)
 {
-    return sizeof(k_scenarios) / sizeof(k_scenarios[0]);
+    return sizeof(g_scenarios) / sizeof(g_scenarios[0]);
 }
 
 const ott_scenario_t* ott_scenarios_get(size_t in_index)
 {
     ASSERT(in_index < ott_scenarios_get_count());
 
-    return &k_scenarios[in_index];
+    return &g_scenarios[in_index];
 }
 
 bool ott_scenarios_find(const char* const in_name, size_t* out_index)
@@ -46,7 +46,7 @@ bool ott_scenarios_find(const char* const in_name, size_t* out_index)
 
     for (size_t index = 0U; index < ott_scenarios_get_count(); ++index)
     {
-        if (strcmp(in_name, k_scenarios[index].name) == 0)
+        if (strcmp(in_name, g_scenarios[index].name) == 0)
         {
             *out_index = index;
 

@@ -194,7 +194,7 @@ static void prv_scene_composite(void)
                         OTT_DISPLAY_WEDGE_RIGHT_X, OTT_DISPLAY_WEDGE_BASE_Y, FRAMEBUFFER_COLOR_BLACK);
 }
 
-static const ott_display_scene_fn k_scenes[] = {
+static const ott_display_scene_fn g_scenes[] = {
     prv_scene_rays,          prv_scene_nested_rectangles, prv_scene_alternating_bands,
     prv_scene_concentric_circles, prv_scene_dot_grid,     prv_scene_nested_triangles,
     prv_scene_composite,
@@ -219,7 +219,7 @@ bool ott_display_setup(int in_argument_count, char* in_arguments[], uint8_t* out
 bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, char* out_reason,
                      size_t in_reason_size)
 {
-    const size_t scene_count = sizeof(k_scenes) / sizeof(k_scenes[0]);
+    const size_t scene_count = sizeof(g_scenes) / sizeof(g_scenes[0]);
     bool is_confirmed = false;
 
     (void)in_parameter;
@@ -242,7 +242,7 @@ bool ott_display_run(const uint8_t* in_parameter, uint32_t in_parameter_size, ch
 
     for (size_t index = 0U; (index < scene_count) && !is_confirmed; ++index)
     {
-        k_scenes[index]();
+        g_scenes[index]();
         display_present(&g_framebuffer);
 
         is_confirmed = prv_hold(OTT_DISPLAY_SCENE_HOLD_MS);
