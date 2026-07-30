@@ -30,7 +30,7 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"user_button"}
+INTERACTIVE = {"joystick", "user_button"}
 SUITE_AUTOMATIC = []  # blinky retired with PA5; the joystick test takes its place in M2
 
 
