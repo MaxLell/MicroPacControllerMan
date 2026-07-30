@@ -59,8 +59,24 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define USER_BUTTON_Pin GPIO_PIN_13
 #define USER_BUTTON_GPIO_Port GPIOC
-#define LED_GREEN_Pin GPIO_PIN_5
-#define LED_GREEN_GPIO_Port GPIOA
+#define JOYSTICK_NORTH_Pin GPIO_PIN_0
+#define JOYSTICK_NORTH_GPIO_Port GPIOC
+#define DISPLAY_TE_Pin GPIO_PIN_0
+#define DISPLAY_TE_GPIO_Port GPIOA
+#define DISPLAY_RESET_Pin GPIO_PIN_1
+#define DISPLAY_RESET_GPIO_Port GPIOA
+#define JOYSTICK_EAST_Pin GPIO_PIN_0
+#define JOYSTICK_EAST_GPIO_Port GPIOB
+#define DISPLAY_DSX_Pin GPIO_PIN_10
+#define DISPLAY_DSX_GPIO_Port GPIOB
+#define JOYSTICK_CENTER_Pin GPIO_PIN_6
+#define JOYSTICK_CENTER_GPIO_Port GPIOC
+#define DISPLAY_CS_Pin GPIO_PIN_7
+#define DISPLAY_CS_GPIO_Port GPIOC
+#define JOYSTICK_WEST_Pin GPIO_PIN_9
+#define JOYSTICK_WEST_GPIO_Port GPIOC
+#define JOYSTICK_SOUTH_Pin GPIO_PIN_4
+#define JOYSTICK_SOUTH_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
