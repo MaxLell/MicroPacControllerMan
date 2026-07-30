@@ -119,20 +119,16 @@ python3 Test/run_ott.py user_button     # interactive; exit 0 = PASS, 1 = FAIL, 
 ```
 
 ```
-ott blinky       # drives LD2 (PA5) and reads the pin back — automatic
 ott user_button  # live button state + every debounced press; passes after 3 presses
 ```
 
-`blinky` is **automatic**: it writes the pin and reads it back through `dio_bsp`, so the
-firmware judges itself and `run_ott.py --suite` can run it unattended. The read is a real
-measurement rather than an echo of what was written — `HAL_GPIO_ReadPin` reads `IDR`, the
-input register, which reflects the level actually present on the pad even for a push-pull
-output. On success it blinks the LED five times in a second, so a person watching gets a
-confirmation too.
-
 `user_button` is **interactive**: the firmware streams the live state and waits for you to
-press B1, with a 30 s safety cap so the board always returns to nominal mode. The display
-and joystick tests arrive with the GFX01M2 shield in M2.
+press B1, with a 30 s safety cap so the board always returns to nominal mode.
+
+There is no automatic OTT at the moment. `blinky` was one — it drove LD2 on PA5 and read the
+pin back — but PA5 is the display's SPI clock on the GFX01M2, so once SPI1 claims it the pin
+is no longer a GPIO the firmware can drive. The joystick test takes that role in M2: its keys
+are plain inputs, so four of the five can be judged by the firmware itself.
 
 **Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a run function
 — plus a setup function only if the test takes console arguments, otherwise the table
@@ -228,7 +224,6 @@ count — use `Services/delay` or `Services/sw_timer`, which are clock-independe
 |---|---|---|
 | Console | PA9 / PA10 | USART1 -> ST-LINK V3E VCP, 115200 8N1 |
 | User button B1 | PC13 | **active HIGH** — idle low, confirmed by reading `GPIOC->IDR` over SWD |
-| LED LD2 | PA5 | `.ioc` label `LED_GREEN`, active HIGH |
 | SWD | PA13 / PA14 | SWDIO / SWCLK |
 
 No display and no direction input yet. The **X-NUCLEO-GFX01M2** (ILI9341, 240x320,
@@ -248,9 +243,7 @@ board with a logic analyzer, the way R-001 was.
    "STM32U535/STM32U545", and verifies the download.
 4. **Boot banner** over the VCP: `MicroPacControllerMan booted (M1 U545RE bring-up)`.
 5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists the scenarios.
-6. **`ott blinky` passes** — drives PA5 both ways, verifies each level by reading the pin
-   back, and blinks the LED. `python3 Test/run_ott.py --suite` exits 0.
-7. **`ott user_button` passes** with B1 pressed three times.
+6. **`ott user_button` passes** with B1 pressed three times.
 
 ## Milestone history
 

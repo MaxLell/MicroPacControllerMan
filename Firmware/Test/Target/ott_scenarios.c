@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "custom_assert.h"
-#include "ott_blinky.h"
 #include "ott_user_button.h"
 
 /* ==========================================================================
@@ -15,7 +14,6 @@
 /* To add a test: write ott_<name>.c/.h with a setup and a run function, add one
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
-    {"blinky", NULL, ott_blinky_run},
     {"user_button", NULL, ott_user_button_run},
 };
 

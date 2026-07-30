@@ -31,7 +31,7 @@ import time
 
 BANNER = "MicroPacControllerMan booted"
 INTERACTIVE = {"user_button"}
-SUITE_AUTOMATIC = ["blinky"]  # judge themselves; no operator at the board needed
+SUITE_AUTOMATIC = []  # blinky retired with PA5; the joystick test takes its place in M2
 
 
 def detect_port() -> str:
