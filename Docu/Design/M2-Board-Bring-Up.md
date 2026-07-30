@@ -60,25 +60,36 @@ this board, **three of the twelve positions carry different pins:**
 
 The other nine agree, which is exactly what makes the mistake tempting.
 
-### 1.2 The one real conflict: SCK against LD2, and its documented fix
+### 1.2 SCK shares PA5 with LD2 — and no soldering is needed
 
-Display SCK is **PA5**, which is also **LD2**, the green user LED. That is a property of the
-Nucleo-64 boards, not of the shield.
+Display SCK is **PA5**, which also drives **LD2**, the green user LED. That is a property of
+the Nucleo-64 boards, not of the shield.
 
-UM3062 table 19 provides the intended remedy: solder bridge **SB10**. Default is ON, where
-"PA5 drives the LD2 LED and the SPI_SCK". Setting it **OFF** disconnects the LED, and the
-manual names precisely this situation as the reason it exists — "in case of a signal issue on
-SPI-SCK depending on the ARDUINO shield". The LED is a capacitive load on a clock line that
-will run at tens of MHz, so this is not a cosmetic choice.
+Two things follow, and they are independent of each other.
 
-**Decision: set SB10 OFF for M2.** Consequences:
+**The LED cannot be driven any more, whatever the board's solder bridges say.** Once PA5 is
+configured as `SPI1_SCK` in its alternate function, it is no longer a GPIO output and
+`dio_bsp` cannot write it. So:
 
-- LD2 stops working, so `dio_bsp`'s `DIO_BSP_PIN_LED_GREEN` and the CubeMX `LED_GREEN`
-  output go away.
-- The **`blinky` OTT is retired** — it verifies PA5 by driving it and reading it back, which
-  neither the SPI peripheral nor a disconnected LED permits. It served its purpose as the
-  first self-judging OTT; the joystick test that replaces it in M2 can be automatic in the
-  same way for four of its five keys.
+- `DIO_BSP_PIN_LED_GREEN` and the CubeMX `LED_GREEN` output go away.
+- The **`blinky` OTT is retired.** It verifies PA5 by driving it and reading it back, which an
+  alternate-function pin does not permit. It served its purpose as the first self-judging OTT;
+  the joystick test that replaces it can be automatic in the same way for four of its five keys.
+
+**Solder bridge SB10 is a separate, deferrable question, and the default is fine.** UM3062
+table 19 offers SB10 to disconnect the LED from PA5, for the reason the manual states — "in
+case of a signal issue on SPI-SCK depending on the ARDUINO shield". The obvious worry is that
+the LED loads a clock line meant to run at tens of MHz.
+
+That worry is smaller than it looks: UM3062 §7.6 says LD2 is driven **through a transistor**,
+so PA5 sees a base resistor and a little capacitance rather than an LED with a series
+resistor. ST also ships SB10 **ON** by default, and their own demonstration firmware for this
+shield runs on boards wired exactly this way.
+
+**Decision: leave SB10 ON.** The only cost is cosmetic — LD2 flickers with display traffic. If
+the display misbehaves at a high SPI clock, opening SB10 is the first thing to try, and the
+symptom will then have told us it mattered. Opening it pre-emptively means soldering on
+speculation.
 
 ### 1.3 What is not a conflict after all
 
@@ -179,8 +190,9 @@ disabled clock.
    confirm it serves five keys without change.
 5. **Confirming the display lines on the board** (§1.4) — paper is not silicon.
 
-Settled since this document was written: the pin map (§1), the SB10 decision (§1.2), the
-non-existence of the supposed PA9 conflict (§1.3), and the display controller (§6).
+Settled since this document was written: the pin map (§1), the non-existence of the supposed
+PA9 conflict (§1.3), and the display controller (§6). SB10 (§1.2) is deliberately left at its
+default until a measurement says otherwise.
 
 ## 6. Display controller: ST7789V
 
