@@ -37,6 +37,23 @@ void display_init(void);
  */
 void display_present(const framebuffer_t* in_framebuffer);
 
+/*! \brief Show one rectangle of a frame buffer, leaving the rest of the panel alone.
+ *
+ * The lever that makes a usable frame rate possible. A whole frame is 153,600 bytes and
+ * the transfer dominates everything else, so redrawing all of it to move a few sprites
+ * is the cost that matters. An 8 x 8 cell is 128 bytes.
+ *
+ * The caller decides what changed; this only sends it.
+ *
+ * \param[in]       in_framebuffer: frame to read from, must not be `NULL`
+ * \param[in]       in_x: left edge, below #FRAMEBUFFER_WIDTH
+ * \param[in]       in_y: top edge, below #FRAMEBUFFER_HEIGHT
+ * \param[in]       in_width: at least `1`, and `in_x + in_width` at most #FRAMEBUFFER_WIDTH
+ * \param[in]       in_height: at least `1`, and `in_y + in_height` at most #FRAMEBUFFER_HEIGHT
+ */
+void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y,
+                            int16_t in_width, int16_t in_height);
+
 /*! \brief Blank the display itself, without touching any frame buffer. */
 void display_clear(void);
 

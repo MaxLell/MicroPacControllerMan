@@ -32,6 +32,12 @@
 
 /* Enough presents to average out the tick's 1 ms granularity. */
 #define OTT_DISPLAY_TEST_FRAME_COUNT (5U)
+
+/* What a Pacman frame actually changes: five actors each vacating one 8x8 cell and
+ * entering another, plus a couple of eaten pellets. */
+#define OTT_DISPLAY_TEST_CELL_SIZE (8)
+#define OTT_DISPLAY_TEST_DIRTY_CELLS (12U)
+#define OTT_DISPLAY_TEST_PARTIAL_FRAMES (100U)
 #define OTT_DISPLAY_TEST_MS_PER_SECOND_F (1000.0)
 
 /* 153,600 bytes. Static, because it does not fit on a stack. */
@@ -130,6 +136,42 @@ static void prv_measure_frame_rate(void)
               (int)(OTT_DISPLAY_TEST_MS_PER_SECOND_F / milliseconds_per_frame));
 }
 
+/* The same path, but sending only what a moving game would actually change. This is
+ * the number that decides whether the panel is usable, not the full-frame one. */
+static void prv_measure_partial_rate(void)
+{
+    uint32_t start_tick;
+    uint32_t elapsed_ms;
+    double milliseconds_per_frame;
+
+    cli_print("  timing %lu dirty %dx%d cells per frame — a realistic Pacman update",
+              (unsigned long)OTT_DISPLAY_TEST_DIRTY_CELLS, OTT_DISPLAY_TEST_CELL_SIZE,
+              OTT_DISPLAY_TEST_CELL_SIZE);
+
+    start_tick = systick_bsp_get_tick();
+
+    for (uint32_t frame = 0U; frame < OTT_DISPLAY_TEST_PARTIAL_FRAMES; ++frame)
+    {
+        for (uint32_t cell = 0U; cell < OTT_DISPLAY_TEST_DIRTY_CELLS; ++cell)
+        {
+            const int16_t x = (int16_t)((cell * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_WIDTH);
+            const int16_t y = (int16_t)((frame * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_HEIGHT);
+
+            display_present_region(&g_framebuffer, x, y, OTT_DISPLAY_TEST_CELL_SIZE,
+                                   OTT_DISPLAY_TEST_CELL_SIZE);
+        }
+    }
+
+    elapsed_ms = systick_bsp_get_tick() - start_tick;
+    milliseconds_per_frame = (double)elapsed_ms / OTT_DISPLAY_TEST_PARTIAL_FRAMES;
+
+    cli_print("  %lu partial frames in %lu ms -> %d.%02d ms/frame, %d fps",
+              (unsigned long)OTT_DISPLAY_TEST_PARTIAL_FRAMES, (unsigned long)elapsed_ms,
+              (int)milliseconds_per_frame,
+              (int)((milliseconds_per_frame - (int)milliseconds_per_frame) * 100.0),
+              (int)(OTT_DISPLAY_TEST_MS_PER_SECOND_F / milliseconds_per_frame));
+}
+
 /* ==========================================================================
  * ott_display_test - public
  * ========================================================================= */
@@ -165,6 +207,7 @@ bool ott_display_test_run(const uint8_t* in_parameter, char* out_reason, size_t 
     delay_ms(OTT_DISPLAY_TEST_HOLD_MS);
 
     prv_measure_frame_rate();
+    prv_measure_partial_rate();
 
     cli_print("Press B1 if you saw red, green, blue, the bars, the border, then a yellow disc.");
     cli_print("Times out after %u s.", OTT_DISPLAY_TEST_TIMEOUT_MS / OTT_DISPLAY_TEST_MS_PER_SECOND);

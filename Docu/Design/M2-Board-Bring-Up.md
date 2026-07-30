@@ -255,7 +255,28 @@ At the configured **5 Mbit/s** the table above predicted ~250 ms. The measuremen
 so the arithmetic holds and the transfer really is the whole cost — there is no hidden
 overhead to hunt for, and no point optimising the drawing side.
 
-Two levers remain, and they multiply rather than compete:
+**Partial updates settle it, and the SPI clock does not have to move.** The same path,
+sending only what a moving game changes — five actors each vacating one 8x8 cell and
+entering another, plus a couple of eaten pellets, so twelve cells:
+
+```
+5 full frames    in 1264 ms -> 252 ms/frame,  3 fps
+100 partial frames in 344 ms -> 3.43 ms/frame, 290 fps
+```
+
+Twelve 8x8 cells are 1,536 bytes against 153,600 — **one percent of the data, and 73
+times faster.** At 30 FPS that uses **10 % of the frame budget and leaves 90 %** for the
+game. NFR-002 is reachable at the bit rate already configured.
+
+Worth noting where the remaining time goes: pure transfer of 1,536 bytes at 5 Mbit/s is
+2.46 ms, and the measurement is 3.43 ms. The extra ~0.97 ms is the per-region overhead —
+about **81 µs to set a window**, since each region costs a CASET, a RASET and a RAMWR,
+each its own short SPI transaction with chip-select and DCX toggling around it. At 290 FPS
+that is irrelevant, but it is the thing to attack first if a future frame ever needs
+hundreds of small regions: merging adjacent dirty cells into one rectangle removes it.
+
+So neither lever below is needed for now. They are recorded because the arithmetic is
+useful, not because there is work outstanding:
 
 - **Raise the SPI clock.** The kernel clock is 160 MHz and the prescaler is a power of two,
   so the choices are 5, 10, 20 or 40 Mbit/s. The shield is specified to 32 MHz, while the

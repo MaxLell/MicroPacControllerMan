@@ -45,12 +45,30 @@ void display_present(const framebuffer_t* in_framebuffer)
     ASSERT(g_is_initialized);
     ASSERT(in_framebuffer != NULL);
 
-    /* The whole frame, every time. At the configured bit rate that is far too slow for
-     * the frame rate NFR-002 asks for — pushing only what changed is the lever, and it
-     * belongs to the render path rather than here. See
+    /* The whole frame — 153,600 bytes, measured at 252 ms. Fine for a still image, far
+     * too slow to animate: use display_present_region() for that and let the caller
+     * decide what changed. See
      * [M2 Board Bring-Up §3](../../../Docu/Design/M2-Board-Bring-Up.md). */
     st7789_write_pixels(0U, 0U, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
                         framebuffer_get_line(in_framebuffer, 0), FRAMEBUFFER_WIDTH);
+}
+
+void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y,
+                            int16_t in_width, int16_t in_height)
+{
+    ASSERT(g_is_initialized);
+    ASSERT(in_framebuffer != NULL);
+    ASSERT(in_x >= 0);
+    ASSERT(in_y >= 0);
+    ASSERT(in_width > 0);
+    ASSERT(in_height > 0);
+    ASSERT(in_x + in_width <= FRAMEBUFFER_WIDTH);
+    ASSERT(in_y + in_height <= FRAMEBUFFER_HEIGHT);
+
+    /* The stride stays the full buffer width, so the driver walks the rows of the
+     * region without anything being copied first. */
+    st7789_write_pixels((uint16_t)in_x, (uint16_t)in_y, (uint16_t)in_width, (uint16_t)in_height,
+                        &framebuffer_get_line(in_framebuffer, in_y)[in_x], FRAMEBUFFER_WIDTH);
 }
 
 void display_clear(void)
