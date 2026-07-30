@@ -6,6 +6,7 @@
 
 #include "custom_assert.h"
 #include "ott_dispid.h"
+#include "ott_disptest.h"
 #include "ott_joystick.h"
 #include "ott_user_button.h"
 
@@ -17,6 +18,7 @@
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
     {"dispid", NULL, ott_dispid_run},
+    {"disptest", NULL, ott_disptest_run},
     {"joystick", NULL, ott_joystick_run},
     {"user_button", NULL, ott_user_button_run},
 };

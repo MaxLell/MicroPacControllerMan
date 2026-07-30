@@ -30,7 +30,7 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"joystick", "user_button"}
+INTERACTIVE = {"disptest", "joystick", "user_button"}
 SUITE_AUTOMATIC = ["dispid"]  # judges itself: the display either answers or it does not
 
 
