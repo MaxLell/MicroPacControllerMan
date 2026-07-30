@@ -137,7 +137,7 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | Unique-ID | Name | Description |
 |---|---|---|
 | CON-001 | Target Hardware | The system shall run on the STM32U545RE-Q Nucleo-64 board. |
-| CON-002 | Display Hardware | The system shall use the display of the X-NUCLEO-GFX01M2 expansion board (2.2" colour TFT, 240 × 320, ILI9341 controller over SPI) as its display. |
+| CON-002 | Display Hardware | The system shall use the display of the X-NUCLEO-GFX01M2 expansion board (2.2" colour TFT, 240 × 320, over SPI) as its display. |
 | CON-003 | Input Hardware | The system shall use the joystick of the X-NUCLEO-GFX01M2 — four directional keys plus a centre key — as its directional input device. |
 | CON-004 | Carrier Hardware | The display shield shall connect to the Nucleo board through the ST-Morpho headers; no separate carrier board is used. |
 | CON-005 | Debug Interface | The system shall use the on-board ST-LINK for debugging (SWD) and serial console output. |
