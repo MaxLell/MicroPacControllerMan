@@ -34,9 +34,11 @@
  * the panel's native portrait orientation — 240 wide, 320 tall. */
 #define ST7789_MADCTL_PORTRAIT (0x00U)
 
-/* Most ST7789 panels are wired such that the picture is inverted without this. If
- * colours come out as their complement, this is the line to change. */
-#define ST7789_USE_INVERSION (true)
+/* Off, measured rather than assumed. Most ST7789 modules need inversion on, so that is
+ * what this started at — and the panel then showed every colour as its complement: a
+ * yellow disc came out blue, which in RGB565 is exactly ~0xFFE0 = 0x001F. This panel
+ * does not want it. */
+#define ST7789_USE_INVERSION (false)
 
 /* Reset timing, generous against the datasheet: RESX low for at least 10 us, up to
  * 120 ms before the controller accepts commands, and the same again after sleep-out. */

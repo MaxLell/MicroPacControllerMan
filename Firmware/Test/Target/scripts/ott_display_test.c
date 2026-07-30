@@ -106,7 +106,7 @@ static void prv_measure_frame_rate(void)
     uint32_t elapsed_ms;
     double milliseconds_per_frame;
 
-    cli_print("  timing a full-frame present through framebuffer -> gfx -> display");
+    cli_print("  a YELLOW disc with a BLUE border — through framebuffer -> gfx -> display");
 
     framebuffer_fill(&g_framebuffer, FRAMEBUFFER_COLOR_BLACK);
     gfx_filled_circle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2,
@@ -157,9 +157,9 @@ bool ott_display_test_run(const uint8_t* in_parameter, char* out_reason, size_t 
         return false;
     }
 
-    prv_show_screen("full red", ST7789_RGB(255U, 0U, 0U));
-    prv_show_screen("full green", ST7789_RGB(0U, 255U, 0U));
-    prv_show_screen("full blue", ST7789_RGB(0U, 0U, 255U));
+    prv_show_screen("the whole screen must be RED (not cyan)", ST7789_RGB(255U, 0U, 0U));
+    prv_show_screen("the whole screen must be GREEN (not magenta)", ST7789_RGB(0U, 255U, 0U));
+    prv_show_screen("the whole screen must be BLUE (not yellow)", ST7789_RGB(0U, 0U, 255U));
     prv_show_colour_bars();
     prv_show_geometry();
     delay_ms(OTT_DISPLAY_TEST_HOLD_MS);

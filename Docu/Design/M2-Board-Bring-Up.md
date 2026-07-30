@@ -136,10 +136,22 @@ green and blue, the eight colour bars in the announced order, and the red border
 the white origin square. So the whole path is proven end to end — SPI, the control pins,
 the initialisation sequence, RGB565 pixel format and byte order, and the 240x320 extent.
 
-Two settings that were chosen rather than derived turn out to be right: display
-inversion **on**, which is what most ST7789 panels need, and `MADCTL = 0x00`, the
-native portrait orientation. Had either been wrong the symptom would have been obvious —
-complementary colours, or bars in the wrong order.
+`MADCTL = 0x00`, the native portrait orientation, is right.
+
+**Display inversion is off, and getting there is worth recording.** It started *on*,
+because that is what most ST7789 modules need. The first pass through the flat fills and
+the colour bars was confirmed as "the colours all come" — and it was wrong. Every colour
+was its own complement, and nobody caught it, because a set of colours in reverse order
+still looks like a set of colours.
+
+What caught it was drawing something with a *named expectation*: a yellow disc came out
+blue. In RGB565 that is exact — `~0xFFE0 = 0x001F`, yellow's complement is precisely blue
+— which turned a vague "looks odd" into a one-line diagnosis. Inversion off, and the disc
+is yellow.
+
+The lesson is in the test, not the driver: `display_test` now announces what each screen
+*must* look like ("the whole screen must be RED (not cyan)") instead of merely naming what
+it drew. A confirmation is only worth as much as the expectation it was checked against.
 
 Note that this settles the *panel's* orientation, not the game's. Which way is "up" for
 Pacman is still open, which is why the joystick keys carry compass names and the
