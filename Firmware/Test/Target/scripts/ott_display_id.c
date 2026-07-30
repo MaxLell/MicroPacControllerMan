@@ -1,4 +1,4 @@
-#include "ott_dispid.h"
+#include "ott_display_id.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -11,38 +11,38 @@
 #include "spi_bsp.h"
 
 /* ==========================================================================
- * ott_dispid - private
+ * ott_display_id - private
  * ========================================================================= */
 
 /* ST7789V reset timing, generous: RESX must be low for at least 10 us, and the
  * controller needs up to 120 ms afterwards before it accepts commands. */
-#define OTT_DISPID_RESET_LOW_MS (20U)
-#define OTT_DISPID_RESET_SETTLE_MS (150U)
+#define OTT_DISPLAY_ID_RESET_LOW_MS (20U)
+#define OTT_DISPLAY_ID_RESET_SETTLE_MS (150U)
 
 /* Identification registers. RDDID returns a dummy byte followed by three identity
  * bytes; RDID1..3 each return a dummy plus one byte. Four bytes are read
  * throughout so the dummy is visible rather than silently consumed. */
-#define OTT_DISPID_COMMAND_RDDID (0x04U)
-#define OTT_DISPID_COMMAND_RDID1 (0xDAU)
-#define OTT_DISPID_COMMAND_RDID2 (0xDBU)
-#define OTT_DISPID_COMMAND_RDID3 (0xDCU)
+#define OTT_DISPLAY_ID_COMMAND_RDDID (0x04U)
+#define OTT_DISPLAY_ID_COMMAND_RDID1 (0xDAU)
+#define OTT_DISPLAY_ID_COMMAND_RDID2 (0xDBU)
+#define OTT_DISPLAY_ID_COMMAND_RDID3 (0xDCU)
 
-#define OTT_DISPID_READ_LENGTH (4U)
+#define OTT_DISPLAY_ID_READ_LENGTH (4U)
 
 typedef struct
 {
     uint8_t command;
     const char* name;
-} ott_dispid_register_t;
+} ott_display_id_register_t;
 
-static const ott_dispid_register_t g_registers[] = {
-    {OTT_DISPID_COMMAND_RDDID, "RDDID"},
-    {OTT_DISPID_COMMAND_RDID1, "RDID1"},
-    {OTT_DISPID_COMMAND_RDID2, "RDID2"},
-    {OTT_DISPID_COMMAND_RDID3, "RDID3"},
+static const ott_display_id_register_t g_registers[] = {
+    {OTT_DISPLAY_ID_COMMAND_RDDID, "RDDID"},
+    {OTT_DISPLAY_ID_COMMAND_RDID1, "RDID1"},
+    {OTT_DISPLAY_ID_COMMAND_RDID2, "RDID2"},
+    {OTT_DISPLAY_ID_COMMAND_RDID3, "RDID3"},
 };
 
-#define OTT_DISPID_REGISTER_COUNT (sizeof(g_registers) / sizeof(g_registers[0]))
+#define OTT_DISPLAY_ID_REGISTER_COUNT (sizeof(g_registers) / sizeof(g_registers[0]))
 
 /* Chip-select is driven by hand because its polarity is what this test determines.
  * UM2750 claims active high; the ST7789V datasheet says CSX is active low, and the
@@ -61,15 +61,15 @@ static void prv_reset_controller(bool in_is_active_high)
     prv_select(in_is_active_high, false);
 
     dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_RESET, DIO_BSP_PIN_STATE_LOW);
-    delay_ms(OTT_DISPID_RESET_LOW_MS);
+    delay_ms(OTT_DISPLAY_ID_RESET_LOW_MS);
     dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_RESET, DIO_BSP_PIN_STATE_HIGH);
-    delay_ms(OTT_DISPID_RESET_SETTLE_MS);
+    delay_ms(OTT_DISPLAY_ID_RESET_SETTLE_MS);
 }
 
 /* Sends one command with DCX low, then clocks out zeros to shift the reply in. */
 static void prv_read_register(bool in_is_active_high, uint8_t in_command, uint8_t* out_data)
 {
-    const uint8_t zeros[OTT_DISPID_READ_LENGTH] = {0U};
+    const uint8_t zeros[OTT_DISPLAY_ID_READ_LENGTH] = {0U};
 
     prv_select(in_is_active_high, true);
 
@@ -77,7 +77,7 @@ static void prv_read_register(bool in_is_active_high, uint8_t in_command, uint8_
     spi_bsp_write(&in_command, sizeof(in_command));
 
     dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_DCX, DIO_BSP_PIN_STATE_HIGH);
-    spi_bsp_transfer(zeros, out_data, OTT_DISPID_READ_LENGTH);
+    spi_bsp_transfer(zeros, out_data, OTT_DISPLAY_ID_READ_LENGTH);
 
     prv_select(in_is_active_high, false);
 }
@@ -114,9 +114,9 @@ static bool prv_probe_polarity(bool in_is_active_high)
 
     prv_reset_controller(in_is_active_high);
 
-    for (size_t index = 0U; index < OTT_DISPID_REGISTER_COUNT; ++index)
+    for (size_t index = 0U; index < OTT_DISPLAY_ID_REGISTER_COUNT; ++index)
     {
-        uint8_t data[OTT_DISPID_READ_LENGTH] = {0U};
+        uint8_t data[OTT_DISPLAY_ID_READ_LENGTH] = {0U};
 
         prv_read_register(in_is_active_high, g_registers[index].command, data);
 
@@ -134,10 +134,10 @@ static bool prv_probe_polarity(bool in_is_active_high)
 }
 
 /* ==========================================================================
- * ott_dispid - public
+ * ott_display_id - public
  * ========================================================================= */
 
-bool ott_dispid_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size)
+bool ott_display_id_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size)
 {
     bool has_answered_low;
     bool has_answered_high;

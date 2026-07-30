@@ -160,8 +160,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
-    Test/Target/scripts/ott_dispid.c
-    Test/Target/scripts/ott_disptest.c
+    Test/Target/scripts/ott_display_id.c
+    Test/Target/scripts/ott_display_test.c
     Test/Target/scripts/ott_joystick.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c

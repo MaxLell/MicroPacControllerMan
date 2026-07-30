@@ -30,8 +30,8 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"disptest", "joystick", "user_button"}
-SUITE_AUTOMATIC = ["dispid"]  # judges itself: the display either answers or it does not
+INTERACTIVE = {"display_test", "joystick", "user_button"}
+SUITE_AUTOMATIC = ["display_id"]  # judges itself: the display either answers or it does not
 
 
 def detect_port() -> str:

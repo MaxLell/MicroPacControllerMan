@@ -119,7 +119,7 @@ low when pressed, with `GPIO_NOPULL` configured, *is* being pulled up externally
 attempt to show this by reading the pins high over SWD proved nothing on its own — a floating
 input reads high too — so this test, not that measurement, is the evidence.
 
-**Display — confirmed on hardware.** The `dispid` OTT resets the controller and reads its
+**Display — confirmed on hardware.** The `display_id` OTT resets the controller and reads its
 identification registers. It got an answer, which is the only available proof that these pins
 are the ones the map claims: a wrong SCK, MOSI, MISO, CS or DCX produces no reply at all.
 SCK, MOSI and MISO must be right because data went out and came back; CS because the
@@ -129,9 +129,25 @@ controller work. TE stays unused and untested.
 
 **R-009 is closed.** Both halves of the pin map are now measured rather than derived.
 
+### 1.6 The panel works
+
+The `display_test` OTT was run at the board and confirmed by the operator: full red,
+green and blue, the eight colour bars in the announced order, and the red border with
+the white origin square. So the whole path is proven end to end — SPI, the control pins,
+the initialisation sequence, RGB565 pixel format and byte order, and the 240x320 extent.
+
+Two settings that were chosen rather than derived turn out to be right: display
+inversion **on**, which is what most ST7789 panels need, and `MADCTL = 0x00`, the
+native portrait orientation. Had either been wrong the symptom would have been obvious —
+complementary colours, or bars in the wrong order.
+
+Note that this settles the *panel's* orientation, not the game's. Which way is "up" for
+Pacman is still open, which is why the joystick keys carry compass names and the
+key-to-direction mapping stays an explicit table (§1).
+
 ### 1.5 Measured: chip select is active LOW, and the controller is an ST7789V
 
-`dispid` reads the identification registers at both chip-select polarities:
+`display_id` reads the identification registers at both chip-select polarities:
 
 ```
 --- chip select active LOW ---

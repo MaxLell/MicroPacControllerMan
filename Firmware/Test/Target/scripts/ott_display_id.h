@@ -1,7 +1,7 @@
 /*
- * ott_dispid.h
+ * ott_display_id.h
  *
- * dispid OTT (board bring-up): resets the display controller and reads its
+ * display_id OTT (board bring-up): resets the display controller and reads its
  * identification registers, so the firmware learns three things at once before any
  * driver exists.
  *
@@ -17,17 +17,17 @@
  * arguments, so the scenario table carries `NULL`.
  */
 
-#ifndef OTT_DISPID_H
-#define OTT_DISPID_H
+#ifndef OTT_DISPLAY_ID_H
+#define OTT_DISPLAY_ID_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 /* ==========================================================================
- * ott_dispid - public API
+ * ott_display_id - public API
  * ========================================================================= */
 
-bool ott_dispid_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size);
+bool ott_display_id_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size);
 
-#endif /* OTT_DISPID_H */
+#endif /* OTT_DISPLAY_ID_H */

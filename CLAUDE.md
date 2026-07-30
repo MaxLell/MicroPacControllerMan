@@ -37,7 +37,7 @@ silently working around a wart.
   is current; the rest of the doc set still lags in places.
 - **M2 Board Bring-Up — in progress.** ST7789V display + joystick on the GFX01M2. The pin
   map is **measured, not assumed**: the joystick keys were confirmed by the `joystick` OTT
-  and the display by `dispid`, which got the controller to answer. Chip select turned out
+  and the display by `display_id`, which got the controller to answer. Chip select turned out
   **active LOW**, not the active high UM2750 claims. Next: the ST7789V driver and the RGB565
   colour path. See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
