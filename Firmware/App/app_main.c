@@ -4,6 +4,7 @@
 #include "console.h"
 #include "dio_bsp.h"
 #include "ott.h"
+#include "spi_bsp.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
 #include "user_button.h"
@@ -24,6 +25,7 @@ static void prv_init_platform(void)
     systick_bsp_init();
     dio_bsp_init();
     console_init();
+    spi_bsp_init();
     sw_timer_init();
     user_button_init();
 

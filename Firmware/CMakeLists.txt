@@ -142,6 +142,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
     Bsp/dio_bsp/dio_bsp.c
     Bsp/retain_ram/retain_ram.c
+    Bsp/spi_bsp/spi_bsp.c
     Bsp/switch/switch.c
     Bsp/systick_bsp/systick_bsp.c
     Bsp/uart_bsp/uart_bsp.c
@@ -158,6 +159,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/ott_scenarios.c
+    Test/Target/scripts/ott_dispid.c
     Test/Target/scripts/ott_joystick.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c
@@ -171,6 +173,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     Bsp/dio_bsp
     Bsp/retain_ram
+    Bsp/spi_bsp
     Bsp/switch
     Bsp/systick_bsp
     Bsp/uart_bsp
