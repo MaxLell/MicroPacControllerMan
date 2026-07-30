@@ -24,7 +24,7 @@ CN2 mates with the board's CN7, its CN3 with the board's CN10.
 | Display SCK | CN3-11 | CN10-11 | **PA5** | SPI1_SCK. Also LD2 — see §1.2 |
 | Display MISO (SDO) | CN3-13 | CN10-13 | **PA6** | SPI1_MISO |
 | Display MOSI (SDI) | CN3-15 | CN10-15 | **PA7** | SPI1_MOSI |
-| Display CS (NCS) | CN3-21 | CN10-21 | **PC7** | GPIO, **active HIGH** |
+| Display CS (NCS) | CN3-21 | CN10-21 | **PC7** | GPIO, **active LOW** — measured; see §1.5 |
 | Display DCX (WR) | CN3-25 | CN10-25 | **PB10** | GPIO, data/command select |
 | Display RESET | CN2-30 | CN7-30 | **PA1** | GPIO, active low |
 | Display TE (FMARK) | CN2-28 | CN7-28 | **PA0** | GPIO in, optional |
@@ -119,12 +119,46 @@ low when pressed, with `GPIO_NOPULL` configured, *is* being pulled up externally
 attempt to show this by reading the pins high over SWD proved nothing on its own — a floating
 input reads high too — so this test, not that measurement, is the evidence.
 
-**Display — still on paper.** None of SCK, MOSI, MISO, CS, DCX, RESET or TE has been observed.
-They cannot be confirmed the same way, because there is no equivalent of "press a key and see
-which pin moves": the display is a passive SPI target until it is driven correctly. Confirm
-them with a logic analyzer, or accept that the first display bring-up doubles as the
-measurement — in which case a wrong pin shows up as no reaction at all, which is the symptom
-that cost the previous shield its schedule.
+**Display — confirmed on hardware.** The `dispid` OTT resets the controller and reads its
+identification registers. It got an answer, which is the only available proof that these pins
+are the ones the map claims: a wrong SCK, MOSI, MISO, CS or DCX produces no reply at all.
+SCK, MOSI and MISO must be right because data went out and came back; CS because the
+controller responded only at one polarity; DCX because the command and data phases were
+distinguished. RESET is exercised but not proven — a stuck-high reset line would also let the
+controller work. TE stays unused and untested.
+
+**R-009 is closed.** Both halves of the pin map are now measured rather than derived.
+
+### 1.5 Measured: chip select is active LOW, and the controller is an ST7789V
+
+`dispid` reads the identification registers at both chip-select polarities:
+
+```
+--- chip select active LOW ---
+  RDDID (0x04) -> 42 C2 A9 00
+  RDID1 (0xDA) -> 85 FF 00 00
+  RDID2 (0xDB) -> 85 FF 00 00
+  RDID3 (0xDC) -> 52 00 00 00
+--- chip select active HIGH ---
+  RDDID (0x04) -> 00 00 00 00        (and likewise for the rest)
+```
+
+**Chip select is active LOW.** UM2750 states "SPI chip select active high" in five places, but
+it also says that for a NOR flash whose pin is named **CS#** — and the `#` means active low,
+which the MX25L6433F datasheet confirms. The statement is a copy-paste error repeated through
+the document. The ST7789V datasheet has CSX active low, and the board agrees: at active high
+every register reads as zero.
+
+**The controller identifies as an ST7789V.** RDID1/RDID2/RDID3 give **0x85 / 0x85 / 0x52**,
+the ST7789 identity, which independently backs up the `XNGFX01M2$AZ1` sticker rather than
+relying on it. The driver can make this check at start-up.
+
+**Reads need a one-*bit* dummy, not a one-byte dummy.** The `RDDID` result looks wrong until
+you shift it: `42 C2 A9` left by a single bit is exactly `85 85 52`. So the controller emits
+one dummy clock cycle before the data, and a byte-aligned read lands off by one bit. That the
+shift reproduces the ID exactly is itself confirmation the bus is sound — and it is the kind of
+detail that otherwise costs an afternoon, because the data looks like plausible garbage rather
+than like nothing.
 
 **A note on tooling, learned the hard way.** Reading pins over SWD while the firmware runs is
 not available here: openocd drives this ST-LINK in HLA mode, which offers no memory access on
