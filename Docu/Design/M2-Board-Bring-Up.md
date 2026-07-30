@@ -12,100 +12,93 @@ Requirements realised here: CON-002, CON-003, CON-004 (display, joystick, carrie
 FR-004 (directional control), FR-005 / FR-028 (colour rendering), NFR-002 (frame rate),
 NFR-003 (input latency).
 
-## 1. Pin mapping — the shield side is known, the board side is not
+## 1. Pin mapping
 
-Two tables are needed and only one of them is in hand.
+Established by cross-referencing two documents **by connector position**, which is the only
+way that is valid here: the shield's own positions from **UM2750 Rev 3** (tables 12 and 13),
+and this board's position-to-pin assignment from **UM3062 Rev 4** (table 18). The shield's
+CN2 mates with the board's CN7, its CN3 with the board's CN10.
 
-### 1.1 What the shield puts where (known)
+| Signal | Shield | Board | STM32U545RE | Notes |
+|---|---|---|---|---|
+| Display SCK | CN3-11 | CN10-11 | **PA5** | SPI1_SCK. Also LD2 — see §1.2 |
+| Display MISO (SDO) | CN3-13 | CN10-13 | **PA6** | SPI1_MISO |
+| Display MOSI (SDI) | CN3-15 | CN10-15 | **PA7** | SPI1_MOSI |
+| Display CS (NCS) | CN3-21 | CN10-21 | **PC7** | GPIO, **active HIGH** |
+| Display DCX (WR) | CN3-25 | CN10-25 | **PB10** | GPIO, data/command select |
+| Display RESET | CN2-30 | CN7-30 | **PA1** | GPIO, active low |
+| Display TE (FMARK) | CN2-28 | CN7-28 | **PA0** | GPIO in, optional |
+| Joystick LEFT | CN3-17 | CN10-17 | **PC9** | GPIO in, active low |
+| Joystick CENTER | CN3-19 | CN10-19 | **PC6** | GPIO in, active low |
+| Joystick DOWN | CN3-27 | CN10-27 | **PB4** | GPIO in, active low |
+| Joystick RIGHT | CN2-34 | CN7-34 | **PB0** | GPIO in, active low |
+| Joystick UP | CN2-38 | CN7-38 | **PC0** | GPIO in, active low |
 
-From **UM2750 Rev 3**, tables 12 and 13 — the shield's own ST-morpho *positions*, which are
-independent of any board's pin naming. The shield's CN2 mates with the board's CN7, its CN3
-with the board's CN10.
+Display interface mode is strapped on the shield by IM0..IM3: **4-line, 8-bit data SPI**.
 
-| Signal | Shield position | Board connector | Notes |
+The unused NOR flash sits on PA8 (CS), PB13 (SCK), PB14 (MISO) and PB15 (MOSI), with
+alternates selectable by the shield's solder bridges SB1..SB6. Nothing needs to be done
+about it beyond leaving those pins alone. The shield also wires its flash data lines to
+CN3-35/37, which on this board are **PA2/PA3** — worth remembering only because UM3062
+footnote 7 says the ST-LINK VCP can be re-routed onto PA2/PA3 by solder bridge. Doing that
+would put the flash and the console on the same wires.
+
+### 1.1 Why the position cross-reference was necessary
+
+**UM2750 lists no STM32U5 board at all** — its newest families are G4, WB and WL, and it is
+dated March 2022. Its "STM32 GPIO" columns therefore describe *other* boards, and reading
+the closest neighbour's column as this board's pin map is invalid.
+
+It is also wrong in practice. Comparing the NUCLEO-G431RB column against UM3062's table for
+this board, **three of the twelve positions carry different pins:**
+
+| Signal | Position | NUCLEO-G431RB | NUCLEO-U545RE-Q |
 |---|---|---|---|
-| Display SCK | CN3-11 | CN10-11 | |
-| Display MISO (SDO) | CN3-13 | CN10-13 | |
-| Display MOSI (SDI) | CN3-15 | CN10-15 | |
-| Display CS (NCS) | CN3-21 | CN10-21 | **active HIGH** — the manual is explicit |
-| Display DCX (WR) | CN3-25 | CN10-25 | data/command select |
-| Display RESET | CN2-30 | CN7-30 | active low |
-| Display TE (FMARK) | CN2-28 | CN7-28 | tearing effect, optional |
-| Joystick LEFT | CN3-17 | CN10-17 | active low |
-| Joystick CENTER | CN3-19 | CN10-19 | active low |
-| Joystick DOWN | CN3-27 | CN10-27 | active low |
-| Joystick RIGHT | CN2-34 | CN7-34 | active low |
-| Joystick UP | CN2-38 | CN7-38 | active low |
+| Display CS | CN10-21 | PA9 | **PC7** |
+| Joystick LEFT | CN10-17 | PB6 | **PC9** |
+| Joystick CENTER | CN10-19 | PC7 | **PC6** |
 
-Interface mode is strapped on the shield by IM0..IM3: **4-line, 8-bit data SPI**.
+The other nine agree, which is exactly what makes the mistake tempting.
 
-The unused NOR flash occupies further positions — CN3-16/23/26/28/29/30/31 and
-CN2-2/32/35/36/37 — which matters only in that they must be left alone. CN3-3/5 and CN3-33
-are reserved for a touch panel the shield does not populate.
+### 1.2 The one real conflict: SCK against LD2, and its documented fix
 
-### 1.2 What the board has at those positions (NOT known)
+Display SCK is **PA5**, which is also **LD2**, the green user LED. That is a property of the
+Nucleo-64 boards, not of the shield.
 
-**This is the missing half, and it is the one that decides everything.** UM2750's "STM32
-GPIO" columns are per-board-family footnotes, and **the document lists no STM32U5 board at
-all** — its newest families are G4, WB and WL, and it is dated March 2022.
+UM3062 table 19 provides the intended remedy: solder bridge **SB10**. Default is ON, where
+"PA5 drives the LD2 LED and the SPI_SCK". Setting it **OFF** disconnects the LED, and the
+manual names precisely this situation as the reason it exists — "in case of a signal issue on
+SPI-SCK depending on the ARDUINO shield". The LED is a capacitive load on a clock line that
+will run at tens of MHz, so this is not a cosmetic choice.
 
-So UM2750 can say what pin a *NUCLEO-G431RB* has at CN10-21. It cannot say what a
-NUCLEO-U545RE-Q has there. Nucleo-64 boards are largely consistent by position, but "largely"
-is not a basis for a driver — that assumption is precisely what cost the previous bring-up
-its schedule.
+**Decision: set SB10 OFF for M2.** Consequences:
 
-The authoritative table is **UM3062, "STM32U3/U5 Nucleo-64 boards (MB1841)"**, which carries
-the CN7/CN10 pin assignment for this board. It is not yet in hand; two download attempts
-from st.com failed.
+- LD2 stops working, so `dio_bsp`'s `DIO_BSP_PIN_LED_GREEN` and the CubeMX `LED_GREEN`
+  output go away.
+- The **`blinky` OTT is retired** — it verifies PA5 by driving it and reading it back, which
+  neither the SPI peripheral nor a disconnected LED permits. It served its purpose as the
+  first self-judging OTT; the joystick test that replaces it in M2 can be automatic in the
+  same way for four of its five keys.
 
-For reference only, this is what UM2750 gives for the neighbouring **G431RB/G474RE/G491RE**
-group at the same positions. **Treat it as a hypothesis to be checked against UM3062, not as
-this project's pin map:**
+### 1.3 What is not a conflict after all
 
-| Signal | Position | G4-family pin (reference only) |
-|---|---|---|
-| Display SCK | CN10-11 | PA5 |
-| Display MISO | CN10-13 | PA6 |
-| Display MOSI | CN10-15 | PA7 |
-| Display CS | CN10-21 | PA9 |
-| Display DCX | CN10-25 | PB10 |
-| Display RESET | CN7-30 | PA1 |
-| Display TE | CN7-28 | PA0 |
-| Joystick LEFT | CN10-17 | PB6 |
-| Joystick CENTER | CN10-19 | PC7 |
-| Joystick DOWN | CN10-27 | PB4 |
-| Joystick RIGHT | CN7-34 | PB0 |
-| Joystick UP | CN7-38 | PC0 |
+An earlier reading of this project's notes claimed display CS collides with the console's TX
+on PA9. **It does not.** CS is on **PC7**; PA9/PA10 sit on CN10-2 and CN10-4, which the
+shield leaves unconnected. The console, the ST-LINK VCP and the whole OTT reset flow are
+untouched by the shield, and no CubeMX rework is needed for them.
 
-### 1.3 How it gets settled
+Checked against the current configuration, the only collision with anything already in use
+is PA5/LD2 above. PC13 (user button) and PA13/PA14 (SWD) are clear, and PC0, PC6, PC7, PC9,
+PB0, PB4, PB10, PA0, PA1, PA6, PA7 are all currently unused.
 
-1. Obtain **UM3062** and read the CN7/CN10 tables for the NUCLEO-U545RE-Q.
-2. **Confirm the result on the board** before writing a display driver. The joystick lines
-   can be measured without any instrument: configure candidate pins as inputs with pull-ups,
-   press a direction, and see which pin goes low. The display lines need a logic analyzer.
+### 1.4 Still to be measured
 
-Measuring first is not bureaucracy. On the previous hardware an assumed pin map was the root
-cause of a display that stayed blank, and the mistake survived several days of looking for
-software faults.
-
-### 1.4 Two conflicts that are likely, pending §1.2
-
-Both follow from the G4 reference mapping. **If** the U545RE-Q carries the same pins at those
-positions, both are real; if it does not, both evaporate. They are recorded because each one
-would change a decision already taken, so they must be resolved early either way.
-
-**Display CS against the console.** The G4 reference puts CS at CN10-21 on **PA9** — and on
-our board the console demonstrably runs on **USART1, PA9/PA10**. CS is hardwired on the
-shield and cannot move, and it is active *high*, so a UART transmit line on that pin would
-select and deselect the display mid-transfer. Were this to hold, the console would have to
-move: either to another USART if the board's solder bridges allow re-routing the ST-LINK VCP,
-or off-board to a USB-serial adapter on free pins.
-
-**Display SCK against the LED.** The G4 reference puts SCK at CN10-11 on **PA5**, which on
-this board is **LD2**, the green user LED. Nucleo-64 boards share LD2 with the Arduino-header
-SPI clock, so this one cannot be designed away if the position holds. Consequence: LD2 would
-become an activity indicator, and the `blinky` OTT — which verifies PA5 by driving it and
-reading it back — would stop being valid and need reworking or retiring.
+The map above is derived from two authoritative ST documents rather than from a neighbour's
+column, so the confidence is far higher than before — but it is still paper. **Confirm the
+display lines on the board with a logic analyzer before trusting a driver that misbehaves,**
+and note that the joystick lines need no instrument at all: configure them as inputs with
+pull-ups, press a direction, and the firmware can report which pin went low. That check is
+cheap enough to be an OTT in its own right.
 
 ## 2. Clock and core configuration (as configured)
 
@@ -176,30 +169,32 @@ disabled clock.
 
 ## 5. Open questions for M2
 
-1. **Which STM32U545RE pin sits at each morpho position** (§1.2) — obtain UM3062. Everything
-   else waits on this; the shield side (§1.1) is already settled.
-2. **The PA9 conflict** (§1.4) — only if the G4 reference mapping holds for this board. If it
-   does: can the ST-LINK VCP be re-routed off USART1 by solder bridge? Also UM3062. This
-   would block all display work, so it is checked immediately after item 1.
-3. **Display SPI bit rate** — what the controller and the shield's routing actually sustain,
-   which sets the frame budget in §3.
-4. **Which display controller is on our board.** UM2750 §6.3 shows the GFX01M2 shipped
-   with **two different LCDs**, and the driver has to match:
-
-   | Product identification | Board | LCD | Driver IC |
-   |---|---|---|---|
-   | `XNGFX01M2$AZ1` | MB1642-TCXD022IB5-D01 | TCXD022IBLON-5 | **ST7789V** |
-   | `XNGFX01M2$AZ2` | MB1642-DT022CTFT-D01 | DT022CTFT | **ILI9341V** |
-
-   Read it off the stickers on the PCB — the first sticker's second line is the product
-   identification, the second sticker's first line the board reference. Both controllers can
-   also report an ID over SPI, so the driver can verify at run time once it talks at all.
-   Note that earlier project notes claimed ILI9341 outright; that was one of the two
-   possibilities, not established fact.
-
-5. **Colour format** — RGB565 is assumed throughout; confirm the controller is driven in
-   16-bit pixel mode and that the byte order matches.
-6. **Frame buffer placement** — 153.6 kB of the 256 kB contiguous SRAM. Decide whether a
+1. **Display SPI bit rate** — what the ST7789V and the shield's routing actually sustain,
+   which sets the frame budget in §3. The shield is specified to 32 MHz.
+2. **Colour format** — RGB565 is assumed throughout; confirm the ST7789V is driven in 16-bit
+   pixel mode and that the byte order matches.
+3. **Frame buffer placement** — 153.6 kB of the 256 kB contiguous SRAM. Decide whether a
    single buffer suffices or the render path needs two, which would not fit.
-7. **Joystick debouncing** — the existing `Bsp/switch` primitive already debounces a GPIO
-   over a 32-sample history; confirm it serves five keys without change.
+4. **Joystick debouncing** — `Bsp/switch` already debounces a GPIO over a 32-sample history;
+   confirm it serves five keys without change.
+5. **Confirming the display lines on the board** (§1.4) — paper is not silicon.
+
+Settled since this document was written: the pin map (§1), the SB10 decision (§1.2), the
+non-existence of the supposed PA9 conflict (§1.3), and the display controller (§6).
+
+## 6. Display controller: ST7789V
+
+The GFX01M2 shipped with two different LCDs, so this had to be read off the board rather
+than assumed. The sticker on our shield says **`XNGFX01M2$AZ1`**, which UM2750 §6.3.1 maps to
+board `MB1642-TCXD022IB5-D01`, LCD `TCXD022IBLON-5`, driver IC **ST7789V**.
+
+| Product identification | Board | LCD | Driver IC |
+|---|---|---|---|
+| **`XNGFX01M2$AZ1`** — ours | MB1642-TCXD022IB5-D01 | TCXD022IBLON-5 | **ST7789V** |
+| `XNGFX01M2$AZ2` | MB1642-DT022CTFT-D01 | DT022CTFT | ILI9341V |
+
+So the driver targets the **ST7789V**, not the ILI9341 this project previously assumed. The
+two are similar in shape but differ in initialisation sequence and in some register
+semantics, so the distinction is not academic. The controller can also report its ID over
+SPI, which gives the driver a way to verify what it is talking to at run time rather than
+trusting the sticker.
