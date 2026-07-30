@@ -73,7 +73,30 @@ bool st7789_is_present(void);
 void st7789_fill_rectangle(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
                            uint16_t in_colour);
 
+/*! \brief Switch the output stage on or off. The frame memory is kept either way.
+ *
+ * \param[in]       in_is_on: `true` shows the image, `false` blanks the panel
+ */
+void st7789_set_display_on(bool in_is_on);
+
 /*! \brief Fill the whole screen with one colour. */
 void st7789_fill_screen(uint16_t in_colour);
+
+/*! \brief Send a rectangle of pixels.
+ *
+ * The pixels are read in row-major order, `in_width` of them per row. Byte order is
+ * handled here: the controller wants each pixel most-significant byte first, which is
+ * the opposite of how a `uint16_t` sits in memory on this part.
+ *
+ * \param[in]       in_x: left edge, below #ST7789_WIDTH
+ * \param[in]       in_y: top edge, below #ST7789_HEIGHT
+ * \param[in]       in_width: at least `1`, and `in_x + in_width` at most #ST7789_WIDTH
+ * \param[in]       in_height: at least `1`, and `in_y + in_height` at most #ST7789_HEIGHT
+ * \param[in]       in_pixels: `in_width * in_height` RGB565 values, must not be `NULL`
+ * \param[in]       in_stride: pixels per row in `in_pixels`, at least `in_width` —
+ *                      lets a caller send a sub-rectangle of a larger image
+ */
+void st7789_write_pixels(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
+                         const uint16_t* in_pixels, uint16_t in_stride);
 
 #endif /* ST7789_H */

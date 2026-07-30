@@ -1,16 +1,18 @@
 /*
  * framebuffer.h
  *
- * A 1-bit-per-pixel frame buffer: memory plus the bit arithmetic to address it, and
- * nothing else. Platform-independent, so drawing can be built and unit-tested on the
- * host; presenting one of these is a display driver's only job.
+ * An off-screen colour image: memory plus the arithmetic to address it, and nothing
+ * else. Platform-independent, so drawing can be built and unit-tested on the host;
+ * presenting one of these is a display driver's only job.
  *
- * Colours are logical, not panel-native — a set bit means ink. Whatever bit polarity
- * a particular panel wants is that driver's problem, not the caller's.
+ * Pixels are **RGB565** — five bits red, six green, five blue — which is the format
+ * the panel's controller consumes, so nothing is converted on the way out.
  *
- * The buffer is an object rather than a hidden global so several can exist: the
- * render path is specified to hand on a double-buffered snapshot
- * ([03 §3.2](../../../Docu/PrePlanning/03-Architecture.md), R-007).
+ * A whole frame is 240 x 320 x 2 bytes = **153,600 bytes**, 60 % of the
+ * microcontroller's contiguous SRAM. So a `framebuffer_t` belongs in static storage:
+ * one will not fit on a stack, and two will not fit at all. That rules out the
+ * double-buffered snapshot [03 §3.2](../../../Docu/PrePlanning/03-Architecture.md)
+ * assumed when a frame was 2 kB — see [M2 Board Bring-Up §3](../../../Docu/Design/M2-Board-Bring-Up.md).
  */
 
 #ifndef FRAMEBUFFER_H
@@ -22,22 +24,31 @@
  * framebuffer - public types
  * ========================================================================= */
 
-#define FRAMEBUFFER_WIDTH (128)
-#define FRAMEBUFFER_HEIGHT (128)
+#define FRAMEBUFFER_WIDTH (240)
+#define FRAMEBUFFER_HEIGHT (320)
 
-#define FRAMEBUFFER_BITS_PER_BYTE (8)
-#define FRAMEBUFFER_BYTES_PER_LINE (FRAMEBUFFER_WIDTH / FRAMEBUFFER_BITS_PER_BYTE)
+/*! \brief One pixel, RGB565. */
+typedef uint16_t framebuffer_color_t;
 
-typedef enum
-{
-    FRAMEBUFFER_COLOR_WHITE = 0,                /*!< background — no ink              */
-    FRAMEBUFFER_COLOR_BLACK                     /*!< ink on                           */
-} framebuffer_color_e;
+/*! \brief Build a colour from 8-bit components; the low bits are discarded. */
+#define FRAMEBUFFER_RGB(red, green, blue)                                                \
+    ((framebuffer_color_t)((((uint16_t)(red) & 0xF8U) << 8)                              \
+                           | (((uint16_t)(green) & 0xFCU) << 3)                          \
+                           | (((uint16_t)(blue) & 0xF8U) >> 3)))
+
+#define FRAMEBUFFER_COLOR_BLACK FRAMEBUFFER_RGB(0U, 0U, 0U)
+#define FRAMEBUFFER_COLOR_WHITE FRAMEBUFFER_RGB(255U, 255U, 255U)
+#define FRAMEBUFFER_COLOR_RED FRAMEBUFFER_RGB(255U, 0U, 0U)
+#define FRAMEBUFFER_COLOR_GREEN FRAMEBUFFER_RGB(0U, 255U, 0U)
+#define FRAMEBUFFER_COLOR_BLUE FRAMEBUFFER_RGB(0U, 0U, 255U)
+#define FRAMEBUFFER_COLOR_YELLOW FRAMEBUFFER_RGB(255U, 255U, 0U)
+#define FRAMEBUFFER_COLOR_CYAN FRAMEBUFFER_RGB(0U, 255U, 255U)
+#define FRAMEBUFFER_COLOR_MAGENTA FRAMEBUFFER_RGB(255U, 0U, 255U)
 
 typedef struct
 {
-    /*!< One bit per pixel. Bit 0 of a byte is its left-most pixel; a set bit is ink. */
-    uint8_t lines[FRAMEBUFFER_HEIGHT][FRAMEBUFFER_BYTES_PER_LINE];
+    /*!< Row-major, one RGB565 value per pixel. */
+    framebuffer_color_t pixels[FRAMEBUFFER_HEIGHT][FRAMEBUFFER_WIDTH];
 } framebuffer_t;
 
 /* ==========================================================================
@@ -46,6 +57,10 @@ typedef struct
 
 /*! \brief Set every pixel to white.
  *
+ * The background this module has always cleared to. White is *bright* on an emissive
+ * panel, so a game wanting a dark screen fills \ref FRAMEBUFFER_COLOR_BLACK instead
+ * of clearing.
+ *
  * \param[out]      inout_framebuffer: buffer to clear, must not be `NULL`
  */
 void framebuffer_clear(framebuffer_t* inout_framebuffer);
@@ -53,40 +68,37 @@ void framebuffer_clear(framebuffer_t* inout_framebuffer);
 /*! \brief Set every pixel to one colour.
  *
  * \param[out]      inout_framebuffer: buffer to fill, must not be `NULL`
- * \param[in]       in_color: member of \ref framebuffer_color_e
+ * \param[in]       in_color: colour to write
  */
-void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_e in_color);
+void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_t in_color);
 
-/*! \brief Set one pixel.
- *
- * Coordinates outside the buffer are ignored, so callers may draw over the edge and
- * let the clipping happen here.
+/*! \brief Write one pixel. Coordinates outside the buffer are ignored, so a caller
+ *         may clip lazily.
  *
  * \param[in,out]   inout_framebuffer: buffer to draw into, must not be `NULL`
  * \param[in]       in_x: column, `0` is the left edge
  * \param[in]       in_y: row, `0` is the top edge
- * \param[in]       in_color: member of \ref framebuffer_color_e
+ * \param[in]       in_color: colour to write
  */
 void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                           framebuffer_color_e in_color);
+                           framebuffer_color_t in_color);
 
 /*! \brief Read one pixel.
  *
  * \param[in]       in_framebuffer: buffer to read, must not be `NULL`
  * \param[in]       in_x: column
  * \param[in]       in_y: row
- * \return          The pixel's colour, or \ref FRAMEBUFFER_COLOR_WHITE for
- *                      coordinates outside the buffer
+ * \return          The pixel, or \ref FRAMEBUFFER_COLOR_WHITE outside the buffer
  */
-framebuffer_color_e framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
+framebuffer_color_t framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
                                           int16_t in_y);
 
-/*! \brief Borrow one row's packed bits, for a driver pushing the buffer out.
+/*! \brief Borrow one row, for a display driver that pushes whole lines.
  *
  * \param[in]       in_framebuffer: buffer to read, must not be `NULL`
  * \param[in]       in_y: row, must be inside the buffer
- * \return          Pointer to #FRAMEBUFFER_BYTES_PER_LINE bytes owned by the buffer
+ * \return          Pointer to \ref FRAMEBUFFER_WIDTH pixels, owned by the buffer
  */
-const uint8_t* framebuffer_get_line(const framebuffer_t* in_framebuffer, int16_t in_y);
+const framebuffer_color_t* framebuffer_get_line(const framebuffer_t* in_framebuffer, int16_t in_y);
 
 #endif /* FRAMEBUFFER_H */

@@ -228,7 +228,37 @@ of the rates above.
 
 So the rendering path must transmit only what changed. The design consequence: the display
 driver needs a way to push a sub-rectangle, and the view needs to know which cells are
-dirty. Measure the achieved rate once the display runs, and only then revisit NFR-002.
+dirty.
+
+### 3.1 Measured
+
+With the frame buffer and the display port in place, `display_test` times five full-frame
+presents through the real path — `framebuffer` -> `gfx` -> `display` -> `st7789`:
+
+```
+5 full frames in 1264 ms -> 252 ms/frame, 3 fps
+```
+
+At the configured **5 Mbit/s** the table above predicted ~250 ms. The measurement is 252 ms,
+so the arithmetic holds and the transfer really is the whole cost — there is no hidden
+overhead to hunt for, and no point optimising the drawing side.
+
+Two levers remain, and they multiply rather than compete:
+
+- **Raise the SPI clock.** The kernel clock is 160 MHz and the prescaler is a power of two,
+  so the choices are 5, 10, 20 or 40 Mbit/s. The shield is specified to 32 MHz, while the
+  ST7789V's own write-cycle minimum of 66 ns works out at about 15 MHz — the shield's figure
+  and the controller's disagree, so anything above 10 Mbit/s is worth confirming on the panel
+  rather than assuming. Following the `uart_bsp` precedent the rate is pinned in firmware
+  rather than in the `.ioc`, so changing it is one constant.
+- **Send only what changed.** Six 8x8 cells is 768 bytes against 153,600 — under 0.2 ms at
+  any of those rates. This is the lever that actually reaches 30 FPS; the clock alone does
+  not, since even 40 Mbit/s leaves a full frame at ~31 ms with nothing left for the game.
+
+RAM now reads **157,296 bytes, exactly 60 % of the 256 kB**, which is the frame buffer plus
+the 3.5 kB the firmware used before. A second buffer would not fit, so the double-buffered
+snapshot assumed in [03 §3.2](../PrePlanning/03-Architecture.md) has to be reconsidered when
+M3 resumes.
 
 ## 4. Flashing and debugging
 

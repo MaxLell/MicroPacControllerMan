@@ -7,7 +7,11 @@
 
 #include "Cli.h"
 #include "delay.h"
+#include "display.h"
+#include "framebuffer.h"
+#include "gfx.h"
 #include "st7789.h"
+#include "systick_bsp.h"
 #include "sw_timer.h"
 #include "user_button.h"
 
@@ -25,6 +29,13 @@
 #define OTT_DISPLAY_TEST_BORDER_SIZE (4U)
 
 #define OTT_DISPLAY_TEST_BAR_COUNT (8U)
+
+/* Enough presents to average out the tick's 1 ms granularity. */
+#define OTT_DISPLAY_TEST_FRAME_COUNT (5U)
+#define OTT_DISPLAY_TEST_MS_PER_SECOND_F (1000.0)
+
+/* 153,600 bytes. Static, because it does not fit on a stack. */
+static framebuffer_t g_framebuffer;
 
 static sw_timer_t g_timeout_timer;
 
@@ -86,6 +97,39 @@ static void prv_show_geometry(void)
                           OTT_DISPLAY_TEST_CORNER_SIZE, OTT_DISPLAY_TEST_CORNER_SIZE, white);
 }
 
+/* Draws through the real path — gfx into a frame buffer, then the display port — and
+ * times it, because the frame budget is the open question of M2 and an estimate is not
+ * a measurement. */
+static void prv_measure_frame_rate(void)
+{
+    uint32_t start_tick;
+    uint32_t elapsed_ms;
+    double milliseconds_per_frame;
+
+    cli_print("  timing a full-frame present through framebuffer -> gfx -> display");
+
+    framebuffer_fill(&g_framebuffer, FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_circle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2,
+                      FRAMEBUFFER_WIDTH / 4, FRAMEBUFFER_COLOR_YELLOW);
+    gfx_rectangle(&g_framebuffer, 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
+                  FRAMEBUFFER_COLOR_BLUE);
+
+    start_tick = systick_bsp_get_tick();
+
+    for (uint32_t frame = 0U; frame < OTT_DISPLAY_TEST_FRAME_COUNT; ++frame)
+    {
+        display_present(&g_framebuffer);
+    }
+
+    elapsed_ms = systick_bsp_get_tick() - start_tick;
+    milliseconds_per_frame = (double)elapsed_ms / OTT_DISPLAY_TEST_FRAME_COUNT;
+
+    cli_print("  %lu full frames in %lu ms -> %d ms/frame, %d fps",
+              (unsigned long)OTT_DISPLAY_TEST_FRAME_COUNT, (unsigned long)elapsed_ms,
+              (int)milliseconds_per_frame,
+              (int)(OTT_DISPLAY_TEST_MS_PER_SECOND_F / milliseconds_per_frame));
+}
+
 /* ==========================================================================
  * ott_display_test - public
  * ========================================================================= */
@@ -99,7 +143,7 @@ bool ott_display_test_run(const uint8_t* in_parameter, char* out_reason, size_t 
 
     cli_print("Display test: bringing the panel up.");
 
-    st7789_init();
+    display_init();
     st7789_read_id(id);
 
     cli_print("  controller ID: %02X %02X %02X (%s)", (unsigned)id[0], (unsigned)id[1],
@@ -118,8 +162,11 @@ bool ott_display_test_run(const uint8_t* in_parameter, char* out_reason, size_t 
     prv_show_screen("full blue", ST7789_RGB(0U, 0U, 255U));
     prv_show_colour_bars();
     prv_show_geometry();
+    delay_ms(OTT_DISPLAY_TEST_HOLD_MS);
 
-    cli_print("Press B1 if the panel showed red, green, blue, correct bars and the border.");
+    prv_measure_frame_rate();
+
+    cli_print("Press B1 if you saw red, green, blue, the bars, the border, then a yellow disc.");
     cli_print("Times out after %u s.", OTT_DISPLAY_TEST_TIMEOUT_MS / OTT_DISPLAY_TEST_MS_PER_SECOND);
 
     sw_timer_create(&g_timeout_timer);

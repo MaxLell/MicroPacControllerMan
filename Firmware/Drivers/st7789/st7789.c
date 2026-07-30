@@ -18,6 +18,7 @@
 #define ST7789_CMD_NORON (0x13U)
 #define ST7789_CMD_INVOFF (0x20U)
 #define ST7789_CMD_INVON (0x21U)
+#define ST7789_CMD_DISPOFF (0x28U)
 #define ST7789_CMD_DISPON (0x29U)
 #define ST7789_CMD_CASET (0x2AU)
 #define ST7789_CMD_RASET (0x2BU)
@@ -183,6 +184,13 @@ bool st7789_is_present(void)
            && (id[2] == ST7789_ID_EXPECTED_2);
 }
 
+void st7789_set_display_on(bool in_is_on)
+{
+    ASSERT(g_is_initialized);
+
+    prv_command(in_is_on ? ST7789_CMD_DISPON : ST7789_CMD_DISPOFF);
+}
+
 void st7789_fill_rectangle(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
                            uint16_t in_colour)
 {
@@ -221,4 +229,39 @@ void st7789_fill_rectangle(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint
 void st7789_fill_screen(uint16_t in_colour)
 {
     st7789_fill_rectangle(0U, 0U, ST7789_WIDTH, ST7789_HEIGHT, in_colour);
+}
+
+void st7789_write_pixels(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
+                         const uint16_t* in_pixels, uint16_t in_stride)
+{
+    /* One row at a time: the controller wants each pixel most-significant byte first,
+     * which is the reverse of how a uint16_t sits in memory here, so the row has to be
+     * repacked rather than handed over as-is. A full row is 480 bytes, which is cheap
+     * to hold and keeps the number of SPI calls to one per row. */
+    uint8_t row[ST7789_WIDTH * 2U];
+
+    ASSERT(g_is_initialized);
+    ASSERT(in_pixels != NULL);
+    ASSERT(in_width > 0U);
+    ASSERT(in_height > 0U);
+    ASSERT(in_stride >= in_width);
+    ASSERT((uint32_t)in_x + in_width <= ST7789_WIDTH);
+    ASSERT((uint32_t)in_y + in_height <= ST7789_HEIGHT);
+
+    prv_open_window(in_x, in_y, in_width, in_height);
+
+    for (uint16_t line = 0U; line < in_height; ++line)
+    {
+        const uint16_t* const source = &in_pixels[(uint32_t)line * in_stride];
+
+        for (uint16_t column = 0U; column < in_width; ++column)
+        {
+            row[column * 2U] = (uint8_t)(source[column] >> 8);
+            row[(column * 2U) + 1U] = (uint8_t)source[column];
+        }
+
+        spi_bsp_write(row, (size_t)in_width * 2U);
+    }
+
+    prv_select(false);
 }

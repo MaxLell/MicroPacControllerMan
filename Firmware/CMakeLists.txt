@@ -147,6 +147,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/systick_bsp/systick_bsp.c
     Bsp/uart_bsp/uart_bsp.c
     Bsp/user_button/user_button.c
+    Drivers/display/display.c
     Drivers/st7789/st7789.c
     Services/console/console.c
     Services/crc/crc.c
@@ -180,6 +181,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/systick_bsp
     Bsp/uart_bsp
     Bsp/user_button
+    Drivers/display
     Drivers/st7789
     Services/console
     Services/crc
