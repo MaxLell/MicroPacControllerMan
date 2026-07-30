@@ -102,14 +102,35 @@ Checked against the current configuration, the only collision with anything alre
 is PA5/LD2 above. PC13 (user button) and PA13/PA14 (SWD) are clear, and PC0, PC6, PC7, PC9,
 PB0, PB4, PB10, PA0, PA1, PA6, PA7 are all currently unused.
 
-### 1.4 Still to be measured
+### 1.4 Measured: the joystick half is confirmed, the display half is not
 
-The map above is derived from two authoritative ST documents rather than from a neighbour's
-column, so the confidence is far higher than before — but it is still paper. **Confirm the
-display lines on the board with a logic analyzer before trusting a driver that misbehaves,**
-and note that the joystick lines need no instrument at all: configure them as inputs with
-pull-ups, press a direction, and the firmware can report which pin went low. That check is
-cheap enough to be an OTT in its own right.
+**Joystick — confirmed on hardware.** The `joystick` OTT names each key as it is pressed and
+passes once all five have been seen. Run at the board, all five keys registered *and the name
+the firmware printed matched the key that was pressed* — which is the part that matters. A
+test that merely passes would also pass with two directions swapped; what closes the question
+is the operator seeing NORTH appear when the north key goes down.
+
+So the position cross-reference of §1 holds for these five pins, and with it the method: the
+map derived from UM2750 positions against UM3062's assignment is right where it has been
+checked.
+
+That run also settles the pull-up question properly. A pin that reads high when released and
+low when pressed, with `GPIO_NOPULL` configured, *is* being pulled up externally. An earlier
+attempt to show this by reading the pins high over SWD proved nothing on its own — a floating
+input reads high too — so this test, not that measurement, is the evidence.
+
+**Display — still on paper.** None of SCK, MOSI, MISO, CS, DCX, RESET or TE has been observed.
+They cannot be confirmed the same way, because there is no equivalent of "press a key and see
+which pin moves": the display is a passive SPI target until it is driven correctly. Confirm
+them with a logic analyzer, or accept that the first display bring-up doubles as the
+measurement — in which case a wrong pin shows up as no reaction at all, which is the symptom
+that cost the previous shield its schedule.
+
+**A note on tooling, learned the hard way.** Reading pins over SWD while the firmware runs is
+not available here: openocd drives this ST-LINK in HLA mode, which offers no memory access on
+a running target, and the adapter does not support `dapdirect_swd`. Polling by halt/resume in
+a loop breaks the connection. Measurements of this kind belong in firmware, reported over the
+console — which is what the OTT mechanism is for.
 
 ## 2. Clock and core configuration (as configured)
 
