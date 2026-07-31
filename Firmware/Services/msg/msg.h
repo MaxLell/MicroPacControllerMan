@@ -10,7 +10,7 @@
  * no module ever holds a pointer into another's memory and nothing needs the heap
  * (NFR-103). The render frame used to be the one exception, handing Render a pointer to a
  * double-buffered image; it is not any more. What is large is the rendered image, not the
- * game state — the state is 44 bytes and the image never travels, because Render draws
+ * game state — the state is 56 bytes and the image never travels, because Render draws
  * it (R-007 closed, DEC-016).
  *
  * Header-only: there is no msg.c, because a vocabulary has no behaviour.
@@ -54,10 +54,10 @@ typedef enum
 #define MSG_GHOST_COUNT       (4U)
 
 /*! \brief The playfield, in cells ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)),
- *         and the bytes needed to hold one pellet bit per cell. */
+ *         and the bytes needed to hold one bit per cell. */
 #define MSG_PLAYFIELD_COLUMNS (11U)
 #define MSG_PLAYFIELD_ROWS    (9U)
-#define MSG_PELLET_BYTES      (((MSG_PLAYFIELD_COLUMNS * MSG_PLAYFIELD_ROWS) + 7U) / 8U)
+#define MSG_CELL_BITMAP_BYTES (((MSG_PLAYFIELD_COLUMNS * MSG_PLAYFIELD_ROWS) + 7U) / 8U)
 
 /*! \brief Directions Pacman can be sent in. `NONE` means "no direction yet". */
 typedef enum
@@ -135,7 +135,12 @@ typedef struct
 {
     msg_actor_t pacman;
     msg_actor_t ghosts[MSG_GHOST_COUNT];
-    uint8_t pellets[MSG_PELLET_BYTES]; /*!< One bit per cell, still uneaten */
+    /* Two bitmaps rather than one, because a pellet has three states, not two: gone,
+     * normal, or power. `is_power` is only meaningful where `has_pellet` is set. A power
+     * pellet is drawn larger and it is what starts frightened mode, so the view cannot
+     * treat the two alike. */
+    uint8_t has_pellet[MSG_CELL_BITMAP_BYTES];
+    uint8_t is_power[MSG_CELL_BITMAP_BYTES];
     uint32_t score;
     uint8_t lives;
     uint8_t level;

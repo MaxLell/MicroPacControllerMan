@@ -24,7 +24,7 @@ Design rules:
   - a **system broker** connecting the firmware-level modules (§3.2.2);
   - a **Pacman broker** used only inside the game (§3.6).
 - **Content-agnostic.** The broker only reads a message's topic ID for routing; it treats the payload as opaque bytes and never interprets it.
-- **Fixed-size messages, copied by value — with no exceptions.** A message is a topic ID plus a small fixed-size payload, moved by value so no module ever holds a pointer into another's memory (NFR-103). The render frame used to be the one exception; it is not any more, because the game state turned out to be 44 bytes and the large thing — the image — never travels (§3.3).
+- **Fixed-size messages, copied by value — with no exceptions.** A message is a topic ID plus a small fixed-size payload, moved by value so no module ever holds a pointer into another's memory (NFR-103). The render frame used to be the one exception; it is not any more, because the game state turned out to be 56 bytes and the large thing — the image — never travels (§3.3).
 - **One input queue per broker.** Publishers hand a message to the broker via its API; the broker owns the input queue.
 - **One output queue per subscriber.** A module registers its output queue for the topics it cares about; the broker copies each message into every subscribed module's output queue.
 - **A dedicated worker moves the messages (FR-108).** One task per broker drains the input queue and fans each message out to the subscribed output queues; this is the only place messages cross between modules.
@@ -101,8 +101,8 @@ Every topic is a value in one compile-time `enum msg_id_e`; the payload is a sma
 > handle to a double-buffered snapshot, as the one sanctioned exception to copy-by-value
 > ([R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks)). That exception is
 > **withdrawn**, because the premise behind it was wrong: what is large is the *rendered
-> image*, not the game state. An 11 × 9 maze is 99 pellet bits, five actors and a handful of
-> counters — **44 bytes**, measured, which copies like any other payload. The image never needs
+> image*, not the game state. An 11 × 9 maze is two 99-bit pellet maps, five actors and a handful
+> of counters — **56 bytes**, measured, which copies like any other payload. The image never needs
 > to travel at all, because Render draws it.
 >
 > Three things fall out. There is no pointer in any message, so no module can hold a
@@ -177,7 +177,7 @@ flowchart TB
 
 **Rendering interface — how a moved Pacman reaches the panel.** Three modules and two messages, each doing one thing:
 
-1. **Game** publishes `MSG_GAME_STATE` once per simulation step (§10.1): the five actors with their cells, directions, modes and *progress towards the next cell*, plus the pellet bits, score, lives and level. 44 bytes, copied.
+1. **Game** publishes `MSG_GAME_STATE` once per simulation step (§10.1): the five actors with their cells, directions, modes and *progress towards the next cell*, plus the two pellet bitmaps, score, lives and level. 56 bytes, copied.
 2. **Game-View** holds the last state and runs at the **frame rate, not the step rate** — that is the point of it. Between two steps it draws the same actors nine times at advancing interpolated positions (§10.1), and publishes `MSG_DISPLAY_LIST`: what should be on screen *now*, in pixels.
 3. **Render** draws it, and is the only module that works out **what changed** since the last frame. It knows what it drew and it is the only one that knows the cost: two 16 x 16 rectangles are 2.08 ms, a full frame is 252 ms ([M2 Board Bring-Up §3](../Design/M2-Board-Bring-Up.md)). Nobody else should be making that trade.
 
