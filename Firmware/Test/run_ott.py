@@ -6,22 +6,23 @@ Two ways to use it:
 
   ./run_ott.py                         # run the AUTOMATIC regression suite (default)
   ./run_ott.py --suite                 # same, explicitly
-  ./run_ott.py touchpad                # run one INTERACTIVE test (streams live,
-  ./run_ott.py display                 #   long timeout, you confirm on the board
-  ./run_ott.py touchdot                #   and press the USER button to finish)
+  ./run_ott.py display_test            # run one INTERACTIVE test (streams live,
+  ./run_ott.py joystick_dot            #   long timeout, you confirm on the board
+  ./run_ott.py animation               #   and press the USER button to finish)
   ./run_ott.py user_button             #   same, for the on-board button
 
 The automatic suite covers the Board-Bring-Up checks a machine can judge on its own:
   VT-INT-001  Power-On & Enumeration   (the VCP device node exists)
   VT-INT-002  Serial Console Output    (`reset` re-emits the known boot banner)
 
-The user_button/display/touchpad tests (VT-INT-006/007) are interactive by design —
+The display and joystick tests (VT-INT-006, VT-INT-019..021) are interactive by design —
 the firmware renders/prints and waits for you to confirm with the USER button —
 so they are excluded from --suite and streamed live instead.
 
 Stdlib only — no pyserial required. Exit 0 = all pass, 1 = fail, 2 = timeout.
 """
 import argparse
+import codecs
 import glob
 import os
 import select
@@ -30,8 +31,8 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"user_button"}
-SUITE_AUTOMATIC = ["blinky"]  # judge themselves; no operator at the board needed
+INTERACTIVE = {"animation", "display_test", "joystick", "joystick_dot", "user_button"}
+SUITE_AUTOMATIC = ["display_id"]  # judges itself: the display either answers or it does not
 
 
 def detect_port() -> str:
@@ -48,6 +49,39 @@ def detect_port() -> str:
     if acm:
         return acm[0]
     return "/dev/ttyACM0"
+
+
+def warn_if_port_is_busy(port: str) -> None:
+    """Say so when something else already has the port open.
+
+    Two readers on one tty split the incoming bytes between them, so the harness sees a
+    stream with characters missing and reports a timeout or a mangled line — with nothing
+    pointing at the real cause. A `console.py` left open in another terminal is the usual
+    culprit, and the symptom looks exactly like a flaky board.
+    """
+    try:
+        result = subprocess.run(["fuser", port], capture_output=True, text=True, timeout=5)
+    except (FileNotFoundError, subprocess.SubprocessError):
+        return  # No fuser: skip the check rather than fail because of a missing tool.
+
+    holders = result.stdout.split()
+
+    if not holders:
+        return
+
+    print(f"WARNING: {port} is already open by PID(s) {' '.join(holders)} — the two readers "
+          f"will split the bytes between them and this run will look corrupted.",
+          file=sys.stderr)
+
+    for pid in holders:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as cmdline:
+                command = cmdline.read().replace(b"\0", b" ").decode().strip()
+                print(f"         PID {pid}: {command}", file=sys.stderr)
+        except OSError:
+            pass
+
+    print("         Close it and run again.", file=sys.stderr)
 
 
 def configure_tty(port: str, baud: str) -> None:
@@ -77,11 +111,14 @@ def read_until(fd: int, needles, timeout: float, echo: bool = False) -> "tuple[s
     Returns (matched_needle_or_None, full_text). Echoes bytes live if echo=True."""
     deadline = time.monotonic() + timeout
     text = ""
+    # Incremental, because a read can split a multi-byte character in half and
+    # decoding each chunk on its own would turn every em dash into garbage.
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
     while time.monotonic() < deadline:
         r, _, _ = select.select([fd], [], [], max(0.0, deadline - time.monotonic()))
         if not r:
             break
-        chunk = os.read(fd, 256).decode(errors="replace")
+        chunk = decoder.decode(os.read(fd, 256))
         if echo:
             sys.stdout.write(chunk)
             sys.stdout.flush()
@@ -114,6 +151,7 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
     if timeout is None:
         timeout = 130.0 if interactive else 8.0
 
+    warn_if_port_is_busy(port)
     configure_tty(port, baud)
     passed = f"OTT PASSED [{test}]"
     failed = f"OTT FAILED [{test}]"
@@ -200,7 +238,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (user_button/touchpad/display/touchdot); omit to run the suite")
+                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")

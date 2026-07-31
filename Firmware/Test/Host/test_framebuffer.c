@@ -27,8 +27,10 @@
 #define TEST_PACKED_ROW (4)
 #define TEST_PACKED_PIXEL_LOW_X (0)
 #define TEST_PACKED_PIXEL_HIGH_X (9)
-#define TEST_PACKED_BYTE_LOW (0x01U)
-#define TEST_PACKED_BYTE_HIGH (0x02U)
+/* Two colours that share no bits, so a row that returned the wrong pixel — or the
+ * bytes of one pixel swapped — cannot pass by coincidence. */
+#define TEST_ROW_COLOR_LOW FRAMEBUFFER_COLOR_RED
+#define TEST_ROW_COLOR_HIGH FRAMEBUFFER_COLOR_BLUE
 
 #define TEST_LONE_PIXEL_X (5)
 
@@ -174,19 +176,21 @@ void test_reading_outside_the_buffer_reports_white(void)
 
 void test_a_row_reflects_the_pixels_set_in_it(void)
 {
-    const uint8_t* row;
+    const framebuffer_color_t* row;
 
     framebuffer_set_pixel(&g_framebuffer, TEST_PACKED_PIXEL_LOW_X, TEST_PACKED_ROW,
-                          FRAMEBUFFER_COLOR_BLACK);
+                          TEST_ROW_COLOR_LOW);
     framebuffer_set_pixel(&g_framebuffer, TEST_PACKED_PIXEL_HIGH_X, TEST_PACKED_ROW,
-                          FRAMEBUFFER_COLOR_BLACK);
+                          TEST_ROW_COLOR_HIGH);
 
     row = framebuffer_get_line(&g_framebuffer, TEST_PACKED_ROW);
 
-    /* Bit 0 of a byte is its left-most pixel, so pixel 0 -> byte 0 bit 0 and
-     * pixel 9 -> byte 1 bit 1. */
-    TEST_ASSERT_EQUAL_HEX8(TEST_PACKED_BYTE_LOW, row[0]);
-    TEST_ASSERT_EQUAL_HEX8(TEST_PACKED_BYTE_HIGH, row[1]);
+    /* A row is one RGB565 value per pixel, so a pixel's column indexes it directly. */
+    TEST_ASSERT_EQUAL_HEX16(TEST_ROW_COLOR_LOW, row[TEST_PACKED_PIXEL_LOW_X]);
+    TEST_ASSERT_EQUAL_HEX16(TEST_ROW_COLOR_HIGH, row[TEST_PACKED_PIXEL_HIGH_X]);
+
+    /* Untouched pixels keep the cleared background rather than bleeding a neighbour. */
+    TEST_ASSERT_EQUAL_HEX16(FRAMEBUFFER_COLOR_WHITE, row[TEST_PACKED_PIXEL_LOW_X + 1]);
 }
 
 /* --- preconditions -------------------------------------------------------- */

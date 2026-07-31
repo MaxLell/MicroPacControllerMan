@@ -141,11 +141,15 @@ add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
     Bsp/dio_bsp/dio_bsp.c
+    Bsp/joystick/joystick.c
     Bsp/retain_ram/retain_ram.c
+    Bsp/spi_bsp/spi_bsp.c
     Bsp/switch/switch.c
     Bsp/systick_bsp/systick_bsp.c
     Bsp/uart_bsp/uart_bsp.c
     Bsp/user_button/user_button.c
+    Drivers/display/display.c
+    Drivers/st7789/st7789.c
     Services/console/console.c
     Services/crc/crc.c
     Services/delay/delay.c
@@ -157,8 +161,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/msg_queue/msg_queue.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
+    Test/Target/ott_framebuffer.c
     Test/Target/ott_scenarios.c
-    Test/Target/scripts/ott_blinky.c
+    Test/Target/scripts/ott_animation.c
+    Test/Target/scripts/ott_display_id.c
+    Test/Target/scripts/ott_display_test.c
+    Test/Target/scripts/ott_joystick.c
+    Test/Target/scripts/ott_joystick_dot.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c
     ThirdParty/embedded_utils/custom_assert.c)
@@ -170,11 +179,15 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     Bsp/dio_bsp
+    Bsp/joystick
     Bsp/retain_ram
+    Bsp/spi_bsp
     Bsp/switch
     Bsp/systick_bsp
     Bsp/uart_bsp
     Bsp/user_button
+    Drivers/display
+    Drivers/st7789
     Services/console
     Services/crc
     Services/delay

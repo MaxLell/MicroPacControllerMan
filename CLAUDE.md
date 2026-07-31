@@ -35,10 +35,16 @@ silently working around a wart.
   Current branch: `feat/m1-u545-bring-up`.
 - **Requirements re-baselined** for the new hardware — [02 Requirements](Docu/PrePlanning/02-Requirements.md)
   is current; the rest of the doc set still lags in places.
-- **M2 Board Bring-Up — next.** ILI9341 display + joystick on the GFX01M2. **Blocker:**
-  the Morpho→STM32 pin map is *not* derived yet ([R-009](Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md#51-risks)),
-  and display CS may collide with the console on PA9. Confirm with a logic analyzer
-  before writing a driver — an assumed pin map is what cost the previous bring-up.
+- **M2 Board Bring-Up — in progress.** ST7789V display + joystick on the GFX01M2. The pin
+  map is **measured, not assumed**: the joystick keys were confirmed by the `joystick` OTT
+  and the display by `display_id`, which got the controller to answer. Chip select turned out
+  **active LOW**, not the active high UM2750 claims. The ST7789V driver, the RGB565 frame
+  buffer and partial updates are in (3 fps whole-frame becomes 290 fps for what a game
+  actually changes), and `joystick_dot` and `animation` put input and display together.
+  **NFR-002 is now 60 FPS, not 30** — measured: five moving actors cost 5.26 ms of a
+  16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
+  Open: the 32 ms debounce window is the whole of the NFR-003 input budget (RF-014).
+  See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
   until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
   Active Objects) is agreed in outline but not settled.
@@ -108,11 +114,14 @@ program this part.
   [mrw 0x42020810]]; resume; shutdown"` is `GPIOC->IDR` (GPIO on AHB2, `0x42020000` +
   `0x400` per port, IDR at `+0x10`). Always take a control reading from a pin whose level
   you already know — an all-zero register looks the same as a disabled clock.
-- **X-NUCLEO-GFX01M2** (ILI9341, 240×320 colour, 5-GPIO joystick, plus a 64-Mbit SPI
-  flash we deliberately do not use): physically present, **not wired up yet**. The
-  Morpho→STM32 pin map is still TBD and is
-  [R-009](Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md#51-risks) —
-  see [M2 Board Bring-Up §1](Docu/Design/M2-Board-Bring-Up.md).
+- **X-NUCLEO-GFX01M2** (**ST7789V**, 240×320 colour, 5-GPIO joystick, plus a 64-Mbit SPI
+  flash we deliberately do not use). Pin map measured and recorded in
+  [M2 Board Bring-Up §1](Docu/Design/M2-Board-Bring-Up.md): display SCK **PA5** / MOSI
+  **PA7** / MISO **PA6** / CS **PC7** (**active LOW**) / DCX **PB10** / RESET **PA1**;
+  joystick NORTH **PC0**, SOUTH **PB4**, EAST **PB0**, WEST **PC9**, CENTER **PC6**, all
+  active low with the shield's own pull-ups. Two traps: UM2750 claims CS is active *high*
+  and it is not, and register reads carry a one-**bit** dummy so byte-aligned reads land
+  off by one bit.
 
 ## Conventions
 

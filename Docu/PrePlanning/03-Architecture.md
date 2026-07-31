@@ -9,7 +9,7 @@ This document describes *how* the firmware is structured, at a functional-specif
 The game is built as Model-View-Control (FR-101), so the game logic is identical on host and target and is unit-testable without hardware (NFR-101):
 
 - **Model** — owns the entire game state: the active maze, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, current level (1–5), and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
-- **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the LCD Mono Click; the host draws to an SDL window (CON-103 / FR-104).
+- **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the shield's ST7789V panel; the host draws to an SDL window (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
 > **Decided (R-008):** the maze is a **reduced, display-fit maze** — a custom layout smaller than the classic 28×31 grid, sized so tiles, Pacman, four ghosts and pellets stay legible on 128×128. Exact dimensions are set during Pacman Development (FR-022). See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
@@ -73,7 +73,7 @@ flowchart TB
 
 | Module | Responsibility |
 |---|---|
-| **Input** | Reads the touchpad and the user button; turns them into direction and button messages. |
+| **Input** | Reads the joystick and the user button; turns them into direction and button messages. |
 | **System** | Orchestrates the screen flow: loading → menu → game (levels 1–5) → score (2 s, FR-023) → menu. |
 | **Game** | Runs the Pacman application (§3.6); bridges the game to the rest of the firmware. |
 | **Render** | Draws the current screen to the display — the single rendering output (§3.6). |
@@ -105,7 +105,7 @@ A *task* is a unit of execution; a *module* (§3.2.2) is a unit of code. They ar
 | Task | Runs module(s) | Responsibility |
 |---|---|---|
 | **Message Broker Task** | (broker worker) | Drains the broker input queue and fans messages out to subscribers (FR-108). Owns no application state. |
-| **Input Task** | Input | Reads the touchpad (I2C) and user button; debounces and classifies. |
+| **Input Task** | Input | Reads the joystick and user button (GPIO); debounces and classifies. |
 | **System Task** | System | Drives the screen-flow state machine. |
 | **Game Task** | Game (+ the Pacman application and its internal broker, §3.6) | Runs the game tick and game rules. |
 | **Render Task** | Render | Draws the current screen to the display. |
@@ -205,11 +205,11 @@ The `Firmware/` tree follows the **layered layout of the reference project** ([B
 | Layer (folder) | Purpose | What to create here |
 |---|---|---|
 | `App/` | Application layer: entry point and the game itself. | `App/app_main.c` (entry, called from the CubeMX-generated `main()`: init the platform, run a pending OTT, print the banner, start the app); one folder per application module (`App/<module>/`). The Pacman Model/View/Control modules land here (Milestone 3). |
-| `Bsp/` | Board Support Package: access to the STM32G431 and board through the STM32 HAL, thin C API upward. No application logic. | One folder per peripheral/facility (`Bsp/<module>/`). Peripheral wrappers carry the **`_bsp` suffix**, as in the reference project: `dio_bsp/` (digital I/O — the *only* module that may call HAL GPIO), `uart_bsp/` (LPUART1 VCP), `i2c_bsp/`, `spi_bsp/`, `systick_bsp/` (1 kHz tick + 1 ms hook). Non-peripheral facilities keep a plain name: `switch/` (debounced-input primitive), `user_button/` (its B1/PC13 instance), `retain_ram/` (`.noinit` buffer for the OTT reset, doc 09). |
-| `Drivers/` | Device drivers built on `Bsp/` transports (device-oriented API). Never call the HAL directly. | One folder per device (`Drivers/<device>/`): `display/` (LCD Mono Click over `spi_bsp` + `dio_bsp`), `gfx/` (1-bpp primitives on the frame buffer), `touchpad/` (Touchpad Click over `i2c_bsp`) — added in Milestone 2. |
+| `Bsp/` | Board Support Package: access to the STM32U545 and board through the STM32 HAL, thin C API upward. No application logic. | One folder per peripheral/facility (`Bsp/<module>/`). Peripheral wrappers carry the **`_bsp` suffix**, as in the reference project: `dio_bsp/` (digital I/O — the *only* module that may call HAL GPIO), `uart_bsp/` (USART1 VCP), `spi_bsp/`, `systick_bsp/` (1 kHz tick + 1 ms hook). Non-peripheral facilities keep a plain name: `switch/` (debounced-input primitive), `user_button/` (its B1/PC13 instance), `joystick/` (the shield's five keys, likewise instances of `switch`), `retain_ram/` (`.noinit` buffer for the OTT reset, doc 09). |
+| `Drivers/` | Device drivers built on `Bsp/` transports (device-oriented API). Never call the HAL directly. | One folder per device (`Drivers/<device>/`): `st7789/` (the display controller over `spi_bsp` + `dio_bsp`), `display/` (the port above it, which is what the game sees) — added in Milestone 2. Note that `gfx/` and `framebuffer/` are **not** here: they touch no hardware and live in `Services/`. |
 | `Services/` | Hardware-independent, reusable, host-testable middleware. | One folder per service (`Services/<service>/`): `delay/` (the one blocking wait), `sw_timer/` (all non-blocking timeouts and periodic work); later the pub-sub message broker (§3.2), the Active-Object base (§3.5), FSM helpers. |
 | `Test/` | Verification code (mirrors the reference `Test/` layout). | `Test/Target/` — OTT core (`ott.c`, `ott_scenarios.c`); `Test/Target/scripts/` — one module per OTT scenario (`ott_<name>.c/.h`, e.g. `ott_user_button`); `Test/run_ott.py` — host harness; `Test/Host/` — Ceedling/Unity host unit tests (from Milestone 3); `Test/support/` — vendored Unity. |
-| `ThirdParty/` | Vendored third-party and ST-provided code — **not our code**, kept out of the architecture layers. | One folder per dependency: `EmbeddedCli/` (the CLI framework); `STM32_G431RB_HAL/` — the STM32CubeMX export, self-contained: its own `Core/` (generated `main.c` + peripheral init), `Drivers/` (HAL + CMSIS), `startup_stm32g431xx.s`, `STM32G431xx_FLASH.ld`, and a `cmake/stm32cubemx` interface library. HAL/CMSIS/startup/linker are device-specific and therefore live here, not in `Bsp/`. |
+| `ThirdParty/` | Vendored third-party and ST-provided code — **not our code**, kept out of the architecture layers. | One folder per dependency: `EmbeddedCli/` (the CLI framework); `STM32_U545RE_HAL/` — the STM32CubeMX export, self-contained: its own `Core/` (generated `main.c` + peripheral init), `Drivers/` (HAL + CMSIS), startup file and linker script, and a `cmake/stm32cubemx` interface library. HAL/CMSIS/startup/linker are device-specific and therefore live here, not in `Bsp/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
 
 Two module-naming rules follow from the table. First, a **generic primitive and its concrete instance are separate modules** (`switch` vs. `user_button`), so the primitive stays reusable. Second, **exactly one module owns each hardware access path** — all GPIO goes through `dio_bsp` by logical pin name, and all timing through `delay`/`sw_timer`; there is deliberately no `millis()`-style tick accessor above `Bsp/`.
 

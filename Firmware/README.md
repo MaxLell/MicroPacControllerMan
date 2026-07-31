@@ -119,20 +119,16 @@ python3 Test/run_ott.py user_button     # interactive; exit 0 = PASS, 1 = FAIL, 
 ```
 
 ```
-ott blinky       # drives LD2 (PA5) and reads the pin back — automatic
 ott user_button  # live button state + every debounced press; passes after 3 presses
 ```
 
-`blinky` is **automatic**: it writes the pin and reads it back through `dio_bsp`, so the
-firmware judges itself and `run_ott.py --suite` can run it unattended. The read is a real
-measurement rather than an echo of what was written — `HAL_GPIO_ReadPin` reads `IDR`, the
-input register, which reflects the level actually present on the pad even for a push-pull
-output. On success it blinks the LED five times in a second, so a person watching gets a
-confirmation too.
-
 `user_button` is **interactive**: the firmware streams the live state and waits for you to
-press B1, with a 30 s safety cap so the board always returns to nominal mode. The display
-and joystick tests arrive with the GFX01M2 shield in M2.
+press B1, with a 30 s safety cap so the board always returns to nominal mode.
+
+`display_id` is the automatic one: it resets the controller and reads its identification
+registers, and the display either answers or it does not. Everything else needs an operator,
+because what they check — a colour that is genuinely red, a name that matches the key pushed,
+motion that looks smooth — is not something the firmware can judge about itself.
 
 **Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a run function
 — plus a setup function only if the test takes console arguments, otherwise the table
@@ -156,11 +152,14 @@ source of truth in
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
 | `Bsp/switch/` | Reusable debounced-GPIO input primitive (32-sample history). |
 | `Bsp/user_button/` | This board's B1 (PC13) instance of `switch`, incl. a latched press edge. |
+| `Bsp/joystick/` | The shield's five-key joystick — five instances of `switch`, latched press edge per key. |
+| `Bsp/spi_bsp/` | Blocking SPI master on SPI1, full duplex (reading a controller's ID register needs it). |
 | `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
-| `Drivers/display/` | The display **port** only: shows a `framebuffer_t`. `display_host.c` is the headless host implementation; the target implementation is gone with the Sharp panel and returns with the ILI9341 in M2. |
+| `Drivers/st7789/` | The ST7789V controller: init, ID self-check, rectangles, pixel blits with byte-order handling. |
+| `Drivers/display/` | The display **port** the game sees: shows a `framebuffer_t`, whole or by rectangle (`display_present_region`, the lever behind the frame rate). `display.c` drives the ST7789V; `display_host.c` keeps the frame in memory for the host build. |
 | `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
-| `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
+| `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
 | `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-generic-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
@@ -168,7 +167,7 @@ source of truth in
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |
 | `Services/msg_broker/` | The publish/subscribe bus between modules (FR-103/108/110). Instance-based; output queues, not callbacks. |
 | `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
-| `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
+| `Test/Target/` | The OTT core, the scenario registry, the one shared frame buffer (`ott_framebuffer`), and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
 | `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
@@ -204,7 +203,7 @@ strong `HAL_IncTick()`, overriding the HAL's `__weak` one, so the generated
 `stm32u5xx_it.c` stays untouched and a re-generation cannot drop the hook.
 
 **Editing the `.ioc` by hand** is fine for a pin *label*, which is what
-`USER_BUTTON` and `LED_GREEN` are: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
+`USER_BUTTON` and `JOYSTICK_NORTH` are: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
 rename to the `<label>_Pin` / `<label>_GPIO_Port` macros in `Core/Inc/main.h` and
 their uses in `Core/Src/gpio.c`, and the result is byte-identical to what CubeMX
 would generate. Do **not** hand-edit peripheral *settings* that way (clock tree,
@@ -228,13 +227,16 @@ count — use `Services/delay` or `Services/sw_timer`, which are clock-independe
 |---|---|---|
 | Console | PA9 / PA10 | USART1 -> ST-LINK V3E VCP, 115200 8N1 |
 | User button B1 | PC13 | **active HIGH** — idle low, confirmed by reading `GPIOC->IDR` over SWD |
-| LED LD2 | PA5 | `.ioc` label `LED_GREEN`, active HIGH |
 | SWD | PA13 / PA14 | SWDIO / SWCLK |
 
-No display and no direction input yet. The **X-NUCLEO-GFX01M2** (ILI9341, 240x320,
-plus a 5-GPIO joystick and a 64-Mbit SPI flash we do not use) arrives in M2, together
-with its pin map — which still has to be derived from UM2750 and confirmed on the
-board with a logic analyzer, the way R-001 was.
+The **X-NUCLEO-GFX01M2** carries the display (**ST7789V**, 240x320 colour over SPI),
+a 5-GPIO joystick, and a 64-Mbit SPI flash we deliberately do not use. Its pin map could
+not be read out of UM2750 — that manual lists no STM32U5 board at all — so it was derived
+by connector position against UM3062 and then **confirmed on hardware**, by tests that make
+the parts answer rather than by a multimeter. Two traps worth knowing before touching it:
+chip select is **active LOW** where UM2750 says high, and register reads carry a one-*bit*
+dummy, so a byte-aligned read comes back looking like plausible garbage. The map and the
+measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 
 ## M1 verification — done on hardware
 
@@ -248,9 +250,7 @@ board with a logic analyzer, the way R-001 was.
    "STM32U535/STM32U545", and verifies the download.
 4. **Boot banner** over the VCP: `MicroPacControllerMan booted (M1 U545RE bring-up)`.
 5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists the scenarios.
-6. **`ott blinky` passes** — drives PA5 both ways, verifies each level by reading the pin
-   back, and blinks the LED. `python3 Test/run_ott.py --suite` exits 0.
-7. **`ott user_button` passes** with B1 pressed three times.
+6. **`ott user_button` passes** with B1 pressed three times.
 
 ## Milestone history
 
@@ -266,7 +266,13 @@ board with a logic analyzer, the way R-001 was.
   covered the same ground.
 - **M3 — Game (host only).** The broker, the Active-Object base and the Pacman modules
   under `App/`, playable on the host via SDL. Open as PR #10 and **parked**.
-- **Restart on new hardware (current).** After the PR #10 review the project went back
-  to M1 on the **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the
-  X-NUCLEO-GFX01M2 and Pacman going colour. The Sharp/MTCH6102 drivers and their OTTs
-  are gone; M2 brings the ILI9341 and the joystick.
+- **Restart on new hardware.** After the PR #10 review the project went back to M1 on the
+  **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the X-NUCLEO-GFX01M2 and Pacman
+  going colour. The drivers and OTTs for the old parts are gone, and so are the acceptance
+  tests that described them — a test naming hardware nobody has misleads more than it
+  documents.
+- **M2 on the new board (current).** The panel turned out to be an **ST7789V**, not the
+  ILI9341 this project had been assuming. Display, joystick, the RGB565 frame buffer and
+  partial updates are in, and the two halves are verified against each other by
+  `joystick_dot`. NFR-002 was raised from 30 to **60 FPS** on the strength of the
+  `animation` measurements.

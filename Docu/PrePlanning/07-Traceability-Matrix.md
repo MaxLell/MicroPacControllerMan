@@ -13,7 +13,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-001 | Loading Screen | VT-INT-011 |
 | FR-002 | High Score Menu | VT-INT-011 |
 | FR-003 | Game Start | VT-INT-012 |
-| FR-004 | Directional Control | VT-INT-007, VT-INT-013, VT-INT-010 |
+| FR-004 | Directional Control | VT-INT-019, VT-INT-020, VT-INT-013, VT-INT-010 |
 | FR-005 | Game Rendering | VT-INT-006, VT-INT-016 |
 | FR-006 | Starting Lives | VT-INT-014 |
 | FR-007 | Game Over | VT-INT-014 |
@@ -38,14 +38,14 @@ A few items are structural/process requirements rather than automatically observ
 | FR-026 | Difficulty Scaling | VT-UNIT-006, VT-INT-017 |
 | FR-027 | Game Completion | VT-INT-017 |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
-| NFR-002 | Rendering Rate | VT-INT-016 |
-| NFR-003 | Input Latency | VT-INT-013 |
+| NFR-002 | Rendering Rate | VT-INT-021 (the figure was chosen against it), VT-INT-016 (the game keeps it) |
+| NFR-003 | Input Latency | VT-INT-020 (the drawing half), VT-INT-013 (the whole path) |
 | NFR-004 | NVM Write Frequency | VT-INT-015 |
 | NFR-005 | Logo Display Delay | VT-INT-011 |
-| CON-001 | Target Hardware | VT-INT-001, VT-INT-005 |
-| CON-002 | Display Hardware | VT-INT-003, VT-INT-006 |
-| CON-003 | Input Hardware | VT-INT-004, VT-INT-007 |
-| CON-004 | Carrier Hardware | VT-INT-003, VT-INT-004 |
+| CON-001 | Target Hardware | VT-INT-001, VT-INT-002 |
+| CON-002 | Display Hardware | VT-INT-018, VT-INT-006 |
+| CON-003 | Input Hardware | VT-INT-019, VT-INT-020 |
+| CON-004 | Carrier Hardware | VT-INT-018, VT-INT-019 |
 | CON-005 | Debug Interface | VT-INT-001, VT-INT-002 |
 
 ## 7.2 Software & Test Requirements (FR-1xx / NFR-1xx / CON-1xx)
@@ -57,15 +57,15 @@ A few items are structural/process requirements rather than automatically observ
 | FR-103 | Message-Based Communication | VT-UNIT-001 |
 | FR-104 | Host Buildability | VT-INT-008 |
 | FR-105 | FreeRTOS Task Separation | VT-INT-009 |
-| FR-106 | On-Target Test (OTT) Framework | VT-INT-005, VT-INT-009, VT-INT-015 (each exercises an OTT command) |
-| FR-107 | OTT Result Reporting | VT-INT-005, VT-INT-009, VT-INT-015 |
+| FR-106 | On-Target Test (OTT) Framework | VT-INT-018, VT-INT-009, VT-INT-015 (each exercises an OTT command) |
+| FR-107 | OTT Result Reporting | VT-INT-018, VT-INT-009, VT-INT-015 |
 | FR-108 | Dedicated Message-Broker Task | VT-UNIT-001, VT-INT-009 |
 | FR-110 | Pacman Internal Message Bus | VT-UNIT-001, VT-INT-010 |
 | FR-111 | Fatal-Error Halt | Manual fault-injection / code review (no automated `VT-*` test — see gap note above) |
 | NFR-101 | Unit Testability | VT-UNIT-002 |
 | NFR-102 | Coding Standard Compliance | Code review against c-code-style (no automated `VT-*` test yet — see gap note above) |
 | NFR-103 | No Runtime Heap Allocation | VT-UNIT-001 |
-| NFR-104 | OTT Harness Compatibility | VT-INT-005, VT-INT-009, VT-INT-015 (harness successfully drives each Automatic test) |
+| NFR-104 | OTT Harness Compatibility | VT-INT-018, VT-INT-009, VT-INT-015 (harness successfully drives each Automatic test) |
 | NFR-105 | Message-Bus Backpressure | VT-UNIT-001 |
 | CON-101 | Language | Enforced by the C toolchain at build time (no dedicated `VT-*` test) |
 | CON-102 | Test Framework | VT-UNIT-002, VT-UNIT-003 |

@@ -105,7 +105,7 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | Unique-ID | Name | Description |
 |---|---|---|
 | NFR-001 | Loading Screen Duration | The loading screen shall be displayed for no more than 3 seconds before the menu is shown. *(default value — see [A-001](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
-| NFR-002 | Rendering Rate | While a game is in progress, the system shall refresh the display at a minimum of 30 frames per second. *(default value — see [A-002](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
+| NFR-002 | Rendering Rate | While a game is in progress, the system shall refresh the display at a minimum of 60 frames per second. *(measured and chosen — see [A-002](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-003 | Input Latency | When a joystick directional key is pressed, the system shall reflect the corresponding movement on the display within 30 ms. *(default value — see [A-003](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-005 | Logo Display Delay | Upon power-on, the system shall wait 200 ms before displaying the Pacman logo of the loading screen (FR-001). |
 

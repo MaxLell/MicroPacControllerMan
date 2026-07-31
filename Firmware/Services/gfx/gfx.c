@@ -40,13 +40,13 @@ static int16_t prv_safe_divisor(int16_t in_divisor)
  * gfx - public
  * ========================================================================= */
 
-void gfx_fill(framebuffer_t* inout_framebuffer, framebuffer_color_e in_color)
+void gfx_fill(framebuffer_t* inout_framebuffer, framebuffer_color_t in_color)
 {
     framebuffer_fill(inout_framebuffer, in_color);
 }
 
 void gfx_horizontal_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                         int16_t in_width, framebuffer_color_e in_color)
+                         int16_t in_width, framebuffer_color_t in_color)
 {
     for (int16_t offset = 0; offset < in_width; ++offset)
     {
@@ -55,7 +55,7 @@ void gfx_horizontal_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t
 }
 
 void gfx_vertical_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                       int16_t in_height, framebuffer_color_e in_color)
+                       int16_t in_height, framebuffer_color_t in_color)
 {
     for (int16_t offset = 0; offset < in_height; ++offset)
     {
@@ -64,7 +64,7 @@ void gfx_vertical_line(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t i
 }
 
 void gfx_line(framebuffer_t* inout_framebuffer, int16_t in_x_start, int16_t in_y_start,
-              int16_t in_x_end, int16_t in_y_end, framebuffer_color_e in_color)
+              int16_t in_x_end, int16_t in_y_end, framebuffer_color_t in_color)
 {
     int16_t x_start = in_x_start;
     int16_t y_start = in_y_start;
@@ -121,7 +121,7 @@ void gfx_line(framebuffer_t* inout_framebuffer, int16_t in_x_start, int16_t in_y
 }
 
 void gfx_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
-                   int16_t in_height, framebuffer_color_e in_color)
+                   int16_t in_height, framebuffer_color_t in_color)
 {
     gfx_horizontal_line(inout_framebuffer, in_x, in_y, in_width, in_color);
     gfx_horizontal_line(inout_framebuffer, in_x, (int16_t)(in_y + in_height - 1), in_width,
@@ -131,7 +131,7 @@ void gfx_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
 }
 
 void gfx_filled_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                          int16_t in_width, int16_t in_height, framebuffer_color_e in_color)
+                          int16_t in_width, int16_t in_height, framebuffer_color_t in_color)
 {
     for (int16_t row = 0; row < in_height; ++row)
     {
@@ -140,7 +140,7 @@ void gfx_filled_rectangle(framebuffer_t* inout_framebuffer, int16_t in_x, int16_
 }
 
 void gfx_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, int16_t in_center_y,
-                int16_t in_radius, framebuffer_color_e in_color)
+                int16_t in_radius, framebuffer_color_t in_color)
 {
     int16_t x = 0;
     int16_t y = in_radius;
@@ -181,7 +181,7 @@ void gfx_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, int16_t i
 }
 
 void gfx_filled_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, int16_t in_center_y,
-                       int16_t in_radius, framebuffer_color_e in_color)
+                       int16_t in_radius, framebuffer_color_t in_color)
 {
     const int32_t radius_squared = (int32_t)in_radius * in_radius;
 
@@ -199,7 +199,7 @@ void gfx_filled_circle(framebuffer_t* inout_framebuffer, int16_t in_center_x, in
 }
 
 void gfx_triangle(framebuffer_t* inout_framebuffer, int16_t in_x_0, int16_t in_y_0, int16_t in_x_1,
-                  int16_t in_y_1, int16_t in_x_2, int16_t in_y_2, framebuffer_color_e in_color)
+                  int16_t in_y_1, int16_t in_x_2, int16_t in_y_2, framebuffer_color_t in_color)
 {
     gfx_line(inout_framebuffer, in_x_0, in_y_0, in_x_1, in_y_1, in_color);
     gfx_line(inout_framebuffer, in_x_1, in_y_1, in_x_2, in_y_2, in_color);
@@ -208,7 +208,7 @@ void gfx_triangle(framebuffer_t* inout_framebuffer, int16_t in_x_0, int16_t in_y
 
 void gfx_filled_triangle(framebuffer_t* inout_framebuffer, int16_t in_x_0, int16_t in_y_0,
                          int16_t in_x_1, int16_t in_y_1, int16_t in_x_2, int16_t in_y_2,
-                         framebuffer_color_e in_color)
+                         framebuffer_color_t in_color)
 {
     int16_t x_top = in_x_0;
     int16_t y_top = in_y_0;
