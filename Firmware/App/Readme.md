@@ -30,6 +30,7 @@ which is what lets the whole of it be unit-tested on the host.
 | `ghost/` | The four personalities and their targets (§10.4), scatter/chase/frightened. |
 | `score/` | Points and the ghost-eaten chain. The one Active Object here: it reacts to events on the game's internal bus (FR-110) rather than being asked. |
 | `game/` | The orchestrator: the tick, collisions, lives, levels, and the state it hands to the view. |
+| `sprite_set/` | The drawings and their palettes. *This game's* art, which is why it is here and not in `Services/sprite` — that module knows how to draw any sprite, this one is the one set we have. Not inside the render port either: SDL on the host must draw the same figures as the panel. |
 
 `game` is also the bridge between the two brokers (FR-110): game-internal events —
 pellet eaten, ghost eaten, frightened started — stay on the internal bus, and only

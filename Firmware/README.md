@@ -147,7 +147,7 @@ source of truth in
 | Module | What |
 |---|---|
 | `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
-| `App/playfield/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). Nothing calls them on the target yet; they are in the target build for compile coverage, and `--gc-sections` keeps them out of the image. |
+| `App/playfield/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/`, `sprite_set/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). Nothing calls them on the target yet; they are in the target build for compile coverage, and `--gc-sections` keeps them out of the image. |
 | `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
 | `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
@@ -162,6 +162,7 @@ source of truth in
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
 | `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
+| `Services/sprite/` | Indexed pictures with transparency and a palette chosen at draw time. A sprite is stored as **text**, one character per pixel, so the art is editable in the source with no tooling. |
 | `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-generic-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
