@@ -45,6 +45,12 @@ typedef enum
     SPRITE_SET_GHOST_WEST,
     SPRITE_SET_GHOST_SOUTH,
     SPRITE_SET_GHOST_FRIGHTENED,
+
+    /* The field. One tile drawing plus a palette is an empty cell or a wall; the two
+     * pellet drawings carry their own black surroundings so a cell is one item. */
+    SPRITE_SET_TILE,
+    SPRITE_SET_TILE_PELLET,
+    SPRITE_SET_TILE_POWER_PELLET,
     SPRITE_SET_ID_COUNT
 } sprite_set_id_e;
 
@@ -58,6 +64,9 @@ typedef enum
     SPRITE_SET_PALETTE_INKY,
     SPRITE_SET_PALETTE_CLYDE,
     SPRITE_SET_PALETTE_FRIGHTENED,
+    SPRITE_SET_PALETTE_EMPTY,
+    SPRITE_SET_PALETTE_WALL,
+    SPRITE_SET_PALETTE_PELLET,
     SPRITE_SET_PALETTE_COUNT
 } sprite_set_palette_e;
 

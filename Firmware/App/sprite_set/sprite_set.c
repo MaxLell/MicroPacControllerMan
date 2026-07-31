@@ -251,6 +251,74 @@ static const char* const g_ghost_frightened[] = {
     ".1111...1111...1111.",
 };
 
+static const char* const g_tile_solid[] = {
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+    "11111111111111111111",
+};
+
+static const char* const g_tile_pellet[] = {
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222111122222222",
+    "22222222111122222222",
+    "22222222111122222222",
+    "22222222111122222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+};
+
+static const char* const g_tile_power_pellet[] = {
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222111122222222",
+    "22222211111111222222",
+    "22222211111111222222",
+    "22222111111111122222",
+    "22222111111111122222",
+    "22222111111111122222",
+    "22222111111111122222",
+    "22222211111111222222",
+    "22222211111111222222",
+    "22222222111122222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+    "22222222222222222222",
+};
 /* clang-format on */
 
 #define SPRITE_SET_SIZE (20U)
@@ -266,6 +334,14 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_GHOST_WEST] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_ghost_west},
     [SPRITE_SET_GHOST_SOUTH] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_ghost_south},
     [SPRITE_SET_GHOST_FRIGHTENED] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_ghost_frightened},
+
+    /* The field. A tile is exactly one item in a display list, so an empty cell, a wall
+     * and a pellet all have to be full-tile drawings — a pellet sprite that left its
+     * surroundings transparent would need the tile cleared first, and that would be two
+     * items for every dot on the screen. */
+    [SPRITE_SET_TILE] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_tile_solid},
+    [SPRITE_SET_TILE_PELLET] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_tile_pellet},
+    [SPRITE_SET_TILE_POWER_PELLET] = {SPRITE_SET_SIZE, SPRITE_SET_SIZE, g_tile_power_pellet},
 };
 
 /* One drawing, five palettes. Index 0 is never read — it is the transparent character's
@@ -284,6 +360,13 @@ static const sprite_palette_t g_palettes[SPRITE_SET_PALETTE_COUNT] = {
     /* The one the four ghosts share when a power pellet is eaten: a dark blue body and a
      * white face, so which ghost it is stops mattering — which is the point. */
     [SPRITE_SET_PALETTE_FRIGHTENED] = {{0U, FRAMEBUFFER_RGB(33U, 33U, 255U), FRAMEBUFFER_COLOR_WHITE, 0U}},
+
+    /* The field palettes. Index 2 is the tile's own background, which is black
+     * everywhere — a pellet drawing carries its surroundings so that one item paints a
+     * whole cell. */
+    [SPRITE_SET_PALETTE_EMPTY] = {{0U, FRAMEBUFFER_COLOR_BLACK, FRAMEBUFFER_COLOR_BLACK, 0U}},
+    [SPRITE_SET_PALETTE_WALL] = {{0U, FRAMEBUFFER_RGB(33U, 33U, 222U), FRAMEBUFFER_COLOR_BLACK, 0U}},
+    [SPRITE_SET_PALETTE_PELLET] = {{0U, FRAMEBUFFER_RGB(255U, 184U, 151U), FRAMEBUFFER_COLOR_BLACK, 0U}},
 };
 
 /* ==========================================================================

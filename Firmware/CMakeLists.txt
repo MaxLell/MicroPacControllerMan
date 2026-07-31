@@ -88,6 +88,8 @@ if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         App/agent/agent.c
         App/game/game.c
+    App/game_view/game_view.c
+        App/game_view/game_view.c
         App/ghost/ghost.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
@@ -111,6 +113,8 @@ if(PACMAN_HOST_BUILD)
     target_include_directories(pacman_host PUBLIC
         App/agent
         App/game
+    App/game_view
+        App/game_view
         App/ghost
         App/ghost_path
         App/pacman

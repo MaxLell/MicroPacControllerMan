@@ -38,8 +38,7 @@ typedef enum
     MSG_SYSTEM_SHOW_MENU,    /*!< System -> Render                  */
     MSG_SYSTEM_START_GAME,   /*!< System -> Game                    */
     MSG_GAME_STATE,          /*!< Game   -> Game-View               */
-    MSG_DISPLAY_LIST,        /*!< Game-View -> Render               */
-                             /*   Payload lands with Game-View in M3 */
+    MSG_DISPLAY_LIST,        /*!< Game-View -> Render                */
     MSG_GAME_SCORE_UPDATED,  /*!< Game   -> NVM                     */
     MSG_GAME_OVER,           /*!< Game   -> System, NVM             */
     MSG_HIGHSCORE_LOADED,    /*!< NVM    -> System                  */
@@ -62,6 +61,10 @@ typedef enum
 
 /*! \brief The four ghosts; Pacman is carried separately. */
 #define MSG_GHOST_COUNT       (4U)
+
+/*! \brief Everything that moves — the four ghosts plus Pacman. What a frame of drawing
+ *         must always be able to carry in one message. */
+#define MSG_ACTOR_COUNT       (MSG_GHOST_COUNT + 1U)
 
 /*! \brief The playfield, in cells ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)),
  *         and the bytes needed to hold one bit per cell. */
@@ -167,6 +170,53 @@ typedef struct
     uint8_t frightened_ghosts;
 } msg_game_state_t;
 
+/*! \brief What one entry of a display list asks for.
+ *
+ * Two kinds, and the difference is entirely about *erasing*. An actor moves, so Render
+ * has to put back whatever the sprite covered before drawing it somewhere else; a
+ * background item is a change to the field itself, which stays until something changes
+ * it again. Render can tell them apart only if the message says so.
+ */
+typedef enum
+{
+    DISPLAY_ITEM_NONE = 0,
+    DISPLAY_ITEM_BACKGROUND, /*!< A field tile: a wall, a pellet, or emptiness   */
+    DISPLAY_ITEM_ACTOR       /*!< Moves; Render saves what it covers and restores it */
+} display_item_kind_e;
+
+/*! \brief One thing to draw: a sprite, a palette, and where it goes in pixels.
+ *
+ * Uniform on purpose. A wall, an eaten pellet's empty tile and Pacman are all "this
+ * drawing, that palette, here", which is what keeps Render free of the maze, the tile
+ * size and the screen layout — all of that stays in Game-View, where it can be tested
+ * without a display.
+ */
+typedef struct
+{
+    uint8_t kind;    /*!< A \ref display_item_kind_e                        */
+    uint8_t sprite;  /*!< A `sprite_set_id_e`; this header does not name them */
+    uint8_t palette; /*!< A `sprite_set_palette_e`                            */
+    uint8_t reserved;
+    int16_t x; /*!< Left edge, in panel pixels                          */
+    int16_t y; /*!< Top edge, in panel pixels                           */
+} msg_display_item_t;
+
+/*! \brief How many items travel in one message.
+ *
+ * Eight: the five actors of a frame, plus room for the field cells that changed under
+ * them. A frame has to fit in **one** message — split across two, a reader could draw
+ * half of it and show a pellet that Pacman has already eaten. Drawing a whole field on a
+ * level change takes 99 tiles and therefore many messages, but that is a transition, not
+ * a frame, and nobody is watching it. */
+#define MSG_DISPLAY_ITEM_MAX (8U)
+
+/*! \brief Payload of \ref MSG_DISPLAY_LIST (FR-005). */
+typedef struct
+{
+    uint8_t count;
+    msg_display_item_t items[MSG_DISPLAY_ITEM_MAX];
+} msg_display_list_t;
+
 /* ==========================================================================
  * msg - the cell bitmaps
  * ========================================================================= */
@@ -206,10 +256,10 @@ static inline void msg_cell_bitmap_set(uint8_t* inout_bitmap, uint8_t in_column,
 /*! \brief Size of the payload area. Must hold the largest payload above; the static
  *         assertions below fail the build if a new payload outgrows it.
  *
- * 16 bytes sufficed while the largest payload was a pointer. \ref msg_game_state_t is the
- * whole game state instead — which is the point: it is small enough to copy, so nothing
- * has to be shared. */
-#define MSG_PAYLOAD_MAX_SIZE (64U)
+ * 16 bytes sufficed while the largest payload was a pointer. The two that set the size
+ * now are the whole game state and a whole frame of drawing — which is the point: both
+ * are small enough to copy, so nothing has to be shared. */
+#define MSG_PAYLOAD_MAX_SIZE (72U)
 
 typedef struct
 {
@@ -225,5 +275,6 @@ _Static_assert(sizeof(msg_game_score_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too la
 _Static_assert(sizeof(msg_pellet_eaten_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_over_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_state_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
+_Static_assert(sizeof(msg_display_list_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 
 #endif /* MSG_H */
