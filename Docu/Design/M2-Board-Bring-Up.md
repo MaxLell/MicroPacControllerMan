@@ -353,11 +353,17 @@ frames as fast as the path allows, it sits at **175 FPS**.
 - **A rate is only worth requiring if it can be judged.** The test hands the rate to the
   joystick after the ladder, so the same motion can be walked up and down while watching it.
 
-One thing to expect at 60 FPS that did not matter at 30: **tearing.** We write GRAM
+One thing to expect at 60 FPS that did not matter at 30 is **tearing**: we write GRAM
 unsynchronised to the panel's scan, and at a frame rate equal to the scan rate the two beat
-against each other rather than drifting past each other quickly. The tearing-effect output
-is already wired to **PA0** and named in `dio_bsp_pin_e` — unused so far. If moving sprites
-show a horizontal seam, that pin is the fix, not a lower frame rate.
+against each other rather than drifting quickly past each other.
+
+**It was looked for at the board and is not there** — the operator saw no seam through the
+moving sprites at 60 FPS. That is a negative result at one workload, not a proof: five
+16 × 16 sprites in separate rows write little of the panel and finish long before the scan
+reaches most of it. A full-width update — a level transition, a score bar spanning the
+screen — is where a seam would first show. The tearing-effect output is already wired to
+**PA0** and named in `dio_bsp_pin_e`, unused so far, and it is the fix if one ever does;
+a lower frame rate is not.
 
 ### 3.3 Input latency (NFR-003) — the debounce is the whole budget
 
