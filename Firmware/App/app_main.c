@@ -3,6 +3,7 @@
 #include "Cli.h"
 #include "console.h"
 #include "dio_bsp.h"
+#include "joystick.h"
 #include "ott.h"
 #include "spi_bsp.h"
 #include "sw_timer.h"
@@ -18,6 +19,7 @@
 static void prv_on_systick(void)
 {
     (void)user_button_poll();
+    joystick_poll();
 }
 
 static void prv_init_platform(void)
@@ -28,6 +30,7 @@ static void prv_init_platform(void)
     spi_bsp_init();
     sw_timer_init();
     user_button_init();
+    joystick_init();
 
     /* Debouncing needs a steady 1 ms sample rate, so it rides the tick interrupt
      * rather than the main loop. */

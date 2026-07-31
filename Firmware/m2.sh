@@ -7,6 +7,8 @@
 #   ./m2.sh display_id      # build + flash + read the display ID (automatic)
 #   ./m2.sh display_test    # build + flash + draw display patterns (needs you)
 #   ./m2.sh joystick    # build + flash + run just the joystick test (needs you)
+#   ./m2.sh joystick_dot    # build + flash + move a dot with the joystick (needs you)
+#   ./m2.sh animation   # build + flash + judge how smooth moving actors look (needs you)
 #   ./m2.sh user_button # build + flash + run just the user-button test (needs you)
 #   ./m2.sh suite       # build + flash + run the automatic suite (enum + banner)
 #   ./m2.sh flash        # build + flash only (no test)
@@ -68,14 +70,14 @@ cmd="${1:-all}"
 case "$cmd" in
     build) do_build ;;
     flash) do_flash ;;
-    suite | display_id | display_test | joystick | user_button)
+    suite | display_id | display_test | joystick | joystick_dot | animation | user_button)
         do_flash
         run_test "$cmd"
         ;;
     all)
         do_flash
         run_test display_id
-        for t in display_test joystick user_button; do
+        for t in display_test joystick joystick_dot animation user_button; do
             printf '\n\033[1;33m--- Next test: %s. Get ready at the board; press ENTER to start ---\033[0m\n' "$t"
             read -r _
             run_test "$t"
@@ -86,7 +88,7 @@ case "$cmd" in
         sed -n '2,20p' "$0"
         ;;
     *)
-        echo "Unknown command: $cmd (try: all | display_id | display_test | joystick | user_button | suite | flash | build)" >&2
+        echo "Unknown command: $cmd (try: all | display_id | display_test | joystick | joystick_dot | animation | user_button | suite | flash | build)" >&2
         exit 2
         ;;
 esac

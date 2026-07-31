@@ -154,8 +154,29 @@ The lesson is in the test, not the driver: `display_test` now announces what eac
 it drew. A confirmation is only worth as much as the expectation it was checked against.
 
 Note that this settles the *panel's* orientation, not the game's. Which way is "up" for
-Pacman is still open, which is why the joystick keys carry compass names and the
-key-to-direction mapping stays an explicit table (§1).
+Pacman is settled separately, by §1.7.
+
+### 1.7 Input and display agree — measured
+
+Both halves were confirmed separately: `joystick` proved the keys, `display_test` proved
+the panel. Neither could say whether the two agree, and a swapped axis or an inverted row
+order would have passed both.
+
+`joystick_dot` puts them together — a yellow square that moves one cell per key press,
+drawn with partial updates only. Run at the board and confirmed by the operator: **the
+north key moves the square towards the top of the panel.** With `MADCTL = 0x00` and row 0
+at the top, the naive mapping is the correct one, and no rotation is needed anywhere:
+
+| Key | Frame buffer | On the panel |
+|---|---|---|
+| NORTH | row − 1 | up |
+| SOUTH | row + 1 | down |
+| WEST | column − 1 | left |
+| EAST | column + 1 | right |
+
+So "up" for Pacman needs no translation layer. The keys keep their compass names and the
+key-to-direction mapping stays an explicit table, because the *game's* notion of up is a
+game decision — but the hardware imposes nothing on it.
 
 ### 1.5 Measured: chip select is active LOW, and the controller is an ST7789V
 
@@ -218,8 +239,9 @@ or `Services/sw_timer`, which are clock-independent.
 
 ## 3. Frame budget — why NFR-002 needs partial updates
 
-NFR-002 asks for at least 30 frames per second. That cannot be met by transmitting whole
-frames, and the margin is not close.
+NFR-002 asks for at least 60 frames per second — a figure §3.2 arrives at by measurement;
+it read 30 while this section was first written, and the conclusion below holds either way.
+Neither can be met by transmitting whole frames, and the margin is not close.
 
 A 240 × 320 frame at 16 bits per pixel is **153,600 bytes**, or 1.23 Mbit over SPI per frame:
 
@@ -233,7 +255,7 @@ The larger colour display therefore made this budget *harder* than the previous 
 monochrome frame did, even though the CPU is faster. The transfer dominates; the CPU is
 not the constraint.
 
-What makes 30 FPS comfortable rather than impossible is that **almost nothing changes
+What makes such a rate comfortable rather than impossible is that **almost nothing changes
 between two Pacman frames.** The maze is static; only Pacman, four ghosts and the
 occasional eaten pellet move. Redrawing six 8 × 8 cells is 768 bytes — under 0.2 ms at any
 of the rates above.
@@ -266,7 +288,8 @@ entering another, plus a couple of eaten pellets, so twelve cells:
 
 Twelve 8x8 cells are 1,536 bytes against 153,600 — **one percent of the data, and 73
 times faster.** At 30 FPS that uses **10 % of the frame budget and leaves 90 %** for the
-game. NFR-002 is reachable at the bit rate already configured.
+game; at the 60 FPS eventually required, 21 % and 79 %. NFR-002 is reachable at the bit rate
+already configured.
 
 Worth noting where the remaining time goes: pure transfer of 1,536 bytes at 5 Mbit/s is
 2.46 ms, and the measurement is 3.43 ms. The extra ~0.97 ms is the per-region overhead —
@@ -285,13 +308,82 @@ useful, not because there is work outstanding:
   rather than assuming. Following the `uart_bsp` precedent the rate is pinned in firmware
   rather than in the `.ioc`, so changing it is one constant.
 - **Send only what changed.** Six 8x8 cells is 768 bytes against 153,600 — under 0.2 ms at
-  any of those rates. This is the lever that actually reaches 30 FPS; the clock alone does
-  not, since even 40 Mbit/s leaves a full frame at ~31 ms with nothing left for the game.
+  any of those rates. This is the lever that actually reaches the required rate; the clock
+  alone does not, since even 40 Mbit/s leaves a full frame at ~31 ms with nothing left for
+  the game.
 
 RAM now reads **157,296 bytes, exactly 60 % of the 256 kB**, which is the frame buffer plus
 the 3.5 kB the firmware used before. A second buffer would not fit, so the double-buffered
 snapshot assumed in [03 §3.2](../PrePlanning/03-Architecture.md) has to be reconsidered when
-M3 resumes.
+M3 resumes. The on-target tests already live under that constraint: they share one buffer
+through `ott_framebuffer`, because the second scenario that declared its own would not link.
+
+### 3.2 Smooth is not the same as fast
+
+290 FPS answers how much the panel can take. It does not answer whether Pacman will *look*
+smooth, and that is the question NFR-002 exists for. Smoothness is not a function of the
+frame rate on its own but of how far a sprite jumps between two frames — a sprite at 10 FPS
+covering nine pixels a frame and one at 60 FPS covering one and a half are the same speed
+and look nothing alike.
+
+So `animation` holds the speed constant at **90 px/s** and varies only the rate, five actors
+running over a field of pellets, each frame repainting the field behind a sprite and drawing
+it at its new place — the work a real frame does, not a square on a blank screen:
+
+| Requested | Held | Step per frame | Drawing time | Of the frame budget |
+|---|---|---|---|---|
+| 10 FPS | 10 FPS | 9.00 px | 7.09 ms | 7 % of 100 ms |
+| 15 FPS | 15 FPS | 6.00 px | 6.55 ms | 9 % of 66.7 ms |
+| 30 FPS | 30 FPS | 3.00 px | 5.66 ms | 17 % of 33.3 ms |
+| **60 FPS** | **60 FPS** | **1.50 px** | **5.26 ms** | **31 % of 16.7 ms** |
+
+Every pass held the pace it asked for, which is what makes the visual comparison worth
+anything. Note that the cost per frame barely falls as the rate doubles — the sprite
+dominates the dirty rectangle and the step contributes only a few columns — so **doubling
+the rate nearly doubles the data rate.** That is the real ceiling. Unpaced, drawing the same
+frames as fast as the path allows, it sits at **175 FPS**.
+
+**NFR-002 was therefore raised from 30 FPS to 60.** Three things say 60 rather than more:
+
+- **It costs little.** 5.26 ms of a 16.7 ms frame, so 69 % of every frame still belongs to
+  the game — and the measured ceiling is nearly three times the target.
+- **The panel cannot show more.** The ST7789V's own refresh runs at its reset default of
+  60 Hz, which `st7789_init` does not change (`FRCTRL2` is left alone). Frames sent faster
+  than that are overwritten in GRAM before they are ever scanned out.
+- **A rate is only worth requiring if it can be judged.** The test hands the rate to the
+  joystick after the ladder, so the same motion can be walked up and down while watching it.
+
+One thing to expect at 60 FPS that did not matter at 30: **tearing.** We write GRAM
+unsynchronised to the panel's scan, and at a frame rate equal to the scan rate the two beat
+against each other rather than drifting past each other quickly. The tearing-effect output
+is already wired to **PA0** and named in `dio_bsp_pin_e` — unused so far. If moving sprites
+show a horizontal seam, that pin is the fix, not a lower frame rate.
+
+### 3.3 Input latency (NFR-003) — the debounce is the whole budget
+
+NFR-003 allows 30 ms from a key press to the movement appearing. `joystick_dot` measures the
+drawing half through the real path, one move being the cell vacated plus the cell entered:
+
+```
+100 moves in 208 ms -> 2.08 ms per move
+```
+
+Two 16 × 16 regions are 1,024 bytes, about 1.7 ms of transfer plus the two window
+set-ups — so this too is transfer-bound and holds no surprise.
+
+The surprise is the other half. `Bsp/switch` reports a key only after
+**`SWITCH_DEBOUNCE_SAMPLES` = 32 consecutive agreeing samples**, and it is sampled from the
+1 ms tick, so a settled contact takes **32 ms to be reported** — before anything is drawn.
+
+> **32 ms of debounce + 2.08 ms of drawing = 34 ms, against a 30 ms requirement.** The
+> budget is spent on debouncing a switch, and the display is not the problem.
+
+Nothing about that is measured-and-therefore-fixed: 32 ms is an unusually long window, chosen
+because it happens to be the width of the `uint32_t` the history lives in, not because a
+contact needs it. Eight samples is the conventional figure and would put the whole path at
+about 10 ms. The window is not changed here — it is shared with `user_button`, where 32 ms is
+harmless, and shortening it belongs with the game loop that will actually be judged against
+NFR-003. Recorded as [RF-014](../Refactoring-Backlog.md#rf-014).
 
 ## 4. Flashing and debugging
 
@@ -321,12 +413,15 @@ disabled clock.
 3. **Frame buffer placement** — 153.6 kB of the 256 kB contiguous SRAM. Decide whether a
    single buffer suffices or the render path needs two, which would not fit.
 4. **Joystick debouncing** — `Bsp/switch` already debounces a GPIO over a 32-sample history;
-   confirm it serves five keys without change.
+   confirm it serves five keys without change. *Answered: five instances of the primitive,
+   polled from the same 1 ms tick as `user_button`, need no change to it — `Bsp/joystick` is
+   the instance module. But the window costs 32 ms, which is the whole of NFR-003; see §3.3.*
 5. **Confirming the display lines on the board** (§1.4) — paper is not silicon.
 
 Settled since this document was written: the pin map (§1), the non-existence of the supposed
-PA9 conflict (§1.3), and the display controller (§6). SB10 (§1.2) is deliberately left at its
-default until a measurement says otherwise.
+PA9 conflict (§1.3), the display controller (§6), the frame budget and the smoothness of
+motion (§3.1–3.2). SB10 (§1.2) is deliberately left at its default until a measurement says
+otherwise.
 
 ## 6. Display controller: ST7789V
 

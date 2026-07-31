@@ -102,14 +102,26 @@ debugger attached ([doc 09](../../Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Fl
 | `ott.c` / `ott.h` | The OTT core: the `ott` and `reset` console commands, and the boot-time `ott_execute_pending()` runner and reporter. **Owns the layout of the retained request** (magic word, checksum, parameter blob) — `Bsp/retain_ram` only provides the bytes. |
 | `ott_scenarios.c` / `.h` | The scenario registry: one row per test, plus the setup/run function types. |
 | `scripts/` | One module per scenario, `scripts/ott_<name>.c`/`.h`. |
+| `ott_framebuffer.c` / `.h` | The one frame buffer the scenarios draw into. A frame is 60 % of SRAM, so a second one does not link — and one scenario runs per reset, so none is needed. |
 
-Current scenarios, all interactive (the firmware renders or prints, you confirm with
-the USER button B1, and a safety cap returns the board to nominal mode regardless):
+Current scenarios. Most are interactive: the firmware renders or prints, you confirm with
+the USER button B1, and a safety cap returns the board to nominal mode regardless.
 
+- `ott_display_id` — resets the controller and reads its ID at both chip-select
+  polarities. **Automatic** — the display either answers or it does not.
 - `ott_user_button` — live button state plus every debounced press; passes after three.
-- `ott_display` — geometric GFX patterns on the LCD (VT-INT-006).
-- `ott_touchpad` — live x/y and touch-present on the console (VT-INT-007).
-- `ott_touchdot` — a dot on the LCD tracks your finger; display and touchpad together.
+- `ott_joystick` — names each of the five shield keys as it is pressed; passes when all
+  five have been seen. Reads the pins straight through `dio_bsp`, because what it exists
+  to check is the pin map itself.
+- `ott_display_test` — colours, bars, geometry, and both frame-rate measurements. Each
+  screen states what it *must* look like; a confirmation is worth only as much as the
+  expectation it was checked against.
+- `ott_joystick_dot` — a dot the joystick moves, drawn with partial updates only. Input
+  and display together, and the one scenario that fails if their coordinate systems
+  disagree. Measures the drawing half of NFR-003.
+- `ott_animation` — five actors at a constant speed with the frame rate varying under
+  them, then the rate handed to the joystick. Answers whether motion *looks* smooth,
+  which no throughput figure can.
 
 **Adding a scenario:** create `scripts/ott_<name>.c`/`.h` with a setup and a run
 function, add one row to the table in `ott_scenarios.c`, and add the source to

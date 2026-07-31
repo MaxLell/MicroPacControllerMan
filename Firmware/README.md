@@ -152,11 +152,14 @@ source of truth in
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
 | `Bsp/switch/` | Reusable debounced-GPIO input primitive (32-sample history). |
 | `Bsp/user_button/` | This board's B1 (PC13) instance of `switch`, incl. a latched press edge. |
+| `Bsp/joystick/` | The shield's five-key joystick — five instances of `switch`, latched press edge per key. |
+| `Bsp/spi_bsp/` | Blocking SPI master on SPI1, full duplex (reading a controller's ID register needs it). |
 | `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
-| `Drivers/display/` | The display **port** only: shows a `framebuffer_t`. `display_host.c` is the headless host implementation; the target implementation is gone with the Sharp panel and returns with the ILI9341 in M2. |
+| `Drivers/st7789/` | The ST7789V controller: init, ID self-check, rectangles, pixel blits with byte-order handling. |
+| `Drivers/display/` | The display **port** the game sees: shows a `framebuffer_t`, whole or by rectangle (`display_present_region`, the lever behind the frame rate). `display.c` drives the ST7789V; `display_host.c` keeps the frame in memory for the host build. |
 | `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
-| `Services/framebuffer/` | A 1-bpp frame buffer — memory plus bit arithmetic, no hardware. Colours are logical: a set bit is ink. |
+| `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
 | `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-generic-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
@@ -164,7 +167,7 @@ source of truth in
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |
 | `Services/msg_broker/` | The publish/subscribe bus between modules (FR-103/108/110). Instance-based; output queues, not callbacks. |
 | `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
-| `Test/Target/` | The OTT core, the scenario registry, and one module per scenario. |
+| `Test/Target/` | The OTT core, the scenario registry, the one shared frame buffer (`ott_framebuffer`), and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
 | `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |

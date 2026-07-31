@@ -24,7 +24,7 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
 | [RF-012](#rf-012) | Slot-2 reset is wired to PD2, firmware drives PA4 | Cosmetic | — |
-| [RF-013](#rf-013) | `run_ott.py` times out silently when another process holds the port | Low | — |
+| [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | — |
 
 ---
 
@@ -203,16 +203,25 @@ reset pulse simply goes to an unconnected pin.
 `touchpad_init()` and the dead pin removed from `dio_bsp_pin_e` and the `.ioc`. The
 second is probably the better trade, since the controller does not need it.
 
-### RF-013
+### RF-014
 
-**`run_ott.py` times out silently when another process holds the serial port.** Low.
+**The 32 ms debounce window is the whole of the NFR-003 input budget.** Medium.
 
-Two readers on the same tty split the incoming bytes, so the harness sees a partial
-stream and eventually reports a timeout or a missing boot banner — with nothing pointing
-at the real cause. Hit twice during development, both times from a stray script left
-holding `/dev/ttyACM0`; it will hit anyone who leaves `console.py` open in another
-terminal and then runs a test.
+`switch_get_debounced_state()` reports a key only after `SWITCH_DEBOUNCE_SAMPLES` = **32**
+consecutive agreeing samples, and it is sampled from the 1 ms tick, so a settled contact
+takes 32 ms to reach the application. NFR-003 allows **30 ms** from press to movement, and
+`joystick_dot` measures the drawing half at 2.08 ms — so the path is 34 ms and the display
+is not what puts it over ([M2 Board Bring-Up §3.3](Design/M2-Board-Bring-Up.md)).
 
-*Done when* the harness notices at start-up that the port is already open by another
-process and says so, instead of failing as though the firmware were at fault. On Linux
-`fuser`/`lsof` or an advisory `flock` on the device would do it.
+The window is 32 because that is the width of the `uint32_t` the history shift register
+lives in, not because a contact needs it; the `_Static_assert` in `switch.c` ties the two
+together. Eight samples is the conventional figure and would bring the whole path to about
+10 ms.
+
+Left alone for now deliberately: the primitive is shared with `user_button`, where 32 ms is
+harmless, and the number should be chosen against a game loop that can be judged rather than
+against an OTT.
+
+*Done when* the debounce length is a per-instance parameter (history in a `uint8_t`, or a
+count carried in `switch_t`) and the joystick uses a window that leaves NFR-003 some room —
+with the input latency re-measured against the game loop to prove it.

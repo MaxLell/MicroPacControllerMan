@@ -38,8 +38,13 @@ silently working around a wart.
 - **M2 Board Bring-Up — in progress.** ST7789V display + joystick on the GFX01M2. The pin
   map is **measured, not assumed**: the joystick keys were confirmed by the `joystick` OTT
   and the display by `display_id`, which got the controller to answer. Chip select turned out
-  **active LOW**, not the active high UM2750 claims. Next: the ST7789V driver and the RGB565
-  colour path. See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
+  **active LOW**, not the active high UM2750 claims. The ST7789V driver, the RGB565 frame
+  buffer and partial updates are in (3 fps whole-frame becomes 290 fps for what a game
+  actually changes), and `joystick_dot` and `animation` put input and display together.
+  **NFR-002 is now 60 FPS, not 30** — measured: five moving actors cost 5.26 ms of a
+  16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
+  Open: the 32 ms debounce window is the whole of the NFR-003 input budget (RF-014).
+  See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
   until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
   Active Objects) is agreed in outline but not settled.

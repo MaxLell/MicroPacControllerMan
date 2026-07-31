@@ -10,6 +10,7 @@
 #include "display.h"
 #include "framebuffer.h"
 #include "gfx.h"
+#include "ott_framebuffer.h"
 #include "st7789.h"
 #include "systick_bsp.h"
 #include "sw_timer.h"
@@ -39,9 +40,6 @@
 #define OTT_DISPLAY_TEST_DIRTY_CELLS (12U)
 #define OTT_DISPLAY_TEST_PARTIAL_FRAMES (100U)
 #define OTT_DISPLAY_TEST_MS_PER_SECOND_F (1000.0)
-
-/* 153,600 bytes. Static, because it does not fit on a stack. */
-static framebuffer_t g_framebuffer;
 
 static sw_timer_t g_timeout_timer;
 
@@ -114,17 +112,17 @@ static void prv_measure_frame_rate(void)
 
     cli_print("  a YELLOW disc with a BLUE border — through framebuffer -> gfx -> display");
 
-    framebuffer_fill(&g_framebuffer, FRAMEBUFFER_COLOR_BLACK);
-    gfx_filled_circle(&g_framebuffer, FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2,
+    framebuffer_fill(ott_framebuffer_get(), FRAMEBUFFER_COLOR_BLACK);
+    gfx_filled_circle(ott_framebuffer_get(), FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2,
                       FRAMEBUFFER_WIDTH / 4, FRAMEBUFFER_COLOR_YELLOW);
-    gfx_rectangle(&g_framebuffer, 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
+    gfx_rectangle(ott_framebuffer_get(), 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
                   FRAMEBUFFER_COLOR_BLUE);
 
     start_tick = systick_bsp_get_tick();
 
     for (uint32_t frame = 0U; frame < OTT_DISPLAY_TEST_FRAME_COUNT; ++frame)
     {
-        display_present(&g_framebuffer);
+        display_present(ott_framebuffer_get());
     }
 
     elapsed_ms = systick_bsp_get_tick() - start_tick;
@@ -157,7 +155,7 @@ static void prv_measure_partial_rate(void)
             const int16_t x = (int16_t)((cell * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_WIDTH);
             const int16_t y = (int16_t)((frame * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_HEIGHT);
 
-            display_present_region(&g_framebuffer, x, y, OTT_DISPLAY_TEST_CELL_SIZE,
+            display_present_region(ott_framebuffer_get(), x, y, OTT_DISPLAY_TEST_CELL_SIZE,
                                    OTT_DISPLAY_TEST_CELL_SIZE);
         }
     }

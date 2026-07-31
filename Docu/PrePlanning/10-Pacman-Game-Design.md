@@ -7,7 +7,7 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
 ## 10.1 Movement & Tick Model
 
 - **Grid-based.** The maze is a grid of square cells (§10.2). Pacman and each ghost occupy exactly one cell and face one of four directions (North / East / South / West). There is no sub-cell/pixel position — movement is one whole cell at a time. This keeps the logic deterministic and unit-testable, and matches tile rendering on the monochrome display.
-- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 30 FPS (NFR-002) and simply redraws the current Model.
+- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS (NFR-002) and simply redraws the current Model.
 - **Pacman movement.** Pacman moves one cell every **150 ms** *(tunable)*, constant across all levels. He keeps a current direction and a *queued* direction; `MSG_INPUT_DIRECTION` sets the queued one. When he is due to move: if the queued direction is not blocked by a wall it becomes current; then he moves one cell if that cell is open, otherwise he stays put (stopped against a wall until the direction changes).
 - **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period, which is **per level** (§10.9) — slower than Pacman on level 1, faster than him on level 5. A ghost never reverses onto the cell it just left, except when its mode changes (scatter↔chase, or entering/leaving frightened). Frightened ghosts move at half their current speed.
 - **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth — on the same row for the horizontal tunnel, the same column for the vertical one (FR-012).
@@ -103,7 +103,7 @@ Collected for convenience — these realise [A-006](05-Risks-Assumptions-and-Dep
 | Frightened ghost speed | half of the ghost's current speed |
 | Pellet / power-pellet points | 10 / 50 |
 | Ghost-eaten points | 200 / 400 / 800 / 1600 |
-| Render rate | ≥ 30 FPS (NFR-002) |
+| Render rate | ≥ 60 FPS (NFR-002) |
 
 ## 10.9 Levels & Difficulty (FR-025 / FR-026)
 
