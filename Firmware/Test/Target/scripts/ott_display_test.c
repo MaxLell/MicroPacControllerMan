@@ -12,33 +12,33 @@
 #include "gfx.h"
 #include "ott_framebuffer.h"
 #include "st7789.h"
-#include "systick_bsp.h"
 #include "sw_timer.h"
+#include "systick_bsp.h"
 #include "user_button.h"
 
 /* ==========================================================================
  * ott_display_test - private
  * ========================================================================= */
 
-#define OTT_DISPLAY_TEST_TIMEOUT_MS (120000U)
-#define OTT_DISPLAY_TEST_MS_PER_SECOND (1000U)
+#define OTT_DISPLAY_TEST_TIMEOUT_MS      (120000U)
+#define OTT_DISPLAY_TEST_MS_PER_SECOND   (1000U)
 
-#define OTT_DISPLAY_TEST_HOLD_MS (900U)
+#define OTT_DISPLAY_TEST_HOLD_MS         (900U)
 
 /* A marker small enough to leave the rest of the screen readable, big enough to see. */
-#define OTT_DISPLAY_TEST_CORNER_SIZE (40U)
-#define OTT_DISPLAY_TEST_BORDER_SIZE (4U)
+#define OTT_DISPLAY_TEST_CORNER_SIZE     (40U)
+#define OTT_DISPLAY_TEST_BORDER_SIZE     (4U)
 
-#define OTT_DISPLAY_TEST_BAR_COUNT (8U)
+#define OTT_DISPLAY_TEST_BAR_COUNT       (8U)
 
 /* Enough presents to average out the tick's 1 ms granularity. */
-#define OTT_DISPLAY_TEST_FRAME_COUNT (5U)
+#define OTT_DISPLAY_TEST_FRAME_COUNT     (5U)
 
 /* What a Pacman frame actually changes: five actors each vacating one 8x8 cell and
  * entering another, plus a couple of eaten pellets. */
-#define OTT_DISPLAY_TEST_CELL_SIZE (8)
-#define OTT_DISPLAY_TEST_DIRTY_CELLS (12U)
-#define OTT_DISPLAY_TEST_PARTIAL_FRAMES (100U)
+#define OTT_DISPLAY_TEST_CELL_SIZE       (8)
+#define OTT_DISPLAY_TEST_DIRTY_CELLS     (12U)
+#define OTT_DISPLAY_TEST_PARTIAL_FRAMES  (100U)
 #define OTT_DISPLAY_TEST_MS_PER_SECOND_F (1000.0)
 
 static sw_timer_t g_timeout_timer;
@@ -62,9 +62,8 @@ static void prv_show_screen(const char* const in_description, uint16_t in_colour
 static void prv_show_colour_bars(void)
 {
     static const uint16_t bars[OTT_DISPLAY_TEST_BAR_COUNT] = {
-        ST7789_RGB(0U, 0U, 0U),     ST7789_RGB(0U, 0U, 255U),   ST7789_RGB(255U, 0U, 0U),
-        ST7789_RGB(255U, 0U, 255U), ST7789_RGB(0U, 255U, 0U),   ST7789_RGB(0U, 255U, 255U),
-        ST7789_RGB(255U, 255U, 0U), ST7789_RGB(255U, 255U, 255U),
+        ST7789_RGB(0U, 0U, 0U),   ST7789_RGB(0U, 0U, 255U),   ST7789_RGB(255U, 0U, 0U),   ST7789_RGB(255U, 0U, 255U),
+        ST7789_RGB(0U, 255U, 0U), ST7789_RGB(0U, 255U, 255U), ST7789_RGB(255U, 255U, 0U), ST7789_RGB(255U, 255U, 255U),
     };
     const uint16_t bar_width = ST7789_WIDTH / OTT_DISPLAY_TEST_BAR_COUNT;
 
@@ -72,8 +71,7 @@ static void prv_show_colour_bars(void)
 
     for (uint16_t index = 0U; index < OTT_DISPLAY_TEST_BAR_COUNT; ++index)
     {
-        st7789_fill_rectangle((uint16_t)(index * bar_width), 0U, bar_width, ST7789_HEIGHT,
-                              bars[index]);
+        st7789_fill_rectangle((uint16_t)(index * bar_width), 0U, bar_width, ST7789_HEIGHT, bars[index]);
     }
 
     delay_ms(OTT_DISPLAY_TEST_HOLD_MS);
@@ -91,14 +89,14 @@ static void prv_show_geometry(void)
     st7789_fill_screen(ST7789_RGB(0U, 0U, 0U));
 
     st7789_fill_rectangle(0U, 0U, ST7789_WIDTH, OTT_DISPLAY_TEST_BORDER_SIZE, red);
-    st7789_fill_rectangle(0U, ST7789_HEIGHT - OTT_DISPLAY_TEST_BORDER_SIZE, ST7789_WIDTH,
-                          OTT_DISPLAY_TEST_BORDER_SIZE, red);
+    st7789_fill_rectangle(0U, ST7789_HEIGHT - OTT_DISPLAY_TEST_BORDER_SIZE, ST7789_WIDTH, OTT_DISPLAY_TEST_BORDER_SIZE,
+                          red);
     st7789_fill_rectangle(0U, 0U, OTT_DISPLAY_TEST_BORDER_SIZE, ST7789_HEIGHT, red);
-    st7789_fill_rectangle(ST7789_WIDTH - OTT_DISPLAY_TEST_BORDER_SIZE, 0U, OTT_DISPLAY_TEST_BORDER_SIZE,
-                          ST7789_HEIGHT, red);
+    st7789_fill_rectangle(ST7789_WIDTH - OTT_DISPLAY_TEST_BORDER_SIZE, 0U, OTT_DISPLAY_TEST_BORDER_SIZE, ST7789_HEIGHT,
+                          red);
 
-    st7789_fill_rectangle(OTT_DISPLAY_TEST_BORDER_SIZE, OTT_DISPLAY_TEST_BORDER_SIZE,
-                          OTT_DISPLAY_TEST_CORNER_SIZE, OTT_DISPLAY_TEST_CORNER_SIZE, white);
+    st7789_fill_rectangle(OTT_DISPLAY_TEST_BORDER_SIZE, OTT_DISPLAY_TEST_BORDER_SIZE, OTT_DISPLAY_TEST_CORNER_SIZE,
+                          OTT_DISPLAY_TEST_CORNER_SIZE, white);
 }
 
 /* Draws through the real path — gfx into a frame buffer, then the display port — and
@@ -113,10 +111,9 @@ static void prv_measure_frame_rate(void)
     cli_print("  a YELLOW disc with a BLUE border — through framebuffer -> gfx -> display");
 
     framebuffer_fill(ott_framebuffer_get(), FRAMEBUFFER_COLOR_BLACK);
-    gfx_filled_circle(ott_framebuffer_get(), FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2,
-                      FRAMEBUFFER_WIDTH / 4, FRAMEBUFFER_COLOR_YELLOW);
-    gfx_rectangle(ott_framebuffer_get(), 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
-                  FRAMEBUFFER_COLOR_BLUE);
+    gfx_filled_circle(ott_framebuffer_get(), FRAMEBUFFER_WIDTH / 2, FRAMEBUFFER_HEIGHT / 2, FRAMEBUFFER_WIDTH / 4,
+                      FRAMEBUFFER_COLOR_YELLOW);
+    gfx_rectangle(ott_framebuffer_get(), 0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_COLOR_BLUE);
 
     start_tick = systick_bsp_get_tick();
 
@@ -128,9 +125,8 @@ static void prv_measure_frame_rate(void)
     elapsed_ms = systick_bsp_get_tick() - start_tick;
     milliseconds_per_frame = (double)elapsed_ms / OTT_DISPLAY_TEST_FRAME_COUNT;
 
-    cli_print("  %lu full frames in %lu ms -> %d ms/frame, %d fps",
-              (unsigned long)OTT_DISPLAY_TEST_FRAME_COUNT, (unsigned long)elapsed_ms,
-              (int)milliseconds_per_frame,
+    cli_print("  %lu full frames in %lu ms -> %d ms/frame, %d fps", (unsigned long)OTT_DISPLAY_TEST_FRAME_COUNT,
+              (unsigned long)elapsed_ms, (int)milliseconds_per_frame,
               (int)(OTT_DISPLAY_TEST_MS_PER_SECOND_F / milliseconds_per_frame));
 }
 
@@ -143,8 +139,7 @@ static void prv_measure_partial_rate(void)
     double milliseconds_per_frame;
 
     cli_print("  timing %lu dirty %dx%d cells per frame — a realistic Pacman update",
-              (unsigned long)OTT_DISPLAY_TEST_DIRTY_CELLS, OTT_DISPLAY_TEST_CELL_SIZE,
-              OTT_DISPLAY_TEST_CELL_SIZE);
+              (unsigned long)OTT_DISPLAY_TEST_DIRTY_CELLS, OTT_DISPLAY_TEST_CELL_SIZE, OTT_DISPLAY_TEST_CELL_SIZE);
 
     start_tick = systick_bsp_get_tick();
 
@@ -155,8 +150,7 @@ static void prv_measure_partial_rate(void)
             const int16_t x = (int16_t)((cell * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_WIDTH);
             const int16_t y = (int16_t)((frame * OTT_DISPLAY_TEST_CELL_SIZE) % FRAMEBUFFER_HEIGHT);
 
-            display_present_region(ott_framebuffer_get(), x, y, OTT_DISPLAY_TEST_CELL_SIZE,
-                                   OTT_DISPLAY_TEST_CELL_SIZE);
+            display_present_region(ott_framebuffer_get(), x, y, OTT_DISPLAY_TEST_CELL_SIZE, OTT_DISPLAY_TEST_CELL_SIZE);
         }
     }
 
@@ -164,8 +158,7 @@ static void prv_measure_partial_rate(void)
     milliseconds_per_frame = (double)elapsed_ms / OTT_DISPLAY_TEST_PARTIAL_FRAMES;
 
     cli_print("  %lu partial frames in %lu ms -> %d.%02d ms/frame, %d fps",
-              (unsigned long)OTT_DISPLAY_TEST_PARTIAL_FRAMES, (unsigned long)elapsed_ms,
-              (int)milliseconds_per_frame,
+              (unsigned long)OTT_DISPLAY_TEST_PARTIAL_FRAMES, (unsigned long)elapsed_ms, (int)milliseconds_per_frame,
               (int)((milliseconds_per_frame - (int)milliseconds_per_frame) * 100.0),
               (int)(OTT_DISPLAY_TEST_MS_PER_SECOND_F / milliseconds_per_frame));
 }
@@ -186,13 +179,13 @@ bool ott_display_test_run(const uint8_t* in_parameter, char* out_reason, size_t 
     display_init();
     st7789_read_id(id);
 
-    cli_print("  controller ID: %02X %02X %02X (%s)", (unsigned)id[0], (unsigned)id[1],
-              (unsigned)id[2], st7789_is_present() ? "ST7789V" : "UNEXPECTED");
+    cli_print("  controller ID: %02X %02X %02X (%s)", (unsigned)id[0], (unsigned)id[1], (unsigned)id[2],
+              st7789_is_present() ? "ST7789V" : "UNEXPECTED");
 
     if (!st7789_is_present())
     {
-        (void)snprintf(out_reason, in_reason_size, "controller ID %02X %02X %02X is not an ST7789V",
-                       (unsigned)id[0], (unsigned)id[1], (unsigned)id[2]);
+        (void)snprintf(out_reason, in_reason_size, "controller ID %02X %02X %02X is not an ST7789V", (unsigned)id[0],
+                       (unsigned)id[1], (unsigned)id[2]);
 
         return false;
     }

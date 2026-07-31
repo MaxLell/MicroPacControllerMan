@@ -51,8 +51,8 @@ void display_present(const framebuffer_t* in_framebuffer);
  * \param[in]       in_width: at least `1`, and `in_x + in_width` at most #FRAMEBUFFER_WIDTH
  * \param[in]       in_height: at least `1`, and `in_y + in_height` at most #FRAMEBUFFER_HEIGHT
  */
-void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y,
-                            int16_t in_width, int16_t in_height);
+void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
+                            int16_t in_height);
 
 /*! \brief Blank the display itself, without touching any frame buffer. */
 void display_clear(void);

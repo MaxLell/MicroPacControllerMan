@@ -33,13 +33,14 @@ Then confirm the hardware interactively. Each test streams live and ends when yo
 press the USER button (B1):
 
 ```bash
-python3 Test/run_ott.py user_button     # the on-board button (PC13)
-python3 Test/run_ott.py display         # geometric patterns on the LCD
-python3 Test/run_ott.py touchpad        # live x/y/touch over the console
-python3 Test/run_ott.py touchdot        # a dot on the LCD follows your finger
+python3 Test/run_ott.py --list          # what exists, and which kind each test is
+python3 Test/run_ott.py --suite         # the automatic ones, unattended
+python3 Test/run_ott.py --manual        # the ones you have to watch and confirm
+python3 Test/run_ott.py joystick_dot    # or one by name
 ```
 
-`./m2.sh all` does build + flash + all four in sequence.
+`./dev.sh all` does build + flash + both suites in sequence; `./dev.sh check` is what a
+reviewer wants green.
 
 ## How the firmware is organised
 

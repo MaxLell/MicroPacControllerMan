@@ -29,12 +29,12 @@
 
 typedef struct
 {
-    uint8_t* storage;                           /*!< Caller-owned, capacity elements   */
-    size_t element_size;                        /*!< Bytes per element                 */
-    uint16_t capacity;                          /*!< Elements it can hold              */
-    uint16_t count;                             /*!< Elements currently held           */
-    uint16_t read_index;                        /*!< Next element to read              */
-    uint16_t write_index;                       /*!< Next slot to write                */
+    uint8_t* storage;     /*!< Caller-owned, capacity elements   */
+    size_t element_size;  /*!< Bytes per element                 */
+    uint16_t capacity;    /*!< Elements it can hold              */
+    uint16_t count;       /*!< Elements currently held           */
+    uint16_t read_index;  /*!< Next element to read              */
+    uint16_t write_index; /*!< Next slot to write                */
 } circular_buffer_t;
 
 /* ==========================================================================
@@ -49,8 +49,8 @@ typedef struct
  * \param[in]       in_element_size: bytes per element, at least `1`
  * \param[in]       in_capacity: number of elements, at least `1`
  */
-void circular_buffer_init(circular_buffer_t* inout_buffer, void* inout_storage,
-                          size_t in_element_size, uint16_t in_capacity);
+void circular_buffer_init(circular_buffer_t* inout_buffer, void* inout_storage, size_t in_element_size,
+                          uint16_t in_capacity);
 
 /*! \brief Drop everything held, keeping the storage. */
 void circular_buffer_clear(circular_buffer_t* inout_buffer);

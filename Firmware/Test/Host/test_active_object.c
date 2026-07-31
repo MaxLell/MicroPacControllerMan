@@ -30,21 +30,21 @@
 #include "msg_queue.h"
 #include "unity.h"
 
-#define TEST_INPUT_CAPACITY (8U)
-#define TEST_INBOX_CAPACITY (4U)
+#define TEST_INPUT_CAPACITY       (8U)
+#define TEST_INBOX_CAPACITY       (4U)
 #define TEST_SMALL_INBOX_CAPACITY (1U)
 
-#define TEST_SCORE_FIRST (11U)
-#define TEST_SCORE_SECOND (22U)
-#define TEST_SCORE_THIRD (33U)
+#define TEST_SCORE_FIRST          (11U)
+#define TEST_SCORE_SECOND         (22U)
+#define TEST_SCORE_THIRD          (33U)
 
-#define TEST_NO_MSGS (0U)
-#define TEST_ONE_MSG (1U)
-#define TEST_TWO_MSGS (2U)
-#define TEST_ONE_DROP (1U)
+#define TEST_NO_MSGS              (0U)
+#define TEST_ONE_MSG              (1U)
+#define TEST_TWO_MSGS             (2U)
+#define TEST_ONE_DROP             (1U)
 
-#define TEST_FIRST_OBJECT_NAME "first"
-#define TEST_SECOND_OBJECT_NAME "second"
+#define TEST_FIRST_OBJECT_NAME    "first"
+#define TEST_SECOND_OBJECT_NAME   "second"
 
 /*! \brief Stand-in for a module's private state. */
 typedef struct
@@ -137,10 +137,10 @@ void setUp(void)
 
     msg_broker_init(&g_broker, g_broker_input_msg_buffer, TEST_INPUT_CAPACITY);
 
-    active_object_init(&g_first_object, TEST_FIRST_OBJECT_NAME, g_first_inbox_msg_buffer,
-                       TEST_INBOX_CAPACITY, prv_handle_msg, &g_first_state);
-    active_object_init(&g_second_object, TEST_SECOND_OBJECT_NAME, g_second_inbox_msg_buffer,
-                       TEST_INBOX_CAPACITY, prv_handle_msg, &g_second_state);
+    active_object_init(&g_first_object, TEST_FIRST_OBJECT_NAME, g_first_inbox_msg_buffer, TEST_INBOX_CAPACITY,
+                       prv_handle_msg, &g_first_state);
+    active_object_init(&g_second_object, TEST_SECOND_OBJECT_NAME, g_second_inbox_msg_buffer, TEST_INBOX_CAPACITY,
+                       prv_handle_msg, &g_second_state);
 }
 
 void tearDown(void)
@@ -254,8 +254,7 @@ void test_a_handler_that_dispatches_into_its_own_object_is_caught(void)
 
     /* The nested call must trip the guard rather than start handling the second message
      * while the first is still in flight. */
-    ASSERT_PROBE_EXPECT(active_object_process_one(&g_first_object),
-                        "false == inout_object->is_dispatching");
+    ASSERT_PROBE_EXPECT(active_object_process_one(&g_first_object), "false == inout_object->is_dispatching");
 }
 
 /* --- asynchronous messaging only (§3.5) ----------------------------------- */
@@ -295,8 +294,8 @@ void test_an_object_with_a_full_inbox_reports_the_loss(void)
 
     memset(&slow_state, 0, sizeof(slow_state));
 
-    active_object_init(&slow_object, "slow", small_inbox_msg_buffer, TEST_SMALL_INBOX_CAPACITY,
-                       prv_handle_msg, &slow_state);
+    active_object_init(&slow_object, "slow", small_inbox_msg_buffer, TEST_SMALL_INBOX_CAPACITY, prv_handle_msg,
+                       &slow_state);
     active_object_subscribe(&slow_object, &g_broker, MSG_GAME_SCORE_UPDATED);
     msg_broker_start(&g_broker);
 
@@ -316,9 +315,8 @@ void test_an_object_without_a_handler_asserts(void)
 {
     active_object_t bad_object;
 
-    ASSERT_PROBE_EXPECT(active_object_init(&bad_object, TEST_FIRST_OBJECT_NAME,
-                                          g_first_inbox_msg_buffer, TEST_INBOX_CAPACITY, NULL,
-                                          &g_first_state),
+    ASSERT_PROBE_EXPECT(active_object_init(&bad_object, TEST_FIRST_OBJECT_NAME, g_first_inbox_msg_buffer,
+                                           TEST_INBOX_CAPACITY, NULL, &g_first_state),
                         "in_dispatch_fn != NULL");
 }
 
@@ -326,8 +324,8 @@ void test_an_object_without_a_name_asserts(void)
 {
     active_object_t bad_object;
 
-    ASSERT_PROBE_EXPECT(active_object_init(&bad_object, NULL, g_first_inbox_msg_buffer,
-                                          TEST_INBOX_CAPACITY, prv_handle_msg, &g_first_state),
+    ASSERT_PROBE_EXPECT(active_object_init(&bad_object, NULL, g_first_inbox_msg_buffer, TEST_INBOX_CAPACITY,
+                                           prv_handle_msg, &g_first_state),
                         "in_name != NULL");
 }
 
@@ -338,8 +336,8 @@ void test_a_stateless_module_may_pass_no_context(void)
 
     /* A module with nothing to remember is legitimate — the path-planning library of
      * §3.6 is one — so a NULL context must be accepted. */
-    active_object_init(&stateless_object, "stateless", stateless_inbox_msg_buffer,
-                       TEST_INBOX_CAPACITY, prv_handle_msg, NULL);
+    active_object_init(&stateless_object, "stateless", stateless_inbox_msg_buffer, TEST_INBOX_CAPACITY, prv_handle_msg,
+                       NULL);
 
     TEST_ASSERT_EQUAL_UINT32(TEST_NO_MSGS, active_object_get_handled_msg_count(&stateless_object));
 }

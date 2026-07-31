@@ -17,12 +17,12 @@
 #include "unity.h"
 
 /* The canonical check value of CRC-32/ISO-HDLC: the ASCII string "123456789". */
-#define TEST_CHECK_INPUT "123456789"
-#define TEST_CHECK_VALUE (0xCBF43926U)
+#define TEST_CHECK_INPUT     "123456789"
+#define TEST_CHECK_VALUE     (0xCBF43926U)
 
 /* Further published vectors for the same variant. */
-#define TEST_SINGLE_A_VALUE (0xE8B7BE43U)  /* "a"                 */
-#define TEST_ABC_VALUE (0x352441C2U)       /* "abc"               */
+#define TEST_SINGLE_A_VALUE  (0xE8B7BE43U) /* "a"                 */
+#define TEST_ABC_VALUE       (0x352441C2U) /* "abc"               */
 #define TEST_ZERO_BYTE_VALUE (0xD202EF8DU) /* one 0x00 byte       */
 
 void setUp(void)
@@ -105,6 +105,5 @@ void test_crc_32_is_order_sensitive(void)
     const uint8_t forward[] = {0x01U, 0x02U, 0x03U};
     const uint8_t reversed[] = {0x03U, 0x02U, 0x01U};
 
-    TEST_ASSERT_NOT_EQUAL_HEX32(crc_32(forward, sizeof(forward)),
-                                crc_32(reversed, sizeof(reversed)));
+    TEST_ASSERT_NOT_EQUAL_HEX32(crc_32(forward, sizeof(forward)), crc_32(reversed, sizeof(reversed)));
 }

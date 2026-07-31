@@ -25,10 +25,10 @@ typedef void (*sw_timer_callback_fn)(void);
 
 typedef struct
 {
-    uint32_t start_tick;                        /*!< Tick the timer was armed at              */
-    uint32_t timeout_ms;                        /*!< Time until expiry, in milliseconds       */
-    sw_timer_callback_fn callback_fn;            /*!< Called once on expiry                    */
-    bool is_active;                             /*!< Armed and not yet expired                */
+    uint32_t start_tick;              /*!< Tick the timer was armed at              */
+    uint32_t timeout_ms;              /*!< Time until expiry, in milliseconds       */
+    sw_timer_callback_fn callback_fn; /*!< Called once on expiry                    */
+    bool is_active;                   /*!< Armed and not yet expired                */
 } sw_timer_t;
 
 /* ==========================================================================
@@ -53,8 +53,7 @@ void sw_timer_create(sw_timer_t* in_timer);
  * \param[in]       in_timeout_ms: time until expiry, in milliseconds
  * \param[in]       in_callback_fn: called from #sw_timer_process on expiry
  */
-void sw_timer_start(sw_timer_t* in_timer, uint32_t in_timeout_ms,
-                    sw_timer_callback_fn in_callback_fn);
+void sw_timer_start(sw_timer_t* in_timer, uint32_t in_timeout_ms, sw_timer_callback_fn in_callback_fn);
 
 /*! \brief Restart a running timer from the current tick, keeping its timeout.
  *

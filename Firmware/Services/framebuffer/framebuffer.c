@@ -12,8 +12,7 @@
 
 static bool prv_is_inside(int16_t in_x, int16_t in_y)
 {
-    return (in_x >= 0) && (in_x < FRAMEBUFFER_WIDTH) && (in_y >= 0)
-           && (in_y < FRAMEBUFFER_HEIGHT);
+    return (in_x >= 0) && (in_x < FRAMEBUFFER_WIDTH) && (in_y >= 0) && (in_y < FRAMEBUFFER_HEIGHT);
 }
 
 /* ==========================================================================
@@ -40,8 +39,7 @@ void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_t in_c
     }
 }
 
-void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                           framebuffer_color_t in_color)
+void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, framebuffer_color_t in_color)
 {
     ASSERT(inout_framebuffer != NULL);
 
@@ -51,8 +49,7 @@ void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16
     }
 }
 
-framebuffer_color_t framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
-                                          int16_t in_y)
+framebuffer_color_t framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y)
 {
     framebuffer_color_t color = FRAMEBUFFER_COLOR_WHITE;
 

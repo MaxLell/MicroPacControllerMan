@@ -36,8 +36,8 @@ static void prv_assert_initialized(const circular_buffer_t* const in_buffer)
  * circular_buffer - public
  * ========================================================================= */
 
-void circular_buffer_init(circular_buffer_t* inout_buffer, void* inout_storage,
-                          size_t in_element_size, uint16_t in_capacity)
+void circular_buffer_init(circular_buffer_t* inout_buffer, void* inout_storage, size_t in_element_size,
+                          uint16_t in_capacity)
 {
     ASSERT(inout_buffer != NULL);
     ASSERT(inout_storage != NULL);
@@ -70,8 +70,7 @@ bool circular_buffer_push(circular_buffer_t* inout_buffer, const void* in_elemen
         return false;
     }
 
-    memcpy(prv_slot_address(inout_buffer, inout_buffer->write_index), in_element,
-           inout_buffer->element_size);
+    memcpy(prv_slot_address(inout_buffer, inout_buffer->write_index), in_element, inout_buffer->element_size);
 
     inout_buffer->write_index = prv_advance_index(inout_buffer->write_index, inout_buffer->capacity);
     ++inout_buffer->count;
@@ -89,8 +88,7 @@ bool circular_buffer_pop(circular_buffer_t* inout_buffer, void* out_element)
         return false;
     }
 
-    memcpy(out_element, prv_slot_address(inout_buffer, inout_buffer->read_index),
-           inout_buffer->element_size);
+    memcpy(out_element, prv_slot_address(inout_buffer, inout_buffer->read_index), inout_buffer->element_size);
 
     inout_buffer->read_index = prv_advance_index(inout_buffer->read_index, inout_buffer->capacity);
     --inout_buffer->count;

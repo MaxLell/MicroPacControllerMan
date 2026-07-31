@@ -35,7 +35,7 @@ silently working around a wart.
   Current branch: `feat/m1-u545-bring-up`.
 - **Requirements re-baselined** for the new hardware — [02 Requirements](Docu/PrePlanning/02-Requirements.md)
   is current; the rest of the doc set still lags in places.
-- **M2 Board Bring-Up — in progress.** ST7789V display + joystick on the GFX01M2. The pin
+- **M2 Board Bring-Up — done, merged (PR #14).** ST7789V display + joystick on the GFX01M2. The pin
   map is **measured, not assumed**: the joystick keys were confirmed by the `joystick` OTT
   and the display by `display_id`, which got the controller to answer. Chip select turned out
   **active LOW**, not the active high UM2750 claims. The ST7789V driver, the RGB565 frame
@@ -43,7 +43,8 @@ silently working around a wart.
   actually changes), and `joystick_dot` and `animation` put input and display together.
   **NFR-002 is now 60 FPS, not 30** — measured: five moving actors cost 5.26 ms of a
   16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
-  Open: the 32 ms debounce window is the whole of the NFR-003 input budget (RF-014).
+  Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
+  budget (RF-014), to be chosen against a real game loop.
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
   until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
@@ -61,9 +62,14 @@ cmake --build build -j                                   # -> build/pacman.elf, 
 STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
-python3 Test/run_ott.py --suite                          # enumeration + boot banner
-python3 Test/run_ott.py user_button --port /dev/ttyACM0  # exit 0 = PASS
-./m2.sh all                                              # build + flash + the interactive tests
+python3 Test/run_ott.py --suite                          # the automatic ones, unattended
+python3 Test/run_ott.py --manual                         # the ones needing you at the board
+python3 Test/run_ott.py joystick_dot --port /dev/ttyACM0 # one by name; exit 0 = PASS
+
+# Or the umbrella, which wraps every one of these
+./dev.sh check                                           # format + unit tests + both builds
+./dev.sh all                                             # build + flash + both OTT suites
+./dev.sh install-hook                                    # format staged files + test on commit
 
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j

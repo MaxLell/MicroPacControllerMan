@@ -19,12 +19,9 @@
 /* To add a test: write ott_<name>.c/.h with a setup and a run function, add one
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
-    {"animation", NULL, ott_animation_run},
-    {"display_id", NULL, ott_display_id_run},
-    {"display_test", NULL, ott_display_test_run},
-    {"joystick", NULL, ott_joystick_run},
-    {"joystick_dot", NULL, ott_joystick_dot_run},
-    {"user_button", NULL, ott_user_button_run},
+    {"animation", NULL, ott_animation_run},       {"display_id", NULL, ott_display_id_run},
+    {"display_test", NULL, ott_display_test_run}, {"joystick", NULL, ott_joystick_run},
+    {"joystick_dot", NULL, ott_joystick_dot_run}, {"user_button", NULL, ott_user_button_run},
 };
 
 #define OTT_SCENARIO_COUNT (sizeof(g_scenarios) / sizeof(g_scenarios[0]))

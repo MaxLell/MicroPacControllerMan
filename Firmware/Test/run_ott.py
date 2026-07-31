@@ -2,14 +2,15 @@
 """
 Drive the On-Target Tests (OTT) over the ST-LINK serial console.
 
-Two ways to use it:
+How to use it:
 
-  ./run_ott.py                         # run the AUTOMATIC regression suite (default)
+  ./run_ott.py                         # run the AUTOMATIC suite (default)
   ./run_ott.py --suite                 # same, explicitly
-  ./run_ott.py display_test            # run one INTERACTIVE test (streams live,
-  ./run_ott.py joystick_dot            #   long timeout, you confirm on the board
-  ./run_ott.py animation               #   and press the USER button to finish)
-  ./run_ott.py user_button             #   same, for the on-board button
+  ./run_ott.py --manual                # run every test that needs you at the board
+  ./run_ott.py --list                  # which tests exist, and which kind each is
+  ./run_ott.py display_test            # run one test by name (a manual one streams live,
+  ./run_ott.py joystick_dot            #   with a long timeout, and you confirm at the
+  ./run_ott.py animation               #   board with the USER button)
 
 The automatic suite covers the Board-Bring-Up checks a machine can judge on its own:
   VT-INT-001  Power-On & Enumeration   (the VCP device node exists)
@@ -31,8 +32,15 @@ import sys
 import time
 
 BANNER = "MicroPacControllerMan booted"
-INTERACTIVE = {"animation", "display_test", "joystick", "joystick_dot", "user_button"}
-SUITE_AUTOMATIC = ["display_id"]  # judges itself: the display either answers or it does not
+
+# The scenario split, defined once. AUTOMATIC tests judge themselves and are safe to run
+# unattended; MANUAL ones render or print something only a person can assess and end on a
+# USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
+# this list, so adding a scenario means editing one place.
+AUTOMATIC = ["display_id"]
+MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button"]
+
+INTERACTIVE = set(MANUAL)
 
 
 def detect_port() -> str:
@@ -222,9 +230,35 @@ def run_suite(port: str, baud: str) -> int:
 
     results.append(("VT-INT-002 boot banner", check_banner(port, baud)))
 
-    for test in SUITE_AUTOMATIC:
+    for test in AUTOMATIC:
         rc = run_single(port, baud, test, timeout=8.0)
         results.append((f"ott {test}", rc == 0))
+
+    print("\n--- summary ---")
+    all_ok = True
+    for name, ok in results:
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+        all_ok = all_ok and ok
+    return 0 if all_ok else 1
+
+
+def run_manual(port: str, baud: str) -> int:
+    """Run the tests that need somebody at the board, one after another.
+
+    Announced before each one, because the operator has to know what they are about to be
+    asked to judge — and a run that starts while nobody is looking is a wasted run.
+    """
+    print("=== OTT manual suite — you need to be at the board ===")
+    print(f"    {len(MANUAL)} tests: {', '.join(MANUAL)}\n")
+    results = []
+
+    for index, test in enumerate(MANUAL, start=1):
+        print(f"\n--- [{index}/{len(MANUAL)}] {test} — press ENTER when you are ready ---")
+        try:
+            input()
+        except EOFError:
+            pass  # Not a terminal: run straight through rather than fail.
+        results.append((f"ott {test}", run_single(port, baud, test, timeout=None) == 0))
 
     print("\n--- summary ---")
     all_ok = True
@@ -240,15 +274,28 @@ def main() -> int:
     ap.add_argument("test", nargs="?", default=None,
                     help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
+    ap.add_argument("--manual", action="store_true",
+                    help="run every test that needs a human at the board, in sequence")
+    ap.add_argument("--list", action="store_true", help="list the scenarios and their kind")
     ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")
     ap.add_argument("--timeout", type=float, default=None,
                     help="override timeout (s); default 8 (auto) / 130 (interactive)")
     args = ap.parse_args()
 
+    if args.list:
+        for test in AUTOMATIC:
+            print(f"  {test:<14} automatic")
+        for test in MANUAL:
+            print(f"  {test:<14} needs you at the board")
+        return 0
+
     port = args.port or detect_port()
     if not args.port:
         print(f"(auto-detected serial port: {port})")
+
+    if args.manual:
+        return run_manual(port, args.baud)
 
     if args.suite or args.test is None:
         return run_suite(port, args.baud)

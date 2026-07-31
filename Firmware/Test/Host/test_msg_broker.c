@@ -31,17 +31,17 @@
 
 /* One input slot more than the output queues, so a full output can be provoked without
  * the input queue filling first. */
-#define TEST_INPUT_CAPACITY (4U)
+#define TEST_INPUT_CAPACITY  (4U)
 #define TEST_OUTPUT_CAPACITY (2U)
 
 /* Payload values, named so a failure message says which message went missing. */
-#define TEST_SCORE_FIRST (11U)
-#define TEST_SCORE_SECOND (22U)
-#define TEST_SCORE_THIRD (33U)
-#define TEST_SCORE_ANY (44U)
+#define TEST_SCORE_FIRST     (11U)
+#define TEST_SCORE_SECOND    (22U)
+#define TEST_SCORE_THIRD     (33U)
+#define TEST_SCORE_ANY       (44U)
 
-#define TEST_NO_DROPS (0U)
-#define TEST_ONE_DROP (1U)
+#define TEST_NO_DROPS        (0U)
+#define TEST_ONE_DROP        (1U)
 
 static msg_t g_input_msg_buffer[TEST_INPUT_CAPACITY];
 static msg_t g_first_output_msg_buffer[TEST_OUTPUT_CAPACITY];
@@ -117,8 +117,7 @@ void test_a_subscriber_receives_a_msg_on_its_topic(void)
     prv_publish_score(MSG_GAME_SCORE_UPDATED, TEST_SCORE_FIRST);
 
     TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_broker_process(&g_broker));
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK,
-                      msg_subscriber_receive(&g_first_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_subscriber_receive(&g_first_subscriber, &received_msg));
     TEST_ASSERT_EQUAL(MSG_GAME_SCORE_UPDATED, received_msg.id);
     TEST_ASSERT_EQUAL_UINT32(TEST_SCORE_FIRST, prv_score_of(&received_msg));
 }
@@ -134,8 +133,7 @@ void test_nothing_arrives_before_the_broker_is_processed(void)
 
     /* Publishing is asynchronous — the publisher must not have called into the
      * subscriber, which is what the queue design is for. */
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE,
-                      msg_subscriber_receive(&g_first_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE, msg_subscriber_receive(&g_first_subscriber, &received_msg));
 }
 
 void test_a_subscriber_does_not_receive_other_topics(void)
@@ -148,8 +146,7 @@ void test_a_subscriber_does_not_receive_other_topics(void)
     prv_publish_score(MSG_INPUT_DIRECTION, TEST_SCORE_ANY);
     (void)msg_broker_process(&g_broker);
 
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE,
-                      msg_subscriber_receive(&g_first_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE, msg_subscriber_receive(&g_first_subscriber, &received_msg));
 }
 
 void test_every_subscriber_of_a_topic_gets_its_own_copy(void)
@@ -164,10 +161,8 @@ void test_every_subscriber_of_a_topic_gets_its_own_copy(void)
     prv_publish_score(MSG_GAME_OVER, TEST_SCORE_FIRST);
     (void)msg_broker_process(&g_broker);
 
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK,
-                      msg_subscriber_receive(&g_first_subscriber, &first_received_msg));
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK,
-                      msg_subscriber_receive(&g_second_subscriber, &second_received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_subscriber_receive(&g_first_subscriber, &first_received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_subscriber_receive(&g_second_subscriber, &second_received_msg));
     TEST_ASSERT_EQUAL_UINT32(TEST_SCORE_FIRST, prv_score_of(&first_received_msg));
     TEST_ASSERT_EQUAL_UINT32(TEST_SCORE_FIRST, prv_score_of(&second_received_msg));
 }
@@ -279,8 +274,7 @@ void test_a_slow_subscriber_loses_msgs_and_they_are_counted(void)
     prv_publish_score(MSG_GAME_SCORE_UPDATED, TEST_SCORE_THIRD);
     (void)msg_broker_process_all(&g_broker);
 
-    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_DROP,
-                             msg_subscriber_get_dropped_msg_count(&g_first_subscriber));
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_DROP, msg_subscriber_get_dropped_msg_count(&g_first_subscriber));
     TEST_ASSERT_EQUAL_UINT32(TEST_ONE_DROP, msg_broker_get_dropped_msg_count(&g_broker));
 }
 
@@ -303,12 +297,9 @@ void test_a_slow_subscriber_does_not_starve_a_fast_one(void)
 
     /* Dropped for the stalled subscriber, delivered to the one keeping up — and the
      * broker itself never stalled. */
-    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_DROP,
-                             msg_subscriber_get_dropped_msg_count(&g_first_subscriber));
-    TEST_ASSERT_EQUAL_UINT32(TEST_NO_DROPS,
-                             msg_subscriber_get_dropped_msg_count(&g_second_subscriber));
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK,
-                      msg_subscriber_receive(&g_second_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL_UINT32(TEST_ONE_DROP, msg_subscriber_get_dropped_msg_count(&g_first_subscriber));
+    TEST_ASSERT_EQUAL_UINT32(TEST_NO_DROPS, msg_subscriber_get_dropped_msg_count(&g_second_subscriber));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_subscriber_receive(&g_second_subscriber, &received_msg));
     TEST_ASSERT_EQUAL_UINT32(TEST_SCORE_THIRD, prv_score_of(&received_msg));
 }
 
@@ -335,10 +326,8 @@ void test_two_brokers_do_not_share_anything(void)
     (void)msg_broker_process_all(&g_broker);
 
     /* Same topic, same subscriber shape — but the other instance saw nothing. */
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK,
-                      msg_subscriber_receive(&g_first_subscriber, &received_msg));
-    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE,
-                      msg_subscriber_receive(&other_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_OK, msg_subscriber_receive(&g_first_subscriber, &received_msg));
+    TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE, msg_subscriber_receive(&other_subscriber, &received_msg));
     TEST_ASSERT_EQUAL(MSG_BROKER_STATUS_IDLE, msg_broker_process(&other_broker));
 }
 
@@ -354,8 +343,7 @@ void test_subscribing_the_same_subscriber_to_a_topic_twice_asserts(void)
 
 void test_subscribing_to_a_reserved_topic_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(msg_broker_subscribe(&g_broker, &g_first_subscriber, MSG_NONE),
-                        "in_topic > MSG_NONE");
+    ASSERT_PROBE_EXPECT(msg_broker_subscribe(&g_broker, &g_first_subscriber, MSG_NONE), "in_topic > MSG_NONE");
 }
 
 void test_publishing_before_start_asserts(void)
@@ -372,11 +360,9 @@ void test_exhausting_a_topic_asserts(void)
 
     for (uint16_t index = 0U; index < MSG_BROKER_MAX_SUBSCRIBERS_PER_TOPIC; ++index)
     {
-        msg_subscriber_init(&extra_subscribers[index], extra_msg_buffers[index],
-                            TEST_OUTPUT_CAPACITY);
+        msg_subscriber_init(&extra_subscribers[index], extra_msg_buffers[index], TEST_OUTPUT_CAPACITY);
         msg_broker_subscribe(&g_broker, &extra_subscribers[index], MSG_GAME_OVER);
     }
 
-    ASSERT_PROBE_EXPECT(msg_broker_subscribe(&g_broker, &g_first_subscriber, MSG_GAME_OVER),
-                        "false");
+    ASSERT_PROBE_EXPECT(msg_broker_subscribe(&g_broker, &g_first_subscriber, MSG_GAME_OVER), "false");
 }

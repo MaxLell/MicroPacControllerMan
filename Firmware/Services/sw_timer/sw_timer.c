@@ -80,8 +80,7 @@ void sw_timer_create(sw_timer_t* in_timer)
     ASSERT(false);
 }
 
-void sw_timer_start(sw_timer_t* in_timer, uint32_t in_timeout_ms,
-                    sw_timer_callback_fn in_callback_fn)
+void sw_timer_start(sw_timer_t* in_timer, uint32_t in_timeout_ms, sw_timer_callback_fn in_callback_fn)
 {
     ASSERT(g_is_initialized);
     ASSERT(in_timer != NULL);

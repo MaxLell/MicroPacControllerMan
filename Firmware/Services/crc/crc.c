@@ -10,9 +10,9 @@
  * ========================================================================= */
 
 #define CRC_32_POLYNOMIAL_REFLECTED (0xEDB88320U)
-#define CRC_32_INITIAL_VALUE (0xFFFFFFFFU)
-#define CRC_32_BITS_PER_BYTE (8U)
-#define CRC_32_LOWEST_BIT_MASK (1U)
+#define CRC_32_INITIAL_VALUE        (0xFFFFFFFFU)
+#define CRC_32_BITS_PER_BYTE        (8U)
+#define CRC_32_LOWEST_BIT_MASK      (1U)
 
 /* ==========================================================================
  * crc - public

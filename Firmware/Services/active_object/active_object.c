@@ -23,9 +23,8 @@ static void prv_assert_initialized(const active_object_t* const in_object)
  * active_object - public
  * ========================================================================= */
 
-void active_object_init(active_object_t* inout_object, const char* in_name,
-                        msg_t* inout_msg_buffer, uint16_t in_capacity,
-                        active_object_dispatch_fn in_dispatch_fn, void* inout_context)
+void active_object_init(active_object_t* inout_object, const char* in_name, msg_t* inout_msg_buffer,
+                        uint16_t in_capacity, active_object_dispatch_fn in_dispatch_fn, void* inout_context)
 {
     ASSERT(inout_object != NULL);
     ASSERT(in_name != NULL);
@@ -41,8 +40,7 @@ void active_object_init(active_object_t* inout_object, const char* in_name,
     inout_object->is_initialized = true;
 }
 
-void active_object_subscribe(active_object_t* inout_object, msg_broker_t* inout_broker,
-                             msg_id_e in_topic)
+void active_object_subscribe(active_object_t* inout_object, msg_broker_t* inout_broker, msg_id_e in_topic)
 {
     prv_assert_initialized(inout_object);
 

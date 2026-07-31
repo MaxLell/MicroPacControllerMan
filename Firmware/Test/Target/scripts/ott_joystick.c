@@ -14,8 +14,8 @@
  * ========================================================================= */
 
 /* Diagnostic cap, so the board returns to nominal mode even if nothing happens. */
-#define OTT_JOYSTICK_TIMEOUT_MS (60000U)
-#define OTT_JOYSTICK_MS_PER_SECOND (1000U)
+#define OTT_JOYSTICK_TIMEOUT_MS     (60000U)
+#define OTT_JOYSTICK_MS_PER_SECOND  (1000U)
 
 /* A key held by a human is stable for far longer than this; the count only has to
  * outlast contact bounce. */
@@ -35,7 +35,7 @@ static const ott_joystick_key_t g_keys[] = {
     {DIO_BSP_PIN_JOYSTICK_CENTER, "CENTER"},
 };
 
-#define OTT_JOYSTICK_KEY_COUNT (sizeof(g_keys) / sizeof(g_keys[0]))
+#define OTT_JOYSTICK_KEY_COUNT           (sizeof(g_keys) / sizeof(g_keys[0]))
 
 #define OTT_JOYSTICK_HEARTBEAT_PERIOD_MS (1000U)
 
@@ -56,11 +56,8 @@ static void prv_on_heartbeat(void)
 
     for (size_t index = 0U; index < OTT_JOYSTICK_KEY_COUNT; ++index)
     {
-        length += (size_t)snprintf(&line[length], sizeof(line) - length, "%s=%u ",
-                                   g_keys[index].name,
-                                   (dio_bsp_get_pin(g_keys[index].pin) == DIO_BSP_PIN_STATE_LOW)
-                                       ? 1U
-                                       : 0U);
+        length += (size_t)snprintf(&line[length], sizeof(line) - length, "%s=%u ", g_keys[index].name,
+                                   (dio_bsp_get_pin(g_keys[index].pin) == DIO_BSP_PIN_STATE_LOW) ? 1U : 0U);
     }
 
     cli_print("JOY %s (1 = pressed)", line);
@@ -83,8 +80,8 @@ static void prv_report_missing(char* out_reason, size_t in_reason_size, const bo
     {
         if (!in_is_seen[index])
         {
-            length += (size_t)snprintf(&missing[length], sizeof(missing) - length, "%s%s",
-                                       (length > 0U) ? "," : "", g_keys[index].name);
+            length += (size_t)snprintf(&missing[length], sizeof(missing) - length, "%s%s", (length > 0U) ? "," : "",
+                                       g_keys[index].name);
         }
     }
 

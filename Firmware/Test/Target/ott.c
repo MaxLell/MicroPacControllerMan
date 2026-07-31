@@ -19,17 +19,17 @@
 
 /* Recognises a deliberately stored request in memory that a power-on reset leaves
  * filled with garbage. */
-#define OTT_MAGIC_WORD (0xB007A5A5U)
+#define OTT_MAGIC_WORD               (0xB007A5A5U)
 
 /* Test ids are 1-based, so an all-zero retained buffer means "no request". */
-#define OTT_TEST_ID_FIRST (1U)
+#define OTT_TEST_ID_FIRST            (1U)
 
 /* Long enough for the diagnostic reasons the scenarios actually write; snprintf
  * truncates rather than overruns if one ever outgrows it. */
-#define OTT_REASON_MAX_SIZE (96U)
+#define OTT_REASON_MAX_SIZE          (96U)
 
 /* Index of the test name within the argument vector handed to a setup step. */
-#define OTT_ARGUMENT_INDEX_NAME (1)
+#define OTT_ARGUMENT_INDEX_NAME      (1)
 #define OTT_ARGUMENT_COUNT_WITH_NAME (2)
 
 /* The part of the request the checksum covers, kept in its own struct so it is one
@@ -47,8 +47,7 @@ typedef struct
     ott_request_t request;
 } ott_spec_t;
 
-_Static_assert(sizeof(ott_spec_t) <= RETAIN_RAM_BUFFER_SIZE,
-               "the OTT request must fit into the retained RAM buffer");
+_Static_assert(sizeof(ott_spec_t) <= RETAIN_RAM_BUFFER_SIZE, "the OTT request must fit into the retained RAM buffer");
 
 static cli_cfg_t g_cli;
 
@@ -63,8 +62,7 @@ static bool prv_is_spec_valid(const ott_spec_t* const in_spec)
 {
     ASSERT(in_spec != NULL);
 
-    return (in_spec->magic_word == OTT_MAGIC_WORD)
-           && (in_spec->request.test_id >= OTT_TEST_ID_FIRST)
+    return (in_spec->magic_word == OTT_MAGIC_WORD) && (in_spec->request.test_id >= OTT_TEST_ID_FIRST)
            && (in_spec->request.test_id <= ott_scenarios_get_count())
            && (in_spec->checksum == prv_calculate_checksum(in_spec));
 }
@@ -96,8 +94,7 @@ static void prv_invalidate_spec(void)
     retained_ram_write(buffer, sizeof(buffer));
 }
 
-static void prv_report(const ott_scenario_t* const in_scenario, bool in_has_passed,
-                       const char* const in_reason)
+static void prv_report(const ott_scenario_t* const in_scenario, bool in_has_passed, const char* const in_reason)
 {
     ASSERT(in_scenario != NULL);
     ASSERT(in_reason != NULL);
@@ -124,9 +121,8 @@ static void prv_print_scenario_list(void)
     }
 }
 
-static bool prv_build_request(const ott_scenario_t* const in_scenario, size_t in_index,
-                             int in_argument_count, char* in_arguments[],
-                             ott_request_t* out_request)
+static bool prv_build_request(const ott_scenario_t* const in_scenario, size_t in_index, int in_argument_count,
+                              char* in_arguments[], ott_request_t* out_request)
 {
     bool is_built = true;
 
@@ -139,16 +135,14 @@ static bool prv_build_request(const ott_scenario_t* const in_scenario, size_t in
     if (in_scenario->setup_fn != NULL)
     {
         is_built = in_scenario->setup_fn(in_argument_count - OTT_ARGUMENT_INDEX_NAME,
-                                         &in_arguments[OTT_ARGUMENT_INDEX_NAME],
-                                         out_request->parameter);
+                                         &in_arguments[OTT_ARGUMENT_INDEX_NAME], out_request->parameter);
     }
 
     return is_built;
 }
 
 /* Stores the request where it survives the reset, then triggers it. Does not return. */
-static void prv_schedule_and_reset(const ott_scenario_t* const in_scenario,
-                                   const ott_request_t* const in_request)
+static void prv_schedule_and_reset(const ott_scenario_t* const in_scenario, const ott_request_t* const in_request)
 {
     ott_spec_t spec = {0};
 
@@ -231,10 +225,9 @@ static int prv_cli_put_character(char in_character)
 
 void ott_init(void)
 {
-    cli_binding_t ott_binding
-        = {"ott", prv_ott_command, NULL, "Schedule an on-target test: ott <name> ('ott' lists them)"};
-    cli_binding_t reset_binding
-        = {"reset", prv_reset_command, NULL, "Reboot the board into nominal mode"};
+    cli_binding_t ott_binding = {"ott", prv_ott_command, NULL,
+                                 "Schedule an on-target test: ott <name> ('ott' lists them)"};
+    cli_binding_t reset_binding = {"reset", prv_reset_command, NULL, "Reboot the board into nominal mode"};
 
     cli_init(&g_cli, prv_cli_put_character);
     cli_register(&ott_binding);
@@ -249,8 +242,7 @@ void ott_execute_pending(void)
 
     if (prv_is_spec_valid(&spec))
     {
-        const ott_scenario_t* const scenario
-            = ott_scenarios_get(spec.request.test_id - OTT_TEST_ID_FIRST);
+        const ott_scenario_t* const scenario = ott_scenarios_get(spec.request.test_id - OTT_TEST_ID_FIRST);
         char reason[OTT_REASON_MAX_SIZE] = {'\0'};
         bool has_passed;
 
