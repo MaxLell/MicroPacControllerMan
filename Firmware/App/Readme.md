@@ -6,7 +6,7 @@ nothing else may depend on `App/`.
 **What is here**
 
 - `app_main.c` / `app_main.h` — the entry point. It is *not* `main()`: the STM32CubeMX
-  export owns `main()` (`ThirdParty/STM32_G431RB_HAL/Core/Src/main.c`), which does
+  export owns `main()` (`ThirdParty/STM32_U545RE_HAL/Core/Src/main.c`), which does
   `HAL_Init()`, the clock setup and the `MX_*_Init()` peripheral bring-up, then calls
   `app_main()` from a USER CODE block. `app_main()` therefore starts from
   already-configured hardware and owns the software side:

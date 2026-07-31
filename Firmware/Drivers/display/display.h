@@ -4,9 +4,9 @@
  * Display sink: shows a frame buffer, and owns nothing else.
  *
  * This is a platform port — one interface, one implementation per platform, selected
- * in CMakeLists.txt. `display.c` drives the LCD Mono Click panel (Sharp LS013B7DH03)
- * over SPI; `display_host.c` keeps the last frame in memory so a host build can
- * inspect or render it. Callers see no difference.
+ * in CMakeLists.txt. `display.c` drives the GFX01M2's ST7789V panel over SPI;
+ * `display_host.c` keeps the last frame in memory so a host build can inspect or
+ * render it. Callers see no difference.
  *
  * The caller owns the frame buffer, so it can keep more than one and hand on a
  * snapshot ([03 §3.2](../../../Docu/PrePlanning/03-Architecture.md), R-007).

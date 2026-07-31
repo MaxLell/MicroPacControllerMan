@@ -15,7 +15,7 @@ The automatic suite covers the Board-Bring-Up checks a machine can judge on its 
   VT-INT-001  Power-On & Enumeration   (the VCP device node exists)
   VT-INT-002  Serial Console Output    (`reset` re-emits the known boot banner)
 
-The user_button/display/joystick tests (VT-INT-006/007) are interactive by design —
+The display and joystick tests (VT-INT-006, VT-INT-019..021) are interactive by design —
 the firmware renders/prints and waits for you to confirm with the USER button —
 so they are excluded from --suite and streamed live instead.
 
@@ -238,7 +238,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (user_button/touchpad/display/touchdot); omit to run the suite")
+                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--port", default=None, help="serial port (default: auto-detect the ST-LINK VCP)")
     ap.add_argument("--baud", default="115200")

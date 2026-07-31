@@ -1,6 +1,6 @@
 # Bsp — Board Support Package
 
-Lowest layer: access to the STM32G431 and the board. Wraps the **STM32 HAL** (from
+Lowest layer: access to the STM32U545 and the board. Wraps the **STM32 HAL** (from
 the CubeMX export under `ThirdParty/`) into a thin, project-shaped C API for the
 layers above. No application logic here.
 
@@ -16,7 +16,6 @@ suffix, matching the reference project.
 |---|---|
 | `dio_bsp/` | Digital I/O. **The only module allowed to call HAL GPIO.** Callers name a pin via `dio_bsp_pin_e`; the port/mask lookup is a single table. |
 | `uart_bsp/` | Blocking console transport on LPUART1 (ST-LINK VCP). The instance and the 115200 8N1 contract are `#define`s, so the module ports to another project by changing one line. |
-| `i2c_bsp/` | Blocking I2C master for mikroBUS slot 2. Device-agnostic (7-bit address in, status enum out) and timeout-bounded, so an absent device reports rather than hangs. |
 | `spi_bsp/` | Blocking SPI master on SPI1, full duplex — reading a controller's ID register needs the receive path a transmit-only version does not have. Chip-select belongs to the device driver, because the framing differs per device. |
 | `systick_bsp/` | 1 kHz tick source: `systick_bsp_get_tick()` plus a 1 ms callback hook for work that needs a steady rate (debouncing). Implemented as a strong override of the HAL's `__weak HAL_IncTick()`, so the generated ISR file stays untouched. |
 | `switch/` | Reusable debounced-GPIO input primitive. Shifts samples into a 32-bit history, so at the 1 ms rate the debounce window is 32 ms. Symmetric: the state only changes on an all-ones or all-zeros history. |
@@ -30,7 +29,7 @@ primitive, which is the point of the split. What the 32-sample window costs in i
 latency is a separate matter, measured in
 [M2 Board Bring-Up §3.3](../../Docu/Design/M2-Board-Bring-Up.md).
 
-Pin assignments follow the HW-confirmed mikroBUS map — see
+Pin assignments follow the HW-confirmed shield map — see
 [M2 Board Bring-Up §1](../../Docu/Design/M2-Board-Bring-Up.md).
 They are configured by CubeMX (`MX_GPIO_Init` and friends) before `app_main()`, so a
 `*_bsp_init()` here usually only resets module state.

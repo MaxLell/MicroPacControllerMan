@@ -4,7 +4,7 @@
 
 This document records how the On-Target Test (OTT) mechanism is actually implemented in the project owner's reference firmware, [BareMetalHollowClockFw](https://github.com/MaxLell/BareMetalHollowClockFw), and derives a **corrected, validated reset flow** for MicroPacControllerMan to adopt. It is the verification backing for the OTT framework summarised in [03 Architecture §3.7](03-Architecture.md#37-on-target-test-ott-cli-framework); it exists because a proposed 7-step OTT flow needed checking against the real source before being turned into an architecture diagram.
 
-> **Reference-target caveat:** BareMetalHollowClockFw runs on an **STM32U083 (Cortex-M0+)** over **SEGGER RTT**, not on an STM32G431 (Cortex-M4) over the STLINK serial console. The reset/retained-RAM reasoning below applies to both parts; where the transport or MCU matters, it is called out. FR-107 (PASS/FAIL over the serial console, no debugger required) makes one part of the reference design unsuitable to copy verbatim — see [§9.5](#95-divergences-for-this-project).
+> **Reference-target caveat:** BareMetalHollowClockFw runs on an **STM32U083 (Cortex-M0+)** over **SEGGER RTT**, not on an STM32U545 (Cortex-M33) over the STLINK serial console. The reset/retained-RAM reasoning below applies to both parts; where the transport or MCU matters, it is called out. FR-107 (PASS/FAIL over the serial console, no debugger required) makes one part of the reference design unsuitable to copy verbatim — see [§9.5](#95-divergences-for-this-project).
 
 ## 9.1 How the reference firmware actually works
 
@@ -32,7 +32,7 @@ Verified against the real source (`Test/Target/ott.c`, `Bsp/retain_ram/retain_ra
 
 **Conclusion:** the structure is right; only step 7's "a report is given" is incorrect. The second reset is a *return-to-nominal* action, not a reporting action.
 
-## 9.3 Technical basis (Cortex-M / STM32G431)
+## 9.3 Technical basis (Cortex-M / STM32U545)
 
 **Does SRAM survive a software reset?** **Yes.** `SYSRESETREQ` resets the core and peripherals and re-runs the reset handler, but it does not clear SRAM — the cells keep their values as long as V<sub>DD</sub> stays in range. The same holds for watchdog and NRST-pin resets. SRAM contents are lost/undefined only when the supply actually drops or the RAM is depowered:
 
@@ -114,4 +114,4 @@ flowchart TD
 
 ## 9.7 Status
 
-Produced during Pre-Planning as verification input for [03 Architecture §3.7](03-Architecture.md#37-on-target-test-ott-cli-framework). The reference-firmware behaviour is confirmed against source; the corrected flow of [§9.6](#96-corrected-flow-for-reference-and-diagram) was **implemented and validated on STM32G431 hardware during [Milestone 1](04-Implementation-Phases-and-Milestones.md)** (brought forward from Board Bring-Up): `ott blinky` schedules via the `.noinit` retained buffer (magic word + checksum guard, §9.4/§9.5), resets, and on the next boot invalidates the request, runs the scenario, and prints `OTT PASSED [blinky]` over the STLINK serial console — driven end-to-end by `Test/run_ott.py`. The firmware mirrors the reference project's layout — the OTT core + registry under `Test/Target/`, each scenario as its own module under `Test/Target/scripts/`, and the retained-RAM buffer as BSP-level code outside `Test/`. The implementation falls through into nominal mode after reporting (no second reset), per step 11.
+Produced during Pre-Planning as verification input for [03 Architecture §3.7](03-Architecture.md#37-on-target-test-ott-cli-framework). The reference-firmware behaviour is confirmed against source; the corrected flow of [§9.6](#96-corrected-flow-for-reference-and-diagram) was **implemented and validated on hardware during [Milestone 1](04-Implementation-Phases-and-Milestones.md)** (brought forward from Board Bring-Up), and re-validated on the STM32U545RE-Q after the hardware change: `ott <name>` schedules via the `.noinit` retained buffer (magic word + checksum guard, §9.4/§9.5), resets, and on the next boot invalidates the request, runs the scenario, and prints `OTT PASSED [<name>]` over the STLINK serial console — driven end-to-end by `Test/run_ott.py`. The firmware mirrors the reference project's layout — the OTT core + registry under `Test/Target/`, each scenario as its own module under `Test/Target/scripts/`, and the retained-RAM buffer as BSP-level code outside `Test/`. The implementation falls through into nominal mode after reporting (no second reset), per step 11.

@@ -125,10 +125,10 @@ ott user_button  # live button state + every debounced press; passes after 3 pre
 `user_button` is **interactive**: the firmware streams the live state and waits for you to
 press B1, with a 30 s safety cap so the board always returns to nominal mode.
 
-There is no automatic OTT at the moment. `blinky` was one — it drove LD2 on PA5 and read the
-pin back — but PA5 is the display's SPI clock on the GFX01M2, so once SPI1 claims it the pin
-is no longer a GPIO the firmware can drive. The joystick test takes that role in M2: its keys
-are plain inputs, so four of the five can be judged by the firmware itself.
+`display_id` is the automatic one: it resets the controller and reads its identification
+registers, and the display either answers or it does not. Everything else needs an operator,
+because what they check — a colour that is genuinely red, a name that matches the key pushed,
+motion that looks smooth — is not something the firmware can judge about itself.
 
 **Adding a scenario:** create `Test/Target/scripts/ott_<name>.c/.h` with a run function
 — plus a setup function only if the test takes console arguments, otherwise the table
@@ -203,7 +203,7 @@ strong `HAL_IncTick()`, overriding the HAL's `__weak` one, so the generated
 `stm32u5xx_it.c` stays untouched and a re-generation cannot drop the hook.
 
 **Editing the `.ioc` by hand** is fine for a pin *label*, which is what
-`USER_BUTTON` and `LED_GREEN` are: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
+`USER_BUTTON` and `JOYSTICK_NORTH` are: change `P<pin>.GPIO_Label` in the `.ioc` and apply the same
 rename to the `<label>_Pin` / `<label>_GPIO_Port` macros in `Core/Inc/main.h` and
 their uses in `Core/Src/gpio.c`, and the result is byte-identical to what CubeMX
 would generate. Do **not** hand-edit peripheral *settings* that way (clock tree,
@@ -229,10 +229,14 @@ count — use `Services/delay` or `Services/sw_timer`, which are clock-independe
 | User button B1 | PC13 | **active HIGH** — idle low, confirmed by reading `GPIOC->IDR` over SWD |
 | SWD | PA13 / PA14 | SWDIO / SWCLK |
 
-No display and no direction input yet. The **X-NUCLEO-GFX01M2** (ILI9341, 240x320,
-plus a 5-GPIO joystick and a 64-Mbit SPI flash we do not use) arrives in M2, together
-with its pin map — which still has to be derived from UM2750 and confirmed on the
-board with a logic analyzer, the way R-001 was.
+The **X-NUCLEO-GFX01M2** carries the display (**ST7789V**, 240x320 colour over SPI),
+a 5-GPIO joystick, and a 64-Mbit SPI flash we deliberately do not use. Its pin map could
+not be read out of UM2750 — that manual lists no STM32U5 board at all — so it was derived
+by connector position against UM3062 and then **confirmed on hardware**, by tests that make
+the parts answer rather than by a multimeter. Two traps worth knowing before touching it:
+chip select is **active LOW** where UM2750 says high, and register reads carry a one-*bit*
+dummy, so a byte-aligned read comes back looking like plausible garbage. The map and the
+measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 
 ## M1 verification — done on hardware
 
@@ -262,7 +266,13 @@ board with a logic analyzer, the way R-001 was.
   covered the same ground.
 - **M3 — Game (host only).** The broker, the Active-Object base and the Pacman modules
   under `App/`, playable on the host via SDL. Open as PR #10 and **parked**.
-- **Restart on new hardware (current).** After the PR #10 review the project went back
-  to M1 on the **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the
-  X-NUCLEO-GFX01M2 and Pacman going colour. The Sharp/MTCH6102 drivers and their OTTs
-  are gone; M2 brings the ILI9341 and the joystick.
+- **Restart on new hardware.** After the PR #10 review the project went back to M1 on the
+  **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the X-NUCLEO-GFX01M2 and Pacman
+  going colour. The drivers and OTTs for the old parts are gone, and so are the acceptance
+  tests that described them — a test naming hardware nobody has misleads more than it
+  documents.
+- **M2 on the new board (current).** The panel turned out to be an **ST7789V**, not the
+  ILI9341 this project had been assuming. Display, joystick, the RGB565 frame buffer and
+  partial updates are in, and the two halves are verified against each other by
+  `joystick_dot`. NFR-002 was raised from 30 to **60 FPS** on the strength of the
+  `animation` measurements.

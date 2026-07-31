@@ -23,7 +23,6 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 | [RF-009](#rf-009) | OTT console keeps partial input across a scenario | Low | — |
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
-| [RF-012](#rf-012) | Slot-2 reset is wired to PD2, firmware drives PA4 | Cosmetic | — |
 | [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | — |
 
 ---
@@ -53,11 +52,10 @@ which no automated check would catch.
 
 **Still to do:**
 
-- **Input.** `Drivers/touchpad` talks to `Bsp/i2c_bsp` and `Bsp/dio_bsp` directly. The
-  port belongs at the *semantic* level the game wants — a direction and a button, not
-  raw touch coordinates — because that is what makes a keyboard a drop-in host
-  implementation. The quadrant mapping of [FR-004](PrePlanning/02-Requirements.md) is
-  logic and should end up in a host-tested module, not inside a platform file.
+- **Input.** `Bsp/joystick` reports five named keys, which is a board fact, not the
+  semantic level the game wants — a *direction* and a button. That level is what makes a
+  keyboard a drop-in host implementation, and it does not exist yet: an M2 test reads
+  `joystick_take_press()` directly, which is fine for a test and wrong for the game.
 - **NVM.** No module yet; the high score will need the same treatment
   ([FR-005](PrePlanning/02-Requirements.md), NFR-004).
 - The message broker and Model/Control do not exist yet; they should be written
@@ -74,7 +72,7 @@ HAL in the include path, against ports that have a target and a host implementat
 
 **Two hand-applied edits are lost on every CubeMX re-generation.** Medium.
 
-1. The `.noinit` section in `ThirdParty/STM32_G431RB_HAL/STM32G431xx_FLASH.ld`, marked
+1. The `.noinit` section in the linker script of `ThirdParty/STM32_U545RE_HAL/`, marked
    NON-GENERATED. Without it the OTT retained-RAM reset flow stops working — and
    *silently*: the build succeeds and every OTT simply looks like a normal boot.
 2. The `app_main()` call in the USER CODE block of the generated `Core/Src/main.c`.
@@ -162,10 +160,11 @@ RX is buffered across scenarios (see RF-008).
 **`spi_bsp_write()` cannot report an error.** Low.
 
 It returns `void` and discards the HAL status, so a stuck bus is invisible to
-`Drivers/display` — a flush "succeeds" either way. `i2c_bsp` by contrast returns
-`i2c_bsp_status_e`, which the touchpad driver and its OTTs propagate. "Error handling /
-return conventions" was one of the areas raised for review in PR #6, but no direction
-was given, so the existing `void` signature was kept.
+`Drivers/st7789` and `Drivers/display` — a flush "succeeds" either way. That matters more
+now than when this was written: the display is the only device on the bus, and a panel
+that has stopped answering is indistinguishable from one showing a black screen on
+purpose. "Error handling / return conventions" was one of the areas raised for review in
+PR #6, but no direction was given, so the existing `void` signature was kept.
 
 *Done when* a project-wide return convention is decided and applied consistently across
 the BSP.
@@ -188,20 +187,6 @@ symptom is a harness timeout with no explanation.
 *Done when* `app_main()` registers a handler that says what happened — the expression,
 file and line over the console, then halt or reset — and the choice is recorded as a
 `DEC-xxx`. A reset with a logged reason is the usual pick for a game.
-
-### RF-012
-
-**Slot-2 reset is wired to PD2, firmware drives PA4.** Cosmetic.
-
-The Click Shield routes slot-2 `RST` to **PD2**, but the firmware configures and drives
-**PA4** ([DEC-008](PrePlanning/11-Decisions-and-As-Built.md),
-[M2 Board Bring-Up §1](Design/M2-Board-Bring-Up.md)).
-The MTCH6102 boots without an explicit reset, so the touchpad works regardless — the
-reset pulse simply goes to an unconnected pin.
-
-*Done when* either the pin is corrected in CubeMX, or the reset is dropped from
-`touchpad_init()` and the dead pin removed from `dio_bsp_pin_e` and the `.ioc`. The
-second is probably the better trade, since the controller does not need it.
 
 ### RF-014
 

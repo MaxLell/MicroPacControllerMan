@@ -4,16 +4,16 @@
 
 ## 1.1 Purpose
 
-MicroPacControllerMan is a standalone embedded Pacman game. A player controls Pacman via a capacitive touchpad; the game state is rendered on a monochrome display. The system boots into a loading screen, then a menu showing the persisted high score, and starts a new game when the on-board user button is pressed.
+MicroPacControllerMan is a standalone embedded Pacman game. A player controls Pacman with a five-key joystick; the game state is rendered on a 240 × 320 colour display. The system boots into a loading screen, then a menu showing the persisted high score, and starts a new game when the on-board user button is pressed.
 
 Beyond delivering a playable game, the primary motivation for this project is to explore the capabilities and boundaries of AI-assisted software development: how far an AI coding agent can carry an embedded project like this — from requirements through firmware — and where its limits are.
 
 ## 1.2 System Boundary
 
 **In scope:**
-- Firmware running on the STM32G431RB Nucleo-64 board.
-- Rendering to the LCD Mono Click (monochrome, 128×128).
-- Reading directional input from the Touchpad Click.
+- Firmware running on the STM32U545RE-Q Nucleo-64 board.
+- Rendering to the X-NUCLEO-GFX01M2's display (colour, 240 × 320, RGB565).
+- Reading directional input from that shield's five-key joystick.
 - Reading the Nucleo user button (game start).
 - Persisting a single high-score value in non-volatile memory (NVM).
 - Core Pacman gameplay across **5 levels of increasing difficulty**, each with its own maze; pellets and power pellets; four distinct ghosts; a frightened mode; tunnel wrap-around; multiple lives; and a final win after the last level (see [FR-006..FR-027](02-Requirements.md)).
@@ -26,9 +26,9 @@ Beyond delivering a playable game, the primary motivation for this project is to
 
 | Interface | Direction | Description |
 |---|---|---|
-| Touchpad Click (MTCH6102, I2C) | Input | Directional gestures / touch position, translated into up/down/left/right movement intent. |
+| GFX01M2 joystick (5 GPIOs) | Input | Four directional keys plus a centre key, active low, translated into up/down/left/right movement intent. |
 | Nucleo user button | Input | Starts a new game from the menu screen. |
-| LCD Mono Click (Sharp LS013B7DH03, SPI) | Output | Renders loading screen, menu, and live game state. |
+| GFX01M2 display (ST7789V, SPI) | Output | Renders loading screen, menu, and live game state. |
 | NVM (on-chip flash or equivalent) | Output/Input | Persists the single high-score entry across power cycles. |
 | STLINK V3 (on-board) | Output | Debugging (SWD) and serial console (log output) during development. |
 
@@ -42,9 +42,9 @@ Blocks are physical components; each arrow is labelled with the electrical inter
 
 ```mermaid
 flowchart LR
-    TP["Touchpad Click<br/>(MTCH6102)"] -->|I2C| MCU["STM32G431RB<br/>Nucleo-64 + Click Shield"]
+    JOY["Joystick<br/>(5 keys, on the shield)"] -->|Digital Input| MCU["STM32U545RE-Q<br/>Nucleo-64 + X-NUCLEO-GFX01M2"]
     BTN["User Button"] -->|Digital Input| MCU
-    MCU -->|SPI| LCD["LCD Mono Click<br/>(Sharp LS013B7DH03)"]
+    MCU -->|SPI| LCD["Display<br/>(ST7789V, 240x320)"]
     MCU -->|on-chip flash| NVM["NVM<br/>(high-score storage)"]
     MCU <-->|SWD + Serial| STL["STLINK V3<br/>(debug + console)"]
 ```
