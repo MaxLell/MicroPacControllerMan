@@ -18,10 +18,27 @@ nothing else may depend on `App/`.
   3. print the boot banner (the harness looks for it, VT-INT-002).
   4. the nominal super-loop — today just the OTT console; later the FreeRTOS scheduler.
 
-**What goes here next** — one folder per application module,
-`App/<module>/<module>.c`/`.h` (mirroring the reference's `App/app/`,
-`App/clockwork/`). The Pacman game modules land here during
-[Milestone 3](../../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md).
+**The game** — one folder per module, all of it pure logic with no hardware behind it,
+which is what lets the whole of it be unit-tested on the host.
+
+| Module | What |
+|---|---|
+| `playfield/` | The maze: static walls per level plus which pellets are left. Walkability is a *query*, which is why it is a plain module and not an Active Object — routing it through a queue would make the movement code unwritable. |
+| `agent/` | The shared base for anything that moves: a cell, a facing, and a step that respects walls and tunnels. Pacman and the ghosts *are* agents and differ only in **how they choose** a direction, so the wall and tunnel rules exist once. |
+| `pacman/` | Current direction plus a *queued* one, applied at the moment of a step (§10.1). |
+| `ghost_path/` | Choosing a direction towards a target cell, without reversing. |
+| `ghost/` | The four personalities and their targets (§10.4), scatter/chase/frightened. |
+| `score/` | Points and the ghost-eaten chain. The one Active Object here: it reacts to events on the game's internal bus (FR-110) rather than being asked. |
+| `game/` | The orchestrator: the tick, collisions, lives, levels, and the state it hands to the view. |
+
+`game` is also the bridge between the two brokers (FR-110): game-internal events —
+pellet eaten, ghost eaten, frightened started — stay on the internal bus, and only
+results leave. What the view gets is `msg_game_state_t`, **by value**, built fresh on
+each call so the between-cell progress it carries is current
+([DEC-016](../../Docu/PrePlanning/11-Decisions-and-As-Built.md)).
+
+Still to come: `game_view` (cell-to-pixel, interpolation, the display list) and the
+Render module below it — neither exists yet.
 
 Note that the `app_main()` call in the generated `main.c` is one of the two things a
 CubeMX re-generation drops and that must be re-applied by hand (the other is the
