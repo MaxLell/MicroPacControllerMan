@@ -93,12 +93,14 @@ if(PACMAN_HOST_BUILD)
         App/pacman/pacman.c
         App/playfield/playfield.c
         App/score/score.c
+        App/sprite_set/sprite_set.c
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
         Services/crc/crc.c
         Services/delay/delay.c
         Services/framebuffer/framebuffer.c
         Services/gfx/gfx.c
+        Services/sprite/sprite.c
         Services/active_object/active_object.c
         Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
@@ -114,12 +116,14 @@ if(PACMAN_HOST_BUILD)
         App/pacman
         App/playfield
         App/score
+        App/sprite_set
         Bsp/systick_bsp
         Drivers/display
         Services/crc
         Services/delay
         Services/framebuffer
         Services/gfx
+        Services/sprite
         Services/active_object
         Services/circular_buffer
         Services/msg
@@ -199,6 +203,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/pacman
     App/playfield
     App/score
+    App/sprite_set
     Bsp/dio_bsp
     Bsp/joystick
     Bsp/retain_ram

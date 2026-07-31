@@ -184,9 +184,18 @@ which is the right outcome for a detected bug, but it halts silently: nothing is
 and, unlike the old `bkpt`, no fault is raised for a debugger to catch. Under an OTT the
 symptom is a harness timeout with no explanation.
 
+**It is not only the target.** A unit test whose `setUp` forgets `assert_probe_begin()`
+hits the same default: the test binary spins at 100 % CPU with no output, Ceedling never
+returns, and nothing anywhere names the cause. That happened while writing
+`test_sprite.c` and cost more time than the test did. Severity stays Low because the fix
+is one line in a test — but the *diagnosis* is expensive every time, and it will be
+expensive again.
+
 *Done when* `app_main()` registers a handler that says what happened — the expression,
 file and line over the console, then halt or reset — and the choice is recorded as a
-`DEC-xxx`. A reset with a logged reason is the usual pick for a game.
+`DEC-xxx`. A reset with a logged reason is the usual pick for a game. Worth considering
+alongside it: a library default that prints before it hangs would have turned both
+symptoms into a one-line answer.
 
 ### RF-014
 
