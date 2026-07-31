@@ -17,21 +17,21 @@
 #include "custom_assert.h"
 #include "unity.h"
 
-#define TEST_CAPACITY (4U)
+#define TEST_CAPACITY             (4U)
 #define TEST_SINGLE_SLOT_CAPACITY (1U)
 
 /* Element values, named so a failure message says which one is missing. */
-#define TEST_VALUE_FIRST (11U)
-#define TEST_VALUE_SECOND (22U)
-#define TEST_VALUE_THIRD (33U)
-#define TEST_VALUE_REJECTED (99U)
+#define TEST_VALUE_FIRST          (11U)
+#define TEST_VALUE_SECOND         (22U)
+#define TEST_VALUE_THIRD          (33U)
+#define TEST_VALUE_REJECTED       (99U)
 
 /* Base for a run of values pushed in a loop: element N holds TEST_VALUE_BASE + N. */
-#define TEST_VALUE_BASE (100U)
+#define TEST_VALUE_BASE           (100U)
 
 /* How far to walk the indices before re-testing, so they pass the end of the storage. */
-#define TEST_WRAP_CYCLES (TEST_CAPACITY + 1U)
-#define TEST_MANY_WRAP_CYCLES (TEST_CAPACITY * 3U)
+#define TEST_WRAP_CYCLES          (TEST_CAPACITY + 1U)
+#define TEST_MANY_WRAP_CYCLES     (TEST_CAPACITY * 3U)
 
 /*! \brief A multi-field element, to prove the buffer moves whole elements. */
 typedef struct
@@ -79,8 +79,7 @@ static void prv_cycle_indices(uint16_t in_cycles)
 void setUp(void)
 {
     assert_probe_begin();
-    circular_buffer_init(&g_value_buffer, g_value_storage, sizeof(g_value_storage[0]),
-                         TEST_CAPACITY);
+    circular_buffer_init(&g_value_buffer, g_value_storage, sizeof(g_value_storage[0]), TEST_CAPACITY);
 }
 
 void tearDown(void)
@@ -157,8 +156,7 @@ void test_a_multi_field_element_survives_intact(void)
     const test_element_t written = {TEST_VALUE_FIRST, TEST_VALUE_SECOND, TEST_VALUE_THIRD};
     test_element_t read_back = {0};
 
-    circular_buffer_init(&element_buffer, element_storage, sizeof(element_storage[0]),
-                         TEST_CAPACITY);
+    circular_buffer_init(&element_buffer, element_storage, sizeof(element_storage[0]), TEST_CAPACITY);
 
     TEST_ASSERT_TRUE(circular_buffer_push(&element_buffer, &written));
     TEST_ASSERT_TRUE(circular_buffer_pop(&element_buffer, &read_back));
@@ -200,8 +198,7 @@ void test_a_single_slot_buffer_still_alternates(void)
     uint32_t second_value = TEST_VALUE_SECOND;
     uint32_t read_back = 0U;
 
-    circular_buffer_init(&single_buffer, single_storage, sizeof(single_storage[0]),
-                         TEST_SINGLE_SLOT_CAPACITY);
+    circular_buffer_init(&single_buffer, single_storage, sizeof(single_storage[0]), TEST_SINGLE_SLOT_CAPACITY);
 
     TEST_ASSERT_TRUE(circular_buffer_push(&single_buffer, &first_value));
     TEST_ASSERT_FALSE(circular_buffer_push(&single_buffer, &second_value));
@@ -239,17 +236,14 @@ void test_a_zero_element_size_asserts(void)
 {
     circular_buffer_t bad_buffer;
 
-    ASSERT_PROBE_EXPECT(circular_buffer_init(&bad_buffer, g_value_storage, 0U, TEST_CAPACITY),
-                        "in_element_size > 0U");
+    ASSERT_PROBE_EXPECT(circular_buffer_init(&bad_buffer, g_value_storage, 0U, TEST_CAPACITY), "in_element_size > 0U");
 }
 
 void test_a_zero_capacity_asserts(void)
 {
     circular_buffer_t bad_buffer;
 
-    ASSERT_PROBE_EXPECT(
-        circular_buffer_init(&bad_buffer, g_value_storage, sizeof(uint32_t), 0U),
-        "in_capacity > 0U");
+    ASSERT_PROBE_EXPECT(circular_buffer_init(&bad_buffer, g_value_storage, sizeof(uint32_t), 0U), "in_capacity > 0U");
 }
 
 void test_pushing_a_null_element_asserts(void)

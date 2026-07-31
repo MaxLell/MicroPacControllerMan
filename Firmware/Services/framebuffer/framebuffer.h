@@ -24,25 +24,24 @@
  * framebuffer - public types
  * ========================================================================= */
 
-#define FRAMEBUFFER_WIDTH (240)
+#define FRAMEBUFFER_WIDTH  (240)
 #define FRAMEBUFFER_HEIGHT (320)
 
 /*! \brief One pixel, RGB565. */
 typedef uint16_t framebuffer_color_t;
 
 /*! \brief Build a colour from 8-bit components; the low bits are discarded. */
-#define FRAMEBUFFER_RGB(red, green, blue)                                                \
-    ((framebuffer_color_t)((((uint16_t)(red) & 0xF8U) << 8)                              \
-                           | (((uint16_t)(green) & 0xFCU) << 3)                          \
+#define FRAMEBUFFER_RGB(red, green, blue)                                                                              \
+    ((framebuffer_color_t)((((uint16_t)(red) & 0xF8U) << 8) | (((uint16_t)(green) & 0xFCU) << 3)                       \
                            | (((uint16_t)(blue) & 0xF8U) >> 3)))
 
-#define FRAMEBUFFER_COLOR_BLACK FRAMEBUFFER_RGB(0U, 0U, 0U)
-#define FRAMEBUFFER_COLOR_WHITE FRAMEBUFFER_RGB(255U, 255U, 255U)
-#define FRAMEBUFFER_COLOR_RED FRAMEBUFFER_RGB(255U, 0U, 0U)
-#define FRAMEBUFFER_COLOR_GREEN FRAMEBUFFER_RGB(0U, 255U, 0U)
-#define FRAMEBUFFER_COLOR_BLUE FRAMEBUFFER_RGB(0U, 0U, 255U)
-#define FRAMEBUFFER_COLOR_YELLOW FRAMEBUFFER_RGB(255U, 255U, 0U)
-#define FRAMEBUFFER_COLOR_CYAN FRAMEBUFFER_RGB(0U, 255U, 255U)
+#define FRAMEBUFFER_COLOR_BLACK   FRAMEBUFFER_RGB(0U, 0U, 0U)
+#define FRAMEBUFFER_COLOR_WHITE   FRAMEBUFFER_RGB(255U, 255U, 255U)
+#define FRAMEBUFFER_COLOR_RED     FRAMEBUFFER_RGB(255U, 0U, 0U)
+#define FRAMEBUFFER_COLOR_GREEN   FRAMEBUFFER_RGB(0U, 255U, 0U)
+#define FRAMEBUFFER_COLOR_BLUE    FRAMEBUFFER_RGB(0U, 0U, 255U)
+#define FRAMEBUFFER_COLOR_YELLOW  FRAMEBUFFER_RGB(255U, 255U, 0U)
+#define FRAMEBUFFER_COLOR_CYAN    FRAMEBUFFER_RGB(0U, 255U, 255U)
 #define FRAMEBUFFER_COLOR_MAGENTA FRAMEBUFFER_RGB(255U, 0U, 255U)
 
 typedef struct
@@ -80,8 +79,7 @@ void framebuffer_fill(framebuffer_t* inout_framebuffer, framebuffer_color_t in_c
  * \param[in]       in_y: row, `0` is the top edge
  * \param[in]       in_color: colour to write
  */
-void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y,
-                           framebuffer_color_t in_color);
+void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16_t in_y, framebuffer_color_t in_color);
 
 /*! \brief Read one pixel.
  *
@@ -90,8 +88,7 @@ void framebuffer_set_pixel(framebuffer_t* inout_framebuffer, int16_t in_x, int16
  * \param[in]       in_y: row
  * \return          The pixel, or \ref FRAMEBUFFER_COLOR_WHITE outside the buffer
  */
-framebuffer_color_t framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x,
-                                          int16_t in_y);
+framebuffer_color_t framebuffer_get_pixel(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y);
 
 /*! \brief Borrow one row, for a display driver that pushes whole lines.
  *

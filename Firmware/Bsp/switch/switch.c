@@ -12,10 +12,10 @@
  * switch - private
  * ========================================================================= */
 
-#define SWITCH_HISTORY_STABLE_ACTIVE (0xFFFFFFFFU)
+#define SWITCH_HISTORY_STABLE_ACTIVE   (0xFFFFFFFFU)
 #define SWITCH_HISTORY_STABLE_INACTIVE (0x00000000U)
 
-#define SWITCH_BITS_PER_BYTE (8U)
+#define SWITCH_BITS_PER_BYTE           (8U)
 
 _Static_assert(SWITCH_DEBOUNCE_SAMPLES == (sizeof(uint32_t) * SWITCH_BITS_PER_BYTE),
                "the debounce window must match the width of switch_t::history");
@@ -55,8 +55,7 @@ bool switch_get_debounced_state(switch_t* inout_switch)
 {
     ASSERT(inout_switch != NULL);
 
-    inout_switch->history
-        = (inout_switch->history << 1U) | (uint32_t)prv_read_gpio_level(inout_switch);
+    inout_switch->history = (inout_switch->history << 1U) | (uint32_t)prv_read_gpio_level(inout_switch);
 
     if (inout_switch->history == SWITCH_HISTORY_STABLE_ACTIVE)
     {

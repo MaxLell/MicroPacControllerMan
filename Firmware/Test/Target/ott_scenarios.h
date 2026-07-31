@@ -44,9 +44,9 @@ typedef bool (*ott_run_fn)(const uint8_t* in_parameter, char* out_reason, size_t
 
 typedef struct
 {
-    const char* name;                           /*!< Name typed on the console                */
-    ott_setup_fn setup_fn;                      /*!< May be `NULL` for a test without arguments */
-    ott_run_fn run_fn;                          /*!< Never `NULL`                             */
+    const char* name;      /*!< Name typed on the console                */
+    ott_setup_fn setup_fn; /*!< May be `NULL` for a test without arguments */
+    ott_run_fn run_fn;     /*!< Never `NULL`                             */
 } ott_scenario_t;
 
 /* ==========================================================================

@@ -48,22 +48,20 @@ bool assert_probe_has_aborted(void);
  * Fails the test if the statement completes without asserting, if more than one
  * assertion fires, or if the expression text does not match.
  */
-#define ASSERT_PROBE_EXPECT(statement, expected_expression)                              \
-    do                                                                                   \
-    {                                                                                    \
-        assert_probe_arm();                                                              \
-                                                                                         \
-        if (TEST_PROTECT())                                                              \
-        {                                                                                \
-            statement;                                                                   \
-            TEST_FAIL_MESSAGE("expected an assertion, but the statement completed");     \
-        }                                                                                \
-                                                                                         \
-        TEST_ASSERT_TRUE_MESSAGE(assert_probe_has_aborted(),                              \
-                                 "the test body was not aborted by an assertion");        \
-        TEST_ASSERT_EQUAL_UINT32_MESSAGE(1U, assert_probe_get_count(),                    \
-                                         "expected exactly one assertion");               \
-        TEST_ASSERT_EQUAL_STRING(expected_expression, assert_probe_get_expression());     \
+#define ASSERT_PROBE_EXPECT(statement, expected_expression)                                                            \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        assert_probe_arm();                                                                                            \
+                                                                                                                       \
+        if (TEST_PROTECT())                                                                                            \
+        {                                                                                                              \
+            statement;                                                                                                 \
+            TEST_FAIL_MESSAGE("expected an assertion, but the statement completed");                                   \
+        }                                                                                                              \
+                                                                                                                       \
+        TEST_ASSERT_TRUE_MESSAGE(assert_probe_has_aborted(), "the test body was not aborted by an assertion");         \
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(1U, assert_probe_get_count(), "expected exactly one assertion");              \
+        TEST_ASSERT_EQUAL_STRING(expected_expression, assert_probe_get_expression());                                  \
     } while (0)
 
 #endif /* ASSERT_PROBE_H */

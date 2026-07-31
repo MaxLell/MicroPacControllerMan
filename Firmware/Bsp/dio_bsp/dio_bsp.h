@@ -15,16 +15,16 @@
 typedef enum
 {
     DIO_BSP_PIN_NONE = 0,
-    DIO_BSP_PIN_USER_BUTTON,      /* PC13 - on-board user button B1, active HIGH   */
-    DIO_BSP_PIN_DISPLAY_CS,       /* PC7  - display chip select, active HIGH       */
-    DIO_BSP_PIN_DISPLAY_DCX,      /* PB10 - display data/command select            */
-    DIO_BSP_PIN_DISPLAY_RESET,    /* PA1  - display reset, active LOW              */
-    DIO_BSP_PIN_DISPLAY_TE,       /* PA0  - display tearing effect, input          */
-    DIO_BSP_PIN_JOYSTICK_NORTH,   /* PC0  - shield joystick, active LOW            */
-    DIO_BSP_PIN_JOYSTICK_SOUTH,   /* PB4  - shield joystick, active LOW            */
-    DIO_BSP_PIN_JOYSTICK_EAST,    /* PB0  - shield joystick, active LOW            */
-    DIO_BSP_PIN_JOYSTICK_WEST,    /* PC9  - shield joystick, active LOW            */
-    DIO_BSP_PIN_JOYSTICK_CENTER,  /* PC6  - shield joystick, active LOW            */
+    DIO_BSP_PIN_USER_BUTTON,     /* PC13 - on-board user button B1, active HIGH   */
+    DIO_BSP_PIN_DISPLAY_CS,      /* PC7  - display chip select, active HIGH       */
+    DIO_BSP_PIN_DISPLAY_DCX,     /* PB10 - display data/command select            */
+    DIO_BSP_PIN_DISPLAY_RESET,   /* PA1  - display reset, active LOW              */
+    DIO_BSP_PIN_DISPLAY_TE,      /* PA0  - display tearing effect, input          */
+    DIO_BSP_PIN_JOYSTICK_NORTH,  /* PC0  - shield joystick, active LOW            */
+    DIO_BSP_PIN_JOYSTICK_SOUTH,  /* PB4  - shield joystick, active LOW            */
+    DIO_BSP_PIN_JOYSTICK_EAST,   /* PB0  - shield joystick, active LOW            */
+    DIO_BSP_PIN_JOYSTICK_WEST,   /* PC9  - shield joystick, active LOW            */
+    DIO_BSP_PIN_JOYSTICK_CENTER, /* PC6  - shield joystick, active LOW            */
     DIO_BSP_PIN_LAST
 } dio_bsp_pin_e;
 

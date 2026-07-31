@@ -44,17 +44,17 @@
 
 typedef enum
 {
-    MSG_BROKER_STATUS_OK = 0,                   /*!< Done                              */
-    MSG_BROKER_STATUS_INPUT_FULL,               /*!< Publish rejected — apply backpressure */
-    MSG_BROKER_STATUS_IDLE,                     /*!< Nothing was waiting to be moved   */
-    MSG_BROKER_STATUS_NO_SUBSCRIBER             /*!< Delivered to nobody               */
+    MSG_BROKER_STATUS_OK = 0,       /*!< Done                              */
+    MSG_BROKER_STATUS_INPUT_FULL,   /*!< Publish rejected — apply backpressure */
+    MSG_BROKER_STATUS_IDLE,         /*!< Nothing was waiting to be moved   */
+    MSG_BROKER_STATUS_NO_SUBSCRIBER /*!< Delivered to nobody               */
 } msg_broker_status_e;
 
 /*! \brief A module's end of the bus: its own output queue, plus what it has missed. */
 typedef struct
 {
     msg_queue_t queue;
-    uint32_t dropped_msg_count;                 /*!< Messages lost to a full queue     */
+    uint32_t dropped_msg_count; /*!< Messages lost to a full queue     */
 } msg_subscriber_t;
 
 typedef struct
@@ -63,9 +63,9 @@ typedef struct
     msg_subscriber_t* topics[MSG_LAST][MSG_BROKER_MAX_SUBSCRIBERS_PER_TOPIC];
     bool is_initialized;
     bool is_started;
-    uint32_t published_msg_count;               /*!< Accepted into the input queue     */
-    uint32_t delivered_msg_count;               /*!< Copies handed to subscribers      */
-    uint32_t dropped_msg_count;                 /*!< Copies lost to full output queues */
+    uint32_t published_msg_count; /*!< Accepted into the input queue     */
+    uint32_t delivered_msg_count; /*!< Copies handed to subscribers      */
+    uint32_t dropped_msg_count;   /*!< Copies lost to full output queues */
 } msg_broker_t;
 
 /* ==========================================================================
@@ -81,8 +81,7 @@ typedef struct
  *                      for the subscriber's lifetime
  * \param[in]       in_capacity: queue depth, at least `1`
  */
-void msg_subscriber_init(msg_subscriber_t* inout_subscriber, msg_t* inout_msg_buffer,
-                         uint16_t in_capacity);
+void msg_subscriber_init(msg_subscriber_t* inout_subscriber, msg_t* inout_msg_buffer, uint16_t in_capacity);
 
 /*! \brief Take the next message from a subscriber's own queue.
  *
@@ -129,8 +128,7 @@ void msg_broker_start(msg_broker_t* inout_broker);
  * \param[in,out]   inout_subscriber: initialized subscriber
  * \param[in]       in_topic: topic between \ref MSG_NONE and \ref MSG_LAST
  */
-void msg_broker_subscribe(msg_broker_t* inout_broker, msg_subscriber_t* inout_subscriber,
-                          msg_id_e in_topic);
+void msg_broker_subscribe(msg_broker_t* inout_broker, msg_subscriber_t* inout_subscriber, msg_id_e in_topic);
 
 /*! \brief Hand a message to the broker's input queue.
  *

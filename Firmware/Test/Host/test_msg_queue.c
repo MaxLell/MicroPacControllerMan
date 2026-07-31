@@ -16,12 +16,12 @@
 #include "msg_queue.h"
 #include "unity.h"
 
-#define TEST_CAPACITY (4U)
+#define TEST_CAPACITY       (4U)
 
-#define TEST_SCORE_FIRST (11U)
-#define TEST_SCORE_SECOND (22U)
+#define TEST_SCORE_FIRST    (11U)
+#define TEST_SCORE_SECOND   (22U)
 #define TEST_SCORE_REJECTED (99U)
-#define TEST_SCORE_BASE (100U)
+#define TEST_SCORE_BASE     (100U)
 
 static msg_t g_msg_buffer[TEST_CAPACITY];
 static msg_queue_t g_msg_queue;

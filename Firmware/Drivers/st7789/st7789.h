@@ -22,11 +22,11 @@
  * ========================================================================= */
 
 /*! \brief Panel geometry in its native, unrotated orientation. */
-#define ST7789_WIDTH (240U)
-#define ST7789_HEIGHT (320U)
+#define ST7789_WIDTH         (240U)
+#define ST7789_HEIGHT        (320U)
 
 /*! \brief Bytes the controller returns for its identity: manufacturer, version, id. */
-#define ST7789_ID_LENGTH (3U)
+#define ST7789_ID_LENGTH     (3U)
 
 /*! \brief The identity an ST7789V reports, so a driver can check what it is talking
  *         to rather than trusting the label on the board. */
@@ -35,8 +35,8 @@
 #define ST7789_ID_EXPECTED_2 (0x52U)
 
 /*! \brief Build an RGB565 colour from 8-bit components. */
-#define ST7789_RGB(red, green, blue)                                                     \
-    ((uint16_t)((((uint16_t)(red) & 0xF8U) << 8) | (((uint16_t)(green) & 0xFCU) << 3)     \
+#define ST7789_RGB(red, green, blue)                                                                                   \
+    ((uint16_t)((((uint16_t)(red) & 0xF8U) << 8) | (((uint16_t)(green) & 0xFCU) << 3)                                  \
                 | (((uint16_t)(blue) & 0xF8U) >> 3)))
 
 /* ==========================================================================
@@ -70,8 +70,7 @@ bool st7789_is_present(void);
  * \param[in]       in_height: at least `1`, and `in_y + in_height` at most #ST7789_HEIGHT
  * \param[in]       in_colour: RGB565 colour
  */
-void st7789_fill_rectangle(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
-                           uint16_t in_colour);
+void st7789_fill_rectangle(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height, uint16_t in_colour);
 
 /*! \brief Switch the output stage on or off. The frame memory is kept either way.
  *
@@ -96,7 +95,7 @@ void st7789_fill_screen(uint16_t in_colour);
  * \param[in]       in_stride: pixels per row in `in_pixels`, at least `in_width` —
  *                      lets a caller send a sub-rectangle of a larger image
  */
-void st7789_write_pixels(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height,
-                         const uint16_t* in_pixels, uint16_t in_stride);
+void st7789_write_pixels(uint16_t in_x, uint16_t in_y, uint16_t in_width, uint16_t in_height, const uint16_t* in_pixels,
+                         uint16_t in_stride);
 
 #endif /* ST7789_H */

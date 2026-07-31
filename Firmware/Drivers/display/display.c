@@ -18,10 +18,8 @@
  * display - private
  * ========================================================================= */
 
-_Static_assert(FRAMEBUFFER_WIDTH == ST7789_WIDTH,
-               "the frame buffer and the panel must agree on width");
-_Static_assert(FRAMEBUFFER_HEIGHT == ST7789_HEIGHT,
-               "the frame buffer and the panel must agree on height");
+_Static_assert(FRAMEBUFFER_WIDTH == ST7789_WIDTH, "the frame buffer and the panel must agree on width");
+_Static_assert(FRAMEBUFFER_HEIGHT == ST7789_HEIGHT, "the frame buffer and the panel must agree on height");
 
 static bool g_is_initialized = false;
 static bool g_is_enabled = false;
@@ -49,12 +47,12 @@ void display_present(const framebuffer_t* in_framebuffer)
      * too slow to animate: use display_present_region() for that and let the caller
      * decide what changed. See
      * [M2 Board Bring-Up §3](../../../Docu/Design/M2-Board-Bring-Up.md). */
-    st7789_write_pixels(0U, 0U, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT,
-                        framebuffer_get_line(in_framebuffer, 0), FRAMEBUFFER_WIDTH);
+    st7789_write_pixels(0U, 0U, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT, framebuffer_get_line(in_framebuffer, 0),
+                        FRAMEBUFFER_WIDTH);
 }
 
-void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y,
-                            int16_t in_width, int16_t in_height)
+void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
+                            int16_t in_height)
 {
     ASSERT(g_is_initialized);
     ASSERT(in_framebuffer != NULL);

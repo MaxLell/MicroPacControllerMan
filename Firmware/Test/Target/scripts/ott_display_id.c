@@ -16,18 +16,18 @@
 
 /* ST7789V reset timing, generous: RESX must be low for at least 10 us, and the
  * controller needs up to 120 ms afterwards before it accepts commands. */
-#define OTT_DISPLAY_ID_RESET_LOW_MS (20U)
+#define OTT_DISPLAY_ID_RESET_LOW_MS    (20U)
 #define OTT_DISPLAY_ID_RESET_SETTLE_MS (150U)
 
 /* Identification registers. RDDID returns a dummy byte followed by three identity
  * bytes; RDID1..3 each return a dummy plus one byte. Four bytes are read
  * throughout so the dummy is visible rather than silently consumed. */
-#define OTT_DISPLAY_ID_COMMAND_RDDID (0x04U)
-#define OTT_DISPLAY_ID_COMMAND_RDID1 (0xDAU)
-#define OTT_DISPLAY_ID_COMMAND_RDID2 (0xDBU)
-#define OTT_DISPLAY_ID_COMMAND_RDID3 (0xDCU)
+#define OTT_DISPLAY_ID_COMMAND_RDDID   (0x04U)
+#define OTT_DISPLAY_ID_COMMAND_RDID1   (0xDAU)
+#define OTT_DISPLAY_ID_COMMAND_RDID2   (0xDBU)
+#define OTT_DISPLAY_ID_COMMAND_RDID3   (0xDCU)
 
-#define OTT_DISPLAY_ID_READ_LENGTH (4U)
+#define OTT_DISPLAY_ID_READ_LENGTH     (4U)
 
 typedef struct
 {
@@ -52,8 +52,7 @@ static void prv_select(bool in_is_active_high, bool in_is_selected)
 {
     const bool drive_high = (in_is_active_high == in_is_selected);
 
-    dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_CS,
-                    drive_high ? DIO_BSP_PIN_STATE_HIGH : DIO_BSP_PIN_STATE_LOW);
+    dio_bsp_set_pin(DIO_BSP_PIN_DISPLAY_CS, drive_high ? DIO_BSP_PIN_STATE_HIGH : DIO_BSP_PIN_STATE_LOW);
 }
 
 static void prv_reset_controller(bool in_is_active_high)
@@ -120,9 +119,8 @@ static bool prv_probe_polarity(bool in_is_active_high)
 
         prv_read_register(in_is_active_high, g_registers[index].command, data);
 
-        cli_print("  %s (0x%02X) -> %02X %02X %02X %02X", g_registers[index].name,
-                  (unsigned)g_registers[index].command, (unsigned)data[0], (unsigned)data[1],
-                  (unsigned)data[2], (unsigned)data[3]);
+        cli_print("  %s (0x%02X) -> %02X %02X %02X %02X", g_registers[index].name, (unsigned)g_registers[index].command,
+                  (unsigned)data[0], (unsigned)data[1], (unsigned)data[2], (unsigned)data[3]);
 
         if (prv_is_plausible(data, sizeof(data)))
         {
@@ -160,8 +158,7 @@ bool ott_display_id_run(const uint8_t* in_parameter, char* out_reason, size_t in
     }
     else
     {
-        (void)snprintf(out_reason, in_reason_size,
-                       "no answer at either CS polarity — check SPI pins, DCX, RESET");
+        (void)snprintf(out_reason, in_reason_size, "no answer at either CS polarity — check SPI pins, DCX, RESET");
     }
 
     /* Leave the panel deselected and out of reset. */

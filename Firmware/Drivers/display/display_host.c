@@ -49,8 +49,8 @@ void display_present(const framebuffer_t* in_framebuffer)
     ++g_present_count;
 }
 
-void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y,
-                            int16_t in_width, int16_t in_height)
+void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
+                            int16_t in_height)
 {
     ASSERT(in_framebuffer != NULL);
     ASSERT(in_x >= 0);
@@ -66,9 +66,8 @@ void display_present_region(const framebuffer_t* in_framebuffer, int16_t in_x, i
     {
         for (int16_t column = 0; column < in_width; ++column)
         {
-            g_last_frame.pixels[in_y + row][in_x + column]
-                = framebuffer_get_pixel(in_framebuffer, (int16_t)(in_x + column),
-                                        (int16_t)(in_y + row));
+            g_last_frame.pixels[in_y + row][in_x + column] =
+                framebuffer_get_pixel(in_framebuffer, (int16_t)(in_x + column), (int16_t)(in_y + row));
         }
     }
 

@@ -32,15 +32,15 @@
 typedef enum
 {
     MSG_NONE = 0,
-    MSG_INPUT_DIRECTION,                        /*!< Input  -> Game                    */
-    MSG_INPUT_BUTTON,                           /*!< Input  -> System                  */
-    MSG_SYSTEM_SHOW_LOADING,                    /*!< System -> Render                  */
-    MSG_SYSTEM_SHOW_MENU,                       /*!< System -> Render                  */
-    MSG_SYSTEM_START_GAME,                      /*!< System -> Game                    */
-    MSG_RENDER_FRAME,                           /*!< Game   -> Render                  */
-    MSG_GAME_SCORE_UPDATED,                     /*!< Game   -> NVM                     */
-    MSG_GAME_OVER,                              /*!< Game   -> System, NVM             */
-    MSG_HIGHSCORE_LOADED,                       /*!< NVM    -> System                  */
+    MSG_INPUT_DIRECTION,     /*!< Input  -> Game                    */
+    MSG_INPUT_BUTTON,        /*!< Input  -> System                  */
+    MSG_SYSTEM_SHOW_LOADING, /*!< System -> Render                  */
+    MSG_SYSTEM_SHOW_MENU,    /*!< System -> Render                  */
+    MSG_SYSTEM_START_GAME,   /*!< System -> Game                    */
+    MSG_RENDER_FRAME,        /*!< Game   -> Render                  */
+    MSG_GAME_SCORE_UPDATED,  /*!< Game   -> NVM                     */
+    MSG_GAME_OVER,           /*!< Game   -> System, NVM             */
+    MSG_HIGHSCORE_LOADED,    /*!< NVM    -> System                  */
     MSG_LAST
 } msg_id_e;
 
@@ -113,9 +113,9 @@ typedef struct
 
 typedef struct
 {
-    msg_id_e id;                                /*!< Topic, a member of \ref msg_id_e  */
-    uint16_t payload_size;                      /*!< Valid bytes in `payload`          */
-    uint8_t payload[MSG_PAYLOAD_MAX_SIZE];      /*!< Opaque to the broker              */
+    msg_id_e id;                           /*!< Topic, a member of \ref msg_id_e  */
+    uint16_t payload_size;                 /*!< Valid bytes in `payload`          */
+    uint8_t payload[MSG_PAYLOAD_MAX_SIZE]; /*!< Opaque to the broker              */
 } msg_t;
 
 _Static_assert(sizeof(msg_input_direction_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
