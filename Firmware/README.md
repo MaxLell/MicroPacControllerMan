@@ -171,6 +171,8 @@ source of truth in
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
 | `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
+| `dev.sh` | The umbrella command: builds, tests, formats, flashes, runs the OTTs, and installs the commit hook. Not a second implementation of any of them — it calls `format.sh`, `ceedling` and `Test/run_ott.py`, so each job has one definition however it is reached. |
+| `format.sh` | The single definition of "formatted" (NFR-102): the whole tree, a path, or just what is staged. |
 | `CMakeLists.txt` | The whole build, cross-toolchain included. |
 | `openocd.cfg` | ST-LINK V3E + STM32U5 **debug only** — flashing is STM32CubeProgrammer's job. |
 | `.clang-format` | The [c-code-style](https://github.com/MaxLell/c-code-style) config (NFR-102). |
@@ -240,8 +242,8 @@ measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 
 ## M1 verification — done on hardware
 
-**`./m2.sh all`** builds, flashes and walks the interactive tests. Set the port with
-`PORT=/dev/ttyACMx ./m2.sh ...`. What has actually been confirmed on this board:
+**`./dev.sh all`** builds, flashes and walks both OTT suites. Set the port with
+`PORT=/dev/ttyACMx ./dev.sh ...`. What has actually been confirmed on this board:
 
 1. **Build** — target and host, warning-free. Flash 38.9 kB (7.4%), RAM 3.5 kB (1.3%).
 2. **`.noinit` present** in the ELF at `0x20000768`, right after `.bss`, so the OTT
