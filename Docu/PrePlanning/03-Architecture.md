@@ -9,7 +9,7 @@ This document describes *how* the firmware is structured, at a functional-specif
 The game is built as Model-View-Control (FR-101), so the game logic is identical on host and target and is unit-testable without hardware (NFR-101):
 
 - **Model** — owns the entire game state: the active maze, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, current level (1–5), and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
-- **View** — takes a read-only snapshot of the Model and renders it, behind one interface with two implementations: the target draws to the shield's ST7789V panel; the host draws to an SDL window (CON-103 / FR-104).
+- **View** — turns a copy of the Model into what should be on screen, and draws it. Split in two: **Game-View** is pure logic (cell-to-pixel, interpolation between simulation steps, sprite and HUD layout) and is unit-tested on the host; **Render** is the platform port behind one interface, drawing to the shield's ST7789V panel on the target and to an SDL window on the host (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
 > **Decided (R-008):** the maze is a **reduced, display-fit maze** — a custom layout smaller than the classic 28×31 grid, sized so tiles, Pacman, four ghosts and pellets stay legible on 128×128. Exact dimensions are set during Pacman Development (FR-022). See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
@@ -24,7 +24,7 @@ Design rules:
   - a **system broker** connecting the firmware-level modules (§3.2.2);
   - a **Pacman broker** used only inside the game (§3.6).
 - **Content-agnostic.** The broker only reads a message's topic ID for routing; it treats the payload as opaque bytes and never interprets it.
-- **Fixed-size messages, copied by value.** A message is a topic ID plus a small fixed-size payload, moved by value so no module holds a pointer into another's memory (NFR-103). The one exception is the render frame: its message carries a *handle* to a statically-allocated, double-buffered read-only snapshot (§3.6, R-007) rather than the bulk data — still no heap.
+- **Fixed-size messages, copied by value — with no exceptions.** A message is a topic ID plus a small fixed-size payload, moved by value so no module ever holds a pointer into another's memory (NFR-103). The render frame used to be the one exception; it is not any more, because the game state turned out to be 56 bytes and the large thing — the image — never travels (§3.3).
 - **One input queue per broker.** Publishers hand a message to the broker via its API; the broker owns the input queue.
 - **One output queue per subscriber.** A module registers its output queue for the topics it cares about; the broker copies each message into every subscribed module's output queue.
 - **A dedicated worker moves the messages (FR-108).** One task per broker drains the input queue and fans each message out to the subscribed output queues; this is the only place messages cross between modules.
@@ -91,12 +91,25 @@ Every topic is a value in one compile-time `enum msg_id_e`; the payload is a sma
 | `MSG_SYSTEM_SHOW_LOADING` | *(none)* | System | Render | Show the loading screen (FR-001). |
 | `MSG_SYSTEM_SHOW_MENU` | `{ high_score }` | System | Render | Show the menu with the current high score (FR-002). |
 | `MSG_SYSTEM_START_GAME` | *(none)* | System | Game | Start a new game (FR-003, FR-006). |
-| `MSG_RENDER_FRAME` | `{ frame handle }` | Game | Render | Draw the latest game frame (FR-005). Frame-transfer mechanics: see [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks). |
+| `MSG_GAME_STATE` | `{ actors, pellets, score, lives, level }` | Game | Game-View | One coherent state per simulation step (§10.1), copied by value like everything else. |
+| `MSG_DISPLAY_LIST` | `{ items: pixel position + what to draw }` | Game-View | Render | What must be on screen *now*, in pixels. Render works out what changed. |
 | `MSG_GAME_SCORE_UPDATED` | `{ score }` | Game | NVM | Track the running score for the end-of-game high-score check. |
 | `MSG_GAME_OVER` | `{ final_score, won }` | Game | System, NVM | End the game (FR-007 / FR-021); show the score screen for 2 s (FR-023); trigger the high-score check (FR-008). |
 | `MSG_HIGHSCORE_LOADED` | `{ high_score }` | NVM | System | Provide the stored high score at start-up for the menu (FR-002, FR-009). |
 
-> **Frame transfer (decided, R-007):** `MSG_RENDER_FRAME` carries a version + handle to a double-buffered, read-only game snapshot. The Game module owns two statically-allocated snapshot buffers and swaps them each tick; Render draws the last-published one. This keeps the queue tiny and uses no heap (NFR-103). See [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks).
+> **No message carries a pointer.** An earlier design had `MSG_RENDER_FRAME` hand Render a
+> handle to a double-buffered snapshot, as the one sanctioned exception to copy-by-value
+> ([R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks)). That exception is
+> **withdrawn**, because the premise behind it was wrong: what is large is the *rendered
+> image*, not the game state. An 11 × 9 maze is two 99-bit pellet maps, five actors and a handful
+> of counters — **56 bytes**, measured, which copies like any other payload. The image never needs
+> to travel at all, because Render draws it.
+>
+> Three things fall out. There is no pointer in any message, so no module can hold a
+> reference into another's memory. There is no second frame buffer to find room for — one is
+> 60 % of SRAM and two do not fit. And because every payload is a copy, a Render task running
+> concurrently with Game can never observe a half-updated model; the concurrency safety is a
+> by-product rather than something to arrange.
 
 ## 3.4 FreeRTOS Task Breakdown
 
@@ -129,7 +142,7 @@ In shape, every module exposes only an `init` (create its queue, subscribe to it
 
 ## 3.6 Pacman Sub-Application Architecture
 
-The Pacman application runs in the **Game Task** and uses its **own broker instance** — the Pacman broker (FR-110) — separate from the system broker. Only the **Game** module bridges the two: it injects inputs (`MSG_INPUT_DIRECTION`, `MSG_SYSTEM_START_GAME`) inward and forwards results (`MSG_RENDER_FRAME`, `MSG_GAME_SCORE_UPDATED`, `MSG_GAME_OVER`) outward. This keeps game-internal traffic off the system bus and lets the whole application run unchanged on the host (FR-104).
+The Pacman application runs in the **Game Task** and uses its **own broker instance** — the Pacman broker (FR-110) — separate from the system broker. Only the **Game** module bridges the two: it injects inputs (`MSG_INPUT_DIRECTION`, `MSG_SYSTEM_START_GAME`) inward and forwards results (`MSG_GAME_STATE`, `MSG_GAME_SCORE_UPDATED`, `MSG_GAME_OVER`) outward. This keeps game-internal traffic off the system bus and lets the whole application run unchanged on the host (FR-104).
 
 The same sandwich applies one level down — the Pacman broker in the middle, the game modules above and below:
 
@@ -154,7 +167,7 @@ flowchart TB
 
 | Module | Responsibility |
 |---|---|
-| **Game (orchestrator)** | Advances the game tick; runs collision checks (Pacman vs. ghost → caught, or → eaten while frightened); applies power-pellet → frightened mode and its timeout; decides game-over (FR-007) and level-clear (FR-021); assembles the render frame. |
+| **Game (orchestrator)** | Advances the game tick; runs collision checks (Pacman vs. ghost → caught, or → eaten while frightened); applies power-pellet → frightened mode and its timeout; decides game-over (FR-007) and level-clear (FR-021); publishes one coherent state per step. |
 | **Pacman** | The player character: consumes the current direction intent and moves Pacman along the playfield, eating pellets. |
 | **Ghosts** | The four ghosts: their positions and current mode (chase / scatter / frightened + timer). |
 | **Ghost Path-Planning** | A stateless *library* that, given a ghost, Pacman, and the playfield, returns the ghost's next step — the four distinct behaviors (FR-014) and scatter/chase (FR-015). |
@@ -162,7 +175,13 @@ flowchart TB
 | **Score** | The running score and the scoring rules (pellet / power-pellet / ghost-eaten values, A-006). |
 | **Agent (base)** | The shared base for movable entities: a position, a facing direction, and a step/move policy that respects the playfield (walls FR-010, tunnel wrap FR-012). **Pacman and each Ghost *are* Agents** and specialize it — Pacman follows the input direction, Ghosts follow Ghost Path-Planning. |
 
-**Rendering interface (your question — how the frame gets out):** each tick, the **Game** orchestrator assembles a **render frame** — a compact description of what to draw (Pacman, the four ghosts, remaining pellets, score, current mode) — and publishes it. The Game module forwards it onto the system broker as `MSG_RENDER_FRAME` (§3.3), where the firmware **Render** module draws it to the display. The frame is the single rendering output, delivered as a version + handle to a double-buffered read-only snapshot (decided, [R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks)).
+**Rendering interface — how a moved Pacman reaches the panel.** Three modules and two messages, each doing one thing:
+
+1. **Game** publishes `MSG_GAME_STATE` once per simulation step (§10.1): the five actors with their cells, directions, modes and *progress towards the next cell*, plus the two pellet bitmaps, score, lives and level. 56 bytes, copied.
+2. **Game-View** holds the last state and runs at the **frame rate, not the step rate** — that is the point of it. Between two steps it draws the same actors nine times at advancing interpolated positions (§10.1), and publishes `MSG_DISPLAY_LIST`: what should be on screen *now*, in pixels.
+3. **Render** draws it, and is the only module that works out **what changed** since the last frame. It knows what it drew and it is the only one that knows the cost: two 16 x 16 rectangles are 2.08 ms, a full frame is 252 ms ([M2 Board Bring-Up §3](../Design/M2-Board-Bring-Up.md)). Nobody else should be making that trade.
+
+The seam between 2 and 3 is the same one the rest of the firmware uses: everything above it is pure logic, host-tested without mocks; everything below it is a platform port with a target and a host implementation.
 
 ## 3.7 On-Target Test (OTT) CLI Framework
 

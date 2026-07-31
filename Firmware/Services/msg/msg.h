@@ -6,10 +6,12 @@
  * [03 §3.3](../../../Docu/PrePlanning/03-Architecture.md) — that table is the
  * authority, this header is its code form.
  *
- * A message is a topic plus a small payload, **copied by value**, so no module ever
- * holds a pointer into another's memory and nothing needs the heap (NFR-103). The one
- * sanctioned exception is the render frame, which carries a handle to a read-only
- * snapshot rather than 2 kB of pixels (R-007).
+ * A message is a topic plus a small payload, **copied by value with no exceptions**, so
+ * no module ever holds a pointer into another's memory and nothing needs the heap
+ * (NFR-103). The render frame used to be the one exception, handing Render a pointer to a
+ * double-buffered image; it is not any more. What is large is the rendered image, not the
+ * game state — the state is 56 bytes and the image never travels, because Render draws
+ * it (R-007 closed, DEC-016).
  *
  * Header-only: there is no msg.c, because a vocabulary has no behaviour.
  */
@@ -19,8 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
-#include "framebuffer.h"
 
 /* ==========================================================================
  * msg - topics
@@ -37,7 +37,9 @@ typedef enum
     MSG_SYSTEM_SHOW_LOADING, /*!< System -> Render                  */
     MSG_SYSTEM_SHOW_MENU,    /*!< System -> Render                  */
     MSG_SYSTEM_START_GAME,   /*!< System -> Game                    */
-    MSG_RENDER_FRAME,        /*!< Game   -> Render                  */
+    MSG_GAME_STATE,          /*!< Game   -> Game-View               */
+    MSG_DISPLAY_LIST,        /*!< Game-View -> Render               */
+                             /*   Payload lands with Game-View in M3 */
     MSG_GAME_SCORE_UPDATED,  /*!< Game   -> NVM                     */
     MSG_GAME_OVER,           /*!< Game   -> System, NVM             */
     MSG_HIGHSCORE_LOADED,    /*!< NVM    -> System                  */
@@ -47,6 +49,15 @@ typedef enum
 /* ==========================================================================
  * msg - payloads
  * ========================================================================= */
+
+/*! \brief The four ghosts; Pacman is carried separately. */
+#define MSG_GHOST_COUNT       (4U)
+
+/*! \brief The playfield, in cells ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)),
+ *         and the bytes needed to hold one bit per cell. */
+#define MSG_PLAYFIELD_COLUMNS (11U)
+#define MSG_PLAYFIELD_ROWS    (9U)
+#define MSG_CELL_BITMAP_BYTES (((MSG_PLAYFIELD_COLUMNS * MSG_PLAYFIELD_ROWS) + 7U) / 8U)
 
 /*! \brief Directions Pacman can be sent in. `NONE` means "no direction yet". */
 typedef enum
@@ -90,26 +101,99 @@ typedef struct
     bool has_won;
 } msg_game_over_t;
 
-/*! \brief Payload of \ref MSG_RENDER_FRAME (FR-005, R-007).
+/*! \brief How far an entity has travelled from its current cell towards the next,
+ *         in 1/256ths. `0` means "on the cell".
  *
- * The sanctioned exception to copy-by-value: this carries a *handle* to one of the
- * publisher's statically-allocated, double-buffered snapshots, plus the version that
- * identifies which frame it is. The publisher must not write the buffer it has just
- * handed out — that is what the second buffer is for.
+ * The rules never read this. It exists so the view can draw motion in pixels while the
+ * logic stays on whole cells: at 21 px per cell and 150 ms to cross one, drawing
+ * cell-by-cell is a 21-pixel jump 6.7 times a second, which is visibly choppy however
+ * fast the panel refreshes. See [10 §10.1](../../../Docu/PrePlanning/10-Pacman-Game-Design.md).
+ */
+typedef uint8_t cell_progress_t;
+
+/*! \brief One moving entity, as the view needs to see it.
+ *
+ * Four bytes, deliberately: `direction` holds a \ref direction_e narrowed to a byte
+ * rather than the enum itself. Five of these plus the pellet bits are the whole payload,
+ * and an `int`-sized enum here would triple the actor block for nothing.
  */
 typedef struct
 {
-    uint32_t version;
-    const framebuffer_t* frame;
-} msg_render_frame_t;
+    uint8_t column; /*!< Current cell, the one the rules act on     */
+    uint8_t row;
+    uint8_t direction;        /*!< A \ref direction_e                          */
+    cell_progress_t progress; /*!< How far towards the next cell (view only)  */
+} msg_actor_t;
+
+/*! \brief Payload of \ref MSG_GAME_STATE (FR-005): one coherent state per simulation
+ *         step, copied like every other payload.
+ *
+ * This is the whole dynamic state of the game. The maze itself is not here — it is
+ * static per level, so the view owns the five tables and needs only the level number.
+ */
+typedef struct
+{
+    msg_actor_t pacman;
+    msg_actor_t ghosts[MSG_GHOST_COUNT];
+    /* Two bitmaps rather than one, because a pellet has three states, not two: gone,
+     * normal, or power. `is_power` is only meaningful where `has_pellet` is set. A power
+     * pellet is drawn larger and it is what starts frightened mode, so the view cannot
+     * treat the two alike. */
+    uint8_t has_pellet[MSG_CELL_BITMAP_BYTES];
+    uint8_t is_power[MSG_CELL_BITMAP_BYTES];
+    uint32_t score;
+    uint8_t lives;
+    uint8_t level;
+
+    /* One bit per ghost, not one flag for the game: a ghost that has been eaten sits in
+     * the pen un-frightened while the others are still blue, so a single flag would
+     * either colour it wrongly or un-colour the rest. */
+    uint8_t frightened_ghosts;
+} msg_game_state_t;
+
+/* ==========================================================================
+ * msg - the cell bitmaps
+ * ========================================================================= */
+
+/*! \brief Index of a cell in a \ref MSG_CELL_BITMAP_BYTES bitmap.
+ *
+ * These two are the exception to "a vocabulary has no behaviour", and they earn it: the
+ * writer and the reader of a bitmap are different modules, and bit arithmetic duplicated
+ * on both sides is a disagreement waiting to happen.
+ */
+static inline bool msg_cell_bitmap_get(const uint8_t* in_bitmap, uint8_t in_column, uint8_t in_row)
+{
+    const uint16_t index = (uint16_t)((in_row * MSG_PLAYFIELD_COLUMNS) + in_column);
+
+    return (in_bitmap[index / 8U] & (uint8_t)(1U << (index % 8U))) != 0U;
+}
+
+static inline void msg_cell_bitmap_set(uint8_t* inout_bitmap, uint8_t in_column, uint8_t in_row, bool in_is_set)
+{
+    const uint16_t index = (uint16_t)((in_row * MSG_PLAYFIELD_COLUMNS) + in_column);
+    const uint8_t mask = (uint8_t)(1U << (index % 8U));
+
+    if (in_is_set)
+    {
+        inout_bitmap[index / 8U] |= mask;
+    }
+    else
+    {
+        inout_bitmap[index / 8U] &= (uint8_t)~mask;
+    }
+}
 
 /* ==========================================================================
  * msg - envelope
  * ========================================================================= */
 
 /*! \brief Size of the payload area. Must hold the largest payload above; the static
- *         assertions below fail the build if a new payload outgrows it. */
-#define MSG_PAYLOAD_MAX_SIZE (16U)
+ *         assertions below fail the build if a new payload outgrows it.
+ *
+ * 16 bytes sufficed while the largest payload was a pointer. \ref msg_game_state_t is the
+ * whole game state instead — which is the point: it is small enough to copy, so nothing
+ * has to be shared. */
+#define MSG_PAYLOAD_MAX_SIZE (64U)
 
 typedef struct
 {
@@ -123,6 +207,6 @@ _Static_assert(sizeof(msg_input_button_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too 
 _Static_assert(sizeof(msg_high_score_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_score_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 _Static_assert(sizeof(msg_game_over_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
-_Static_assert(sizeof(msg_render_frame_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
+_Static_assert(sizeof(msg_game_state_t) <= MSG_PAYLOAD_MAX_SIZE, "payload too large");
 
 #endif /* MSG_H */
