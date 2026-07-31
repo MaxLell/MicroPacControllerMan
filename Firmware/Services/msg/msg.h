@@ -144,8 +144,44 @@ typedef struct
     uint32_t score;
     uint8_t lives;
     uint8_t level;
-    bool is_frightened;
+
+    /* One bit per ghost, not one flag for the game: a ghost that has been eaten sits in
+     * the pen un-frightened while the others are still blue, so a single flag would
+     * either colour it wrongly or un-colour the rest. */
+    uint8_t frightened_ghosts;
 } msg_game_state_t;
+
+/* ==========================================================================
+ * msg - the cell bitmaps
+ * ========================================================================= */
+
+/*! \brief Index of a cell in a \ref MSG_CELL_BITMAP_BYTES bitmap.
+ *
+ * These two are the exception to "a vocabulary has no behaviour", and they earn it: the
+ * writer and the reader of a bitmap are different modules, and bit arithmetic duplicated
+ * on both sides is a disagreement waiting to happen.
+ */
+static inline bool msg_cell_bitmap_get(const uint8_t* in_bitmap, uint8_t in_column, uint8_t in_row)
+{
+    const uint16_t index = (uint16_t)((in_row * MSG_PLAYFIELD_COLUMNS) + in_column);
+
+    return (in_bitmap[index / 8U] & (uint8_t)(1U << (index % 8U))) != 0U;
+}
+
+static inline void msg_cell_bitmap_set(uint8_t* inout_bitmap, uint8_t in_column, uint8_t in_row, bool in_is_set)
+{
+    const uint16_t index = (uint16_t)((in_row * MSG_PLAYFIELD_COLUMNS) + in_column);
+    const uint8_t mask = (uint8_t)(1U << (index % 8U));
+
+    if (in_is_set)
+    {
+        inout_bitmap[index / 8U] |= mask;
+    }
+    else
+    {
+        inout_bitmap[index / 8U] &= (uint8_t)~mask;
+    }
+}
 
 /* ==========================================================================
  * msg - envelope
