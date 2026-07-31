@@ -46,9 +46,13 @@ silently working around a wart.
   Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
   budget (RF-014), to be chosen against a real game loop.
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
-- **M3 Game — parked.** The host-only game is open as PR #10 and is not to be touched
-  until M1/M2 stand on the new hardware. Its architecture rework (Data-Pool instead of
-  Active Objects) is agreed in outline but not settled.
+- **M3 Game — in progress, playable on the host.** `./build-host/pacman_host_app` runs the
+  game in an SDL window through the same path the target will use: `game` publishes a
+  56-byte state, `game_view` turns cells into pixels and interpolates between simulation
+  steps, `render` owns the one frame buffer and erases by save-under. No Data-Pool — every
+  module talks through messages only, and no message carries a pointer (DEC-016). PR #10
+  is closed; `host_main.c` was the last thing salvaged from it. Still missing: the HUD
+  (score, lives, level) and the target wiring.
 
 ## Build · flash · test (all from `Firmware/`)
 
@@ -73,6 +77,7 @@ python3 Test/run_ott.py joystick_dot --port /dev/ttyACM0 # one by name; exit 0 =
 
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
+./build-host/pacman_host_app                             # play it: arrows/WASD, space, esc
 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all

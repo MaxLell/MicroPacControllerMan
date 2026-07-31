@@ -89,7 +89,9 @@ if(PACMAN_HOST_BUILD)
         App/agent/agent.c
         App/game/game.c
     App/game_view/game_view.c
+    App/render/render.c
         App/game_view/game_view.c
+        App/render/render.c
         App/ghost/ghost.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
@@ -114,7 +116,9 @@ if(PACMAN_HOST_BUILD)
         App/agent
         App/game
     App/game_view
+    App/render
         App/game_view
+        App/render
         App/ghost
         App/ghost_path
         App/pacman
@@ -142,8 +146,22 @@ if(PACMAN_HOST_BUILD)
 
     # Unit tests are NOT built here — they run under Ceedling, which does its own
     # compilation with mocked dependencies: `ceedling test:all` (see project.yml).
-    # This build exists for the host *application* (SDL, CON-103 / FR-104), which is
-    # what will link pacman_host once M3 provides it.
+    #
+    # The host application (CON-103 / FR-104) is the playable one: the same game, the
+    # same view and the same render path as the target, with SDL where the panel is.
+    # It is optional, because everything else here builds and every unit test runs
+    # without SDL — a missing library should cost you the window, not the build.
+    find_package(SDL2 QUIET)
+
+    if(SDL2_FOUND)
+        add_executable(pacman_host_app App/host_main.c)
+        target_link_libraries(pacman_host_app PRIVATE pacman_host SDL2::SDL2 SDL2::SDL2main)
+        target_compile_options(pacman_host_app PRIVATE -Wall -Wextra -g)
+    else()
+        message(STATUS "SDL2 not found — skipping the host application. "
+                       "Install it with: sudo apt-get install -y libsdl2-dev")
+    endif()
+
     return()
 endif()
 

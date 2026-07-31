@@ -147,7 +147,7 @@ source of truth in
 | Module | What |
 |---|---|
 | `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
-| `App/playfield/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/`, `sprite_set/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). Nothing calls them on the target yet; they are in the target build for compile coverage, and `--gc-sections` keeps them out of the image. |
+| `App/playfield/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/`, `sprite_set/`, `game_view/`, `render/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). Nothing calls them on the target yet; they are in the target build for compile coverage, and `--gc-sections` keeps them out of the image. |
 | `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
 | `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
