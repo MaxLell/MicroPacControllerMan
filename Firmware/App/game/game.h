@@ -93,6 +93,22 @@ typedef struct
     bool did_pacman_move;
     bool did_ghost_move[GHOST_COUNT];
 
+    /*! \brief The controls that decide when Pinky, Inky and Clyde may leave the house
+     *         (§10.4). Blinky never waits — he starts outside.
+     *
+     * Two counting schemes, and only one runs at a time. Normally each waiting ghost has its
+     * own counter and only the most-preferred one is counting; after a life is lost the
+     * personal ones are set aside for a **global** counter that releases at fixed totals.
+     * The arcade does it this way so that a fresh start after a death is paced the same
+     * however far into the level it happened. */
+    uint16_t ghost_dot_counter[GHOST_COUNT];
+    uint16_t global_dot_counter;
+    bool is_global_dot_counter_active;
+
+    /*! \brief How long since Pacman last ate. Runs the ghosts out of the house on its own,
+     *         so standing still cannot keep them locked up. */
+    uint32_t dots_idle_ms;
+
     uint32_t frightened_remaining_ms;
     uint32_t phase_remaining_ms;
     uint8_t phase_index; /*!< Position in the scatter/chase plan */

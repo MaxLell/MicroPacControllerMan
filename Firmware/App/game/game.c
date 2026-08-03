@@ -80,10 +80,12 @@ static void prv_place_entities(game_t* const inout_game)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        const cell_t pen_cell =
-            playfield_get_pen_cell(&inout_game->playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT));
+        const cell_t start = playfield_get_ghost_start(&inout_game->playfield, index);
 
-        ghost_reset(&inout_game->ghosts[index], (ghost_personality_e)index, pen_cell);
+        /* Blinky's cell is outside the house and the other three are inside it (§10.2), so
+         * the maze decides who has to come out rather than the rules restating it. */
+        ghost_reset(&inout_game->ghosts[index], (ghost_personality_e)index, start,
+                    playfield_is_house(&inout_game->playfield, start));
         inout_game->ghost_move_elapsed_ms[index] = 0U;
         inout_game->did_ghost_move[index] = false;
     }
@@ -91,10 +93,13 @@ static void prv_place_entities(game_t* const inout_game)
     inout_game->pacman_move_elapsed_ms = 0U;
     inout_game->did_pacman_eat_last_step = false;
     inout_game->did_pacman_move = false;
+    inout_game->dots_idle_ms = 0U;
     inout_game->frightened_remaining_ms = 0U;
     inout_game->phase_index = 0U;
     inout_game->phase_remaining_ms = inout_game->difficulty.phase_durations_ms[0];
 }
+
+static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index);
 
 static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 {
@@ -106,6 +111,137 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 
     playfield_load(&inout_game->playfield);
     prv_place_entities(inout_game);
+
+    /* A new level starts the personal counters over and puts the global one away (§10.4).
+     * Losing a life is the other way round, and #prv_lose_life does that. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        inout_game->ghost_dot_counter[index] = 0U;
+    }
+
+    inout_game->global_dot_counter = 0U;
+    inout_game->is_global_dot_counter_active = false;
+
+    /* A limit of zero is already met, so those ghosts walk out as the level begins rather
+     * than waiting for a first pellet. Pinky's limit is always zero, and by level three so
+     * are Inky's and Clyde's — which is why the later levels are busy immediately. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        if (ghost_is_waiting_in_house(&inout_game->ghosts[index]) && (prv_get_dot_limit(inout_game, index) == 0U))
+        {
+            ghost_release_from_house(&inout_game->ghosts[index]);
+        }
+    }
+}
+
+/* The dot limit that lets a ghost out, in pellets eaten. Pinky's is always nothing, so he
+ * leaves the moment a level begins; Blinky is never in there to ask. */
+static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index)
+{
+    switch ((ghost_personality_e)in_index)
+    {
+        case GHOST_INKY: return in_game->difficulty.inky_dot_limit;
+        case GHOST_CLYDE: return in_game->difficulty.clyde_dot_limit;
+        default: return 0U;
+    }
+}
+
+/* Which ghost's counter is running: the most-preferred one still shut in, in the order
+ * Pinky, Inky, Clyde. Returns #GHOST_COUNT when the house is empty of waiters. */
+static uint8_t prv_get_waiting_ghost(const game_t* const in_game)
+{
+    static const ghost_personality_e k_preference[] = {GHOST_PINKY, GHOST_INKY, GHOST_CLYDE};
+
+    for (uint8_t index = 0U; index < (sizeof(k_preference) / sizeof(k_preference[0])); ++index)
+    {
+        const uint8_t candidate = (uint8_t)k_preference[index];
+
+        if (ghost_is_waiting_in_house(&in_game->ghosts[candidate]))
+        {
+            return candidate;
+        }
+    }
+
+    return GHOST_COUNT;
+}
+
+/* The global counter's release points (§10.4). Clyde's is also where the scheme hands back
+ * to the personal counters, which is the one way it can be switched off. */
+#define GLOBAL_RELEASE_PINKY (7U)
+#define GLOBAL_RELEASE_INKY  (17U)
+#define GLOBAL_RELEASE_CLYDE (32U)
+
+static void prv_release_from_house(game_t* const inout_game, uint8_t in_index)
+{
+    ghost_release_from_house(&inout_game->ghosts[in_index]);
+}
+
+/* One pellet's worth of progress towards letting the next ghost out. */
+static void prv_count_dot_for_the_house(game_t* const inout_game)
+{
+    const uint8_t waiting = prv_get_waiting_ghost(inout_game);
+
+    inout_game->dots_idle_ms = 0U;
+
+    if (waiting >= GHOST_COUNT)
+    {
+        return;
+    }
+
+    if (inout_game->is_global_dot_counter_active)
+    {
+        ++inout_game->global_dot_counter;
+
+        if ((inout_game->global_dot_counter >= GLOBAL_RELEASE_CLYDE)
+            && ghost_is_waiting_in_house(&inout_game->ghosts[GHOST_CLYDE]))
+        {
+            /* Clyde still indoors at 32 is the only thing that retires the global counter
+             * and hands back to the personal ones. */
+            prv_release_from_house(inout_game, (uint8_t)GHOST_CLYDE);
+            inout_game->is_global_dot_counter_active = false;
+            inout_game->global_dot_counter = 0U;
+        }
+        else if ((inout_game->global_dot_counter >= GLOBAL_RELEASE_INKY) && (waiting == (uint8_t)GHOST_INKY))
+        {
+            prv_release_from_house(inout_game, waiting);
+        }
+        else if ((inout_game->global_dot_counter >= GLOBAL_RELEASE_PINKY) && (waiting == (uint8_t)GHOST_PINKY))
+        {
+            prv_release_from_house(inout_game, waiting);
+        }
+        else
+        {
+            /* Not there yet. */
+        }
+
+        return;
+    }
+
+    ++inout_game->ghost_dot_counter[waiting];
+
+    if (inout_game->ghost_dot_counter[waiting] >= prv_get_dot_limit(inout_game, waiting))
+    {
+        prv_release_from_house(inout_game, waiting);
+    }
+}
+
+/* Nobody is eating. Push the next one out anyway, or three of them stay in for ever. */
+static void prv_advance_house_idle_timer(game_t* const inout_game, uint32_t in_elapsed_ms)
+{
+    const uint8_t waiting = prv_get_waiting_ghost(inout_game);
+
+    if (waiting >= GHOST_COUNT)
+    {
+        return;
+    }
+
+    inout_game->dots_idle_ms += in_elapsed_ms;
+
+    if (inout_game->dots_idle_ms >= inout_game->difficulty.house_idle_limit_ms)
+    {
+        prv_release_from_house(inout_game, waiting);
+        inout_game->dots_idle_ms = 0U;
+    }
 }
 
 /* --- scatter / chase / frightened ---------------------------------------- */
@@ -242,6 +378,11 @@ static void prv_eat_under_pacman(game_t* const inout_game)
      * an already-cleared cell is what makes him quick again. */
     inout_game->did_pacman_eat_last_step = (eaten != PLAYFIELD_PELLET_NONE);
 
+    if (eaten != PLAYFIELD_PELLET_NONE)
+    {
+        prv_count_dot_for_the_house(inout_game);
+    }
+
     if (eaten == PLAYFIELD_PELLET_NONE)
     {
         return;
@@ -270,8 +411,13 @@ static void prv_lose_life(game_t* const inout_game)
         return;
     }
 
-    /* Lives remain: everyone back to their starting cells, the maze as it stands (§10.7). */
+    /* Lives remain: everyone back to their starting cells, the maze as it stands (§10.7).
+     * The personal dot counters are set aside — not reset — for the global one, so a fresh
+     * start after a death is paced the same however late in the level it happened. */
     prv_place_entities(inout_game);
+
+    inout_game->is_global_dot_counter_active = true;
+    inout_game->global_dot_counter = 0U;
 }
 
 /* §10.7's two ways of meeting: sharing a cell, or swapping cells in the same tick and so
@@ -308,8 +454,9 @@ static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_prev
         if (ghost_is_frightened(ghost))
         {
             prv_publish(inout_game, MSG_GAME_GHOST_EATEN, NULL, 0U);
-            ghost_send_to_pen(
-                ghost, playfield_get_pen_cell(&inout_game->playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
+            /* Revived in the middle of the house, which is Pinky's starting cell, and it
+             * has to walk out through the gate like the others. */
+            ghost_send_to_pen(ghost, playfield_get_ghost_start(&inout_game->playfield, (uint8_t)GHOST_PINKY));
 
             continue;
         }
@@ -386,6 +533,14 @@ static bool prv_move_ghost(game_t* const inout_game, uint8_t in_index)
 
     inout_game->did_ghost_move[in_index] = ghost_advance(&inout_game->ghosts[in_index], &inout_game->playfield,
                                                          pacman_cell, pacman_direction, blinky_cell);
+
+    /* The gate shuts behind it. Checked here rather than in the ghost because where the
+     * house is is the maze's knowledge (§10.4). */
+    if (ghost_is_in_house(&inout_game->ghosts[in_index])
+        && !playfield_is_house(&inout_game->playfield, ghost_get_cell(&inout_game->ghosts[in_index])))
+    {
+        ghost_note_left_house(&inout_game->ghosts[in_index]);
+    }
 
     /* Pacman stood still during this step, so his previous cell is his current one. */
     return prv_resolve_meetings(inout_game, pacman_cell, ghost_previous_cells);
@@ -541,6 +696,7 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
     }
 
     prv_advance_timers(inout_game, in_elapsed_ms);
+    prv_advance_house_idle_timer(inout_game, in_elapsed_ms);
     prv_apply_mode(inout_game);
 
     inout_game->pacman_move_elapsed_ms += in_elapsed_ms;

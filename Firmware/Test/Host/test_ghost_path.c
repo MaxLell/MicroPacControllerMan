@@ -1,19 +1,19 @@
 /*
  * Unit tests for App/ghost_path.
  *
- * Two things are worth nailing down here, because both are invisible in play and both
- * would be silently lost if the algorithm is ever swapped for A*:
+ * Seeking is a route search now and fleeing is still the greedy one-cell choice, and the
+ * things worth nailing down are the ones that are invisible in play:
  *
- * - **The tie-break order.** §10.4 fixes it as Up, Left, Down, Right. Get it wrong and
- *   the ghosts still chase perfectly well — they just do it differently, so no test that
- *   only checks "it got closer" would notice, and the behaviour would quietly change
- *   under the swap.
+ * - **The tie-break order.** §10.4 fixes it as Up, Left, Down, Right, and it still decides
+ *   between routes of equal length to equally near cells. Get it wrong and the ghosts still
+ *   chase perfectly well — they just do it differently, so no test that only checks "it got
+ *   closer" would notice.
+ * - **That the route is what counts.** Two neighbours can be exactly equidistant from a
+ *   target while the ways round them differ by a third. The greedy rule could not see that;
+ *   this one must, and one test below is exactly that case.
  * - **The dead-end escape.** §10.1 forbids reversing, but a stub corridor leaves no
  *   alternative. Without the exception a ghost parks in a dead end for the rest of the
  *   level, which looks like a broken ghost rather than a rule.
- *
- * The tests state *what* the algorithm must achieve, never how, so they survive the move
- * to A* unchanged.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -69,7 +69,7 @@ void test_it_steps_towards_a_target_to_the_east(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(PLAYFIELD_WIDTH - 2, JUNCTION_Y);
 
-    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
 void test_it_steps_towards_a_target_to_the_west(void)
@@ -77,7 +77,7 @@ void test_it_steps_towards_a_target_to_the_west(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
 void test_it_steps_towards_a_target_to_the_north(void)
@@ -85,7 +85,7 @@ void test_it_steps_towards_a_target_to_the_north(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(JUNCTION_X, 1);
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
 void test_it_never_steps_into_a_wall(void)
@@ -94,7 +94,7 @@ void test_it_never_steps_into_a_wall(void)
      * rather than walk into it. */
     const cell_t from = prv_cell(WALLED_NORTH_X, JUNCTION_Y);
     const cell_t target = prv_cell(WALLED_NORTH_X, 0);
-    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false);
 
     TEST_ASSERT_NOT_EQUAL(DIRECTION_NORTH, chosen);
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
@@ -104,7 +104,7 @@ void test_a_target_on_the_current_cell_still_yields_a_legal_step(void)
 {
     /* Degenerate but reachable in play: Blinky standing on Pacman for one tick. */
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
-    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, from, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_towards(&g_playfield, from, from, DIRECTION_NONE, false);
 
     TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, chosen);
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
@@ -117,7 +117,8 @@ void test_an_off_maze_target_is_allowed(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(-20, -20);
 
-    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE,
+                          ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
 /* --- the tie-break order (§10.4) ----------------------------------------- */
@@ -133,31 +134,54 @@ void test_ties_break_up_before_left(void)
     /* Guard the premise: both must be open and equidistant, or the test proves nothing. */
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, north_neighbour));
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, west_neighbour));
-    TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(north_neighbour, target),
-                             playfield_get_distance(west_neighbour, target));
+    TEST_ASSERT_EQUAL_UINT32(playfield_get_squared_distance(north_neighbour, target),
+                             playfield_get_squared_distance(west_neighbour, target));
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
-void test_ties_break_left_before_down_and_right(void)
+void test_the_route_decides_where_the_neighbours_are_a_tie(void)
 {
-    /* A far-off target straight above a cell whose north is walled leaves West, Down and
-     * Right all exactly equidistant, so the order alone decides and Left must take it.
-     * The target is deliberately outside the maze, which §10.4 permits. */
+    /* This is what the route search buys, in one case.
+     *
+     * From here, north is walled and the target is straight up and off the board. West and
+     * East are mirror images, so the two neighbours are *exactly* equidistant — the greedy
+     * rule this replaced had nothing to go on and fell through to its tie-break, taking West
+     * because Left beats Right.
+     *
+     * But the ways up are not mirror images. Row 4 opens at columns 1 and 6, and from here
+     * that is eight steps round by column 6 against ten by column 1. So East is the better
+     * move and the search takes it, which is the answer a player would give and the old rule
+     * could not reach. */
     const cell_t from = prv_cell(OPEN_CELL_X, JUNCTION_Y);
     const cell_t west_neighbour = playfield_step(from, DIRECTION_WEST);
-    const cell_t south_neighbour = playfield_step(from, DIRECTION_SOUTH);
     const cell_t east_neighbour = playfield_step(from, DIRECTION_EAST);
     const cell_t target = prv_cell(from.x, (int16_t)(from.y - 9));
 
     /* Guard the premise, so a redrawn maze fails loudly instead of passing vacuously. */
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(from, DIRECTION_NORTH)));
-    TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(west_neighbour, target),
-                             playfield_get_distance(south_neighbour, target));
-    TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(west_neighbour, target),
-                             playfield_get_distance(east_neighbour, target));
+    TEST_ASSERT_EQUAL_UINT32(playfield_get_squared_distance(west_neighbour, target),
+                             playfield_get_squared_distance(east_neighbour, target));
 
-    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
+}
+
+void test_a_step_that_is_really_further_loses_rather_than_tying(void)
+{
+    /* The same junction, and the point of measuring in straight lines rather than in
+     * corners. Going down from here is genuinely further from a target that is straight up
+     * — one whole cell further — and the ghost now sees that. Under the Manhattan distance
+     * this replaced, West, South and East all came out identical, so a visibly worse option
+     * reached the tie-break as an equal and won whenever it happened to come first in the
+     * order. That is the "ghosts feel dim" bug, and it was arithmetic rather than design. */
+    const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
+    const cell_t west_neighbour = playfield_step(from, DIRECTION_WEST);
+    const cell_t south_neighbour = playfield_step(from, DIRECTION_SOUTH);
+    const cell_t target = prv_cell(from.x, (int16_t)(from.y - 9));
+
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, south_neighbour));
+    TEST_ASSERT_LESS_THAN_UINT32(playfield_get_squared_distance(south_neighbour, target),
+                                 playfield_get_squared_distance(west_neighbour, target));
 }
 
 /* --- the no-reverse rule (§10.1) ----------------------------------------- */
@@ -169,7 +193,8 @@ void test_the_forbidden_direction_is_avoided_when_there_is_a_choice(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_NOT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_WEST));
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_WEST,
+                          ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_WEST, false));
 }
 
 void test_the_maze_itself_has_no_dead_end(void)
@@ -226,7 +251,7 @@ void test_a_dead_end_forces_the_reverse(void)
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_SOUTH)));
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_WEST)));
 
-    chosen = ghost_path_find_step_towards(&g_playfield, stub, target, arrived_from);
+    chosen = ghost_path_find_step_towards(&g_playfield, stub, target, arrived_from, false);
 
     TEST_ASSERT_EQUAL(arrived_from, chosen);
 }
@@ -237,11 +262,11 @@ void test_fleeing_moves_away_from_the_cell_to_avoid(void)
 {
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t pacman_cell = prv_cell(1, JUNCTION_Y);
-    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE, false);
     const cell_t neighbour = playfield_step(from, chosen);
 
-    TEST_ASSERT_GREATER_THAN_UINT16(playfield_get_distance(from, pacman_cell),
-                                    playfield_get_distance(neighbour, pacman_cell));
+    TEST_ASSERT_GREATER_THAN_UINT32(playfield_get_squared_distance(from, pacman_cell),
+                                    playfield_get_squared_distance(neighbour, pacman_cell));
 }
 
 void test_fleeing_and_seeking_disagree_from_the_same_cell(void)
@@ -250,8 +275,8 @@ void test_fleeing_and_seeking_disagree_from_the_same_cell(void)
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t pacman_cell = prv_cell(1, JUNCTION_Y);
 
-    TEST_ASSERT_NOT_EQUAL(ghost_path_find_step_towards(&g_playfield, from, pacman_cell, DIRECTION_NONE),
-                          ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE));
+    TEST_ASSERT_NOT_EQUAL(ghost_path_find_step_towards(&g_playfield, from, pacman_cell, DIRECTION_NONE, false),
+                          ghost_path_find_step_away_from(&g_playfield, from, pacman_cell, DIRECTION_NONE, false));
 }
 
 void test_fleeing_uses_the_same_tie_break_order(void)
@@ -262,17 +287,18 @@ void test_fleeing_uses_the_same_tie_break_order(void)
     /* Equally far from both neighbours, so the order decides. */
     const cell_t avoid = prv_cell((int16_t)(from.x + 4), (int16_t)(from.y + 4));
 
-    TEST_ASSERT_EQUAL_UINT16(playfield_get_distance(north_neighbour, avoid),
-                             playfield_get_distance(west_neighbour, avoid));
+    TEST_ASSERT_EQUAL_UINT32(playfield_get_squared_distance(north_neighbour, avoid),
+                             playfield_get_squared_distance(west_neighbour, avoid));
 
-    TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(DIRECTION_NORTH,
+                      ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE, false));
 }
 
 void test_fleeing_never_steps_into_a_wall(void)
 {
     const cell_t from = prv_cell(WALLED_NORTH_X, JUNCTION_Y);
     const cell_t avoid = prv_cell(WALLED_NORTH_X, (int16_t)(JUNCTION_Y + 3));
-    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE);
+    const direction_e chosen = ghost_path_find_step_away_from(&g_playfield, from, avoid, DIRECTION_NONE, false);
 
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(from, chosen)));
 }
@@ -285,11 +311,11 @@ void test_the_same_question_always_gets_the_same_answer(void)
      * A* implementation caches anything, this is what catches a stale cache. */
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
     const cell_t target = prv_cell(1, 1);
-    const direction_e first = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE);
+    const direction_e first = ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false);
 
     for (uint8_t repeat = 0U; repeat < 5U; ++repeat)
     {
-        TEST_ASSERT_EQUAL(first, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE));
+        TEST_ASSERT_EQUAL(first, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
     }
 }
 
@@ -299,5 +325,5 @@ void test_a_null_playfield_asserts(void)
 {
     const cell_t from = prv_cell(JUNCTION_X, JUNCTION_Y);
 
-    ASSERT_PROBE_EXPECT(ghost_path_find_step_towards(NULL, from, from, DIRECTION_NONE), "in_playfield != NULL");
+    ASSERT_PROBE_EXPECT(ghost_path_find_step_towards(NULL, from, from, DIRECTION_NONE, false), "in_playfield != NULL");
 }

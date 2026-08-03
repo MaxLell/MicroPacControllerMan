@@ -246,8 +246,14 @@ void test_the_later_levels_open_with_a_shorter_scatter(void)
 
 void test_the_table_stops_changing_after_the_final_level(void)
 {
-    difficulty_t final_level;
-    difficulty_t far_beyond;
+    /* Both zeroed before they are filled, and that is load-bearing rather than tidiness.
+     * The comparison below is byte-for-byte, and a struct this shape carries padding the
+     * lookup never writes — so two of them on the stack would differ in bytes that mean
+     * nothing, and the test would fail perhaps one run in three. It did, once the dot-limit
+     * fields moved the padding around. Comparing the whole thing is still what is wanted: a
+     * field added later should be covered without anyone remembering to add it here. */
+    difficulty_t final_level = {0};
+    difficulty_t far_beyond = {0};
 
     difficulty_get(DIFFICULTY_FINAL_LEVEL, &final_level);
     difficulty_get(200U, &far_beyond);

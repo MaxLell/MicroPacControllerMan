@@ -24,6 +24,7 @@ Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
 | [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | — |
+| [RF-016](#rf-016) | The console samples the UART on the tick instead of on an interrupt | Low | — |
 
 ---
 
@@ -219,3 +220,28 @@ against an OTT.
 *Done when* the debounce length is a per-instance parameter (history in a `uint8_t`, or a
 count carried in `switch_t`) and the joystick uses a window that leaves NFR-003 some room —
 with the input latency re-measured against the game loop to prove it.
+
+---
+
+### RF-016
+
+**The console samples the UART on the tick instead of on an interrupt.** Low.
+
+`console_poll_receive()` is called from the 1 ms tick and copies whatever the receive
+register holds into a small ring buffer. That is what makes the command line usable while
+the game is running: the register holds exactly one character and has no FIFO, and the
+main loop disappears into a frame for milliseconds at a time. Before the game was wired in
+the loop did nothing else, so polling it there was enough — wiring the game in is what
+exposed the limitation, and it did so as `run_ott.py` losing half of its command line.
+
+What remains is that **characters still have to arrive more than a millisecond apart**.
+That holds for anything typed and for `run_ott.py`, which paces itself at 2 ms and says so
+in its own comment. It does not hold for a line pasted into a terminal at 115200 baud,
+where a character lands every 87 µs — those are dropped now where they were not before.
+
+The proper fix is the UART receive interrupt feeding the same ring buffer, which would make
+the arrival rate irrelevant. It is not done yet because CubeMX does not enable `USART1_IRQn`
+in the `.ioc`, so it means a regeneration plus a handler, against a limitation nothing
+currently runs into. `uart_bsp_read_character()` already reads `RDR` directly and explains
+why ([DEC-013](PrePlanning/11-Decisions-and-As-Built.md)), so the register-level precedent
+is set and the interrupt would extend it rather than open a new argument.

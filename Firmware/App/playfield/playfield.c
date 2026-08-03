@@ -11,13 +11,19 @@
  * playfield - private
  * ========================================================================= */
 
-/* Map legend, as in [10 §10.2]: '#' wall, '.' pellet, 'o' power pellet, 'P' Pacman
- * start, 'G' ghost pen, ' ' open with nothing on it (a tunnel mouth). */
+/* Map legend, as in [10 §10.2]: '#' wall, '.' pellet, 'o' power pellet, 'P' Pacman start,
+ * 'H' inside the ghost house, 'D' its gate, 'T' tunnel, ' ' open with nothing on it.
+ *
+ * '0'..'3' are the four ghosts' starting cells, numbered as `ghost_personality_e` numbers
+ * them — Blinky, Pinky, Inky, Clyde. Blinky's is the one *outside*, just above the gate,
+ * because that is where the arcade puts him; the other three stand inside. Digits rather
+ * than initials because 'P' is already Pacman's and 'C'/'I' would read as maze pieces. */
 #define MAP_WALL             '#'
 #define MAP_PELLET           '.'
 #define MAP_POWER_PELLET     'o'
 #define MAP_PACMAN_START     'P'
-#define MAP_PEN              'G'
+#define MAP_HOUSE            'H'
+#define MAP_GATE             'D'
 #define MAP_TUNNEL           'T'
 #define MAP_OPEN             ' '
 
@@ -67,11 +73,11 @@ static const char* const g_maze[PLAYFIELD_HEIGHT] = {
     "#......##....##....##......#",
     "######.##### ## #####.######",
     "######.##### ## #####.######",
-    "######.##          ##.######",
-    "######.## ###  ### ##.######",
-    "######.## #      # ##.######",
-    "TTTTTT.   # GGGG #   .TTTTTT",
-    "######.## #      # ##.######",
+    "######.##     0    ##.######",
+    "######.## ###DD### ##.######",
+    "######.## #HHHHHH# ##.######",
+    "TTTTTT.   #2H1HH3#   .TTTTTT",
+    "######.## #HHHHHH# ##.######",
     "######.## ######## ##.######",
     "######.##          ##.######",
     "######.## ######## ##.######",
@@ -109,7 +115,7 @@ static int16_t prv_wrap_coordinate(int16_t in_value, int16_t in_size)
 
 void playfield_load(playfield_t* inout_playfield)
 {
-    uint8_t pen_index = 0U;
+    uint8_t start_count = 0U;
 
     ASSERT(inout_playfield != NULL);
 
@@ -128,7 +134,14 @@ void playfield_load(playfield_t* inout_playfield)
 
             inout_playfield->walls[y][x] = (tile == MAP_WALL);
             inout_playfield->tunnels[y][x] = (tile == MAP_TUNNEL);
+            inout_playfield->gates[y][x] = (tile == MAP_GATE);
             inout_playfield->pellets[y][x] = PLAYFIELD_PELLET_NONE;
+
+            /* The gate counts as house, so a ghost standing on it is still on its way in or
+             * out rather than already loose in the maze. Blinky's cell does not: he starts
+             * outside, and the digit that marks him sits above the gate. */
+            inout_playfield->house[y][x] =
+                (tile == MAP_HOUSE) || (tile == MAP_GATE) || ((tile >= '1') && (tile <= '3'));
 
             if (tile == MAP_PELLET)
             {
@@ -144,11 +157,10 @@ void playfield_load(playfield_t* inout_playfield)
             {
                 inout_playfield->pacman_start = cell;
             }
-            else if (tile == MAP_PEN)
+            else if ((tile >= '0') && (tile < (char)('0' + PLAYFIELD_GHOST_COUNT)))
             {
-                ASSERT(pen_index < PLAYFIELD_PEN_CELL_COUNT);
-                inout_playfield->pen_cells[pen_index] = cell;
-                ++pen_index;
+                inout_playfield->ghost_starts[tile - '0'] = cell;
+                ++start_count;
             }
             else
             {
@@ -157,9 +169,9 @@ void playfield_load(playfield_t* inout_playfield)
         }
     }
 
-    /* A maze without a start or a full pen is a typo in the table above, not a runtime
-     * condition. */
-    ASSERT(pen_index == PLAYFIELD_PEN_CELL_COUNT);
+    /* A maze missing a start, or with two ghosts on one digit, is a typo in the table
+     * above rather than a runtime condition. */
+    ASSERT(start_count == PLAYFIELD_GHOST_COUNT);
     ASSERT(inout_playfield->remaining_pellet_count > 0U);
 
     inout_playfield->total_pellet_count = inout_playfield->remaining_pellet_count;
@@ -250,12 +262,40 @@ cell_t playfield_get_pacman_start(const playfield_t* in_playfield)
     return in_playfield->pacman_start;
 }
 
-cell_t playfield_get_pen_cell(const playfield_t* in_playfield, uint8_t in_index)
+cell_t playfield_get_ghost_start(const playfield_t* in_playfield, uint8_t in_index)
 {
     ASSERT(in_playfield != NULL);
-    ASSERT(in_index < PLAYFIELD_PEN_CELL_COUNT);
+    ASSERT(in_index < PLAYFIELD_GHOST_COUNT);
 
-    return in_playfield->pen_cells[in_index];
+    return in_playfield->ghost_starts[in_index];
+}
+
+cell_t playfield_get_house_exit(const playfield_t* in_playfield)
+{
+    ASSERT(in_playfield != NULL);
+
+    /* Blinky's starting cell, and that is not a coincidence: the arcade stands him on the
+     * very tile the other three emerge onto, which is why the map needs no separate mark
+     * for it. */
+    return in_playfield->ghost_starts[0];
+}
+
+bool playfield_is_house(const playfield_t* in_playfield, cell_t in_cell)
+{
+    const cell_t cell = playfield_wrap_cell(in_cell);
+
+    ASSERT(in_playfield != NULL);
+
+    return in_playfield->house[cell.y][cell.x];
+}
+
+bool playfield_is_gate(const playfield_t* in_playfield, cell_t in_cell)
+{
+    const cell_t cell = playfield_wrap_cell(in_cell);
+
+    ASSERT(in_playfield != NULL);
+
+    return in_playfield->gates[cell.y][cell.x];
 }
 
 cell_t playfield_get_scatter_corner(uint8_t in_index)
@@ -287,12 +327,12 @@ cell_t playfield_step(cell_t in_cell, direction_e in_direction)
     return playfield_wrap_cell(stepped);
 }
 
-uint16_t playfield_get_distance(cell_t in_first, cell_t in_second)
+uint32_t playfield_get_squared_distance(cell_t in_first, cell_t in_second)
 {
-    const int16_t delta_x = (int16_t)(in_first.x - in_second.x);
-    const int16_t delta_y = (int16_t)(in_first.y - in_second.y);
+    const int32_t delta_x = (int32_t)in_first.x - (int32_t)in_second.x;
+    const int32_t delta_y = (int32_t)in_first.y - (int32_t)in_second.y;
 
-    return (uint16_t)(((delta_x < 0) ? -delta_x : delta_x) + ((delta_y < 0) ? -delta_y : delta_y));
+    return (uint32_t)((delta_x * delta_x) + (delta_y * delta_y));
 }
 
 bool playfield_are_cells_equal(cell_t in_first, cell_t in_second)
