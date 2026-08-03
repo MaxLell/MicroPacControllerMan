@@ -113,12 +113,25 @@ static void prv_draw_item(const msg_display_item_t* const in_item)
 
 void render_init(void)
 {
+    /* The panel comes up once and the frame buffer is wiped every time, and those are two
+     * different lifetimes hiding behind one word. `display_init` asserts on a second call —
+     * rightly, it configures a controller — while starting a screen or a run has to be able
+     * to say "blank everything and forget what you drew". Calling this twice used to spin
+     * the board in that assertion the moment the menu came up after the loading screen. */
+    static bool g_is_display_up = false;
+
     memset(g_saves, 0, sizeof(g_saves));
     g_save_count = 0U;
 
     framebuffer_fill(&g_framebuffer, FRAMEBUFFER_COLOR_BLACK);
 
-    display_init();
+    if (!g_is_display_up)
+    {
+        g_is_display_up = true;
+
+        display_init();
+    }
+
     display_present(&g_framebuffer);
 }
 

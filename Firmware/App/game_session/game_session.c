@@ -19,6 +19,11 @@ static game_view_t g_view;
 static sw_timer_t g_frame_timer;
 static bool g_is_frame_due;
 
+/* A timer is *registered* once and armed as often as you like: `sw_timer_create` asserts on
+ * a second registration of the same instance, and #game_session_init is called again for
+ * every run the player starts. */
+static bool g_is_timer_created;
+
 static void prv_on_frame_due(void)
 {
     g_is_frame_due = true;
@@ -43,7 +48,13 @@ void game_session_init(void)
 
     g_is_frame_due = false;
 
-    sw_timer_create(&g_frame_timer);
+    if (!g_is_timer_created)
+    {
+        g_is_timer_created = true;
+
+        sw_timer_create(&g_frame_timer);
+    }
+
     sw_timer_start(&g_frame_timer, GAME_SESSION_FRAME_PERIOD_MS, prv_on_frame_due);
 }
 
@@ -108,3 +119,13 @@ uint8_t game_session_get_level(void)
 {
     return game_get_level(&g_game);
 }
+
+#if defined(TEST)
+/* Forgets that the frame timer was ever registered, so a test may reset `sw_timer` under
+ * this module and start clean. Not built into the firmware, where the two are brought up
+ * once and in order. */
+void game_session_test_reset(void)
+{
+    g_is_timer_created = false;
+}
+#endif /* defined(TEST) */

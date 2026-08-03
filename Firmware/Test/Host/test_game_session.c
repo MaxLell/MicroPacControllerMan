@@ -41,8 +41,9 @@
 #include "sprite_set.h"
 #include "sw_timer.h"
 
-/* Compiled in only under TEST — see sw_timer.c. */
+/* Compiled in only under TEST — see sw_timer.c and game_session.c. */
 void sw_timer_test_reset(void);
+void game_session_test_reset(void);
 
 /* ==========================================================================
  * fixtures
@@ -106,6 +107,7 @@ void setUp(void)
     systick_bsp_get_tick_IgnoreAndReturn(g_now_ms);
 
     sw_timer_test_reset();
+    game_session_test_reset();
     sw_timer_init();
 
     game_session_init();

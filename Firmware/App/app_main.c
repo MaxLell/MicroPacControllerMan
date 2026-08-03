@@ -15,6 +15,7 @@
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
+#include "shell.h"
 #include "spi_bsp.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
@@ -70,6 +71,23 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
     return CLI_OK_STATUS;
 }
 
+/* `start` presses the start key from the console.
+ *
+ * FR-003's key is at the board, and that makes the one path a player actually walks —
+ * menu, run, score, menu again — the one path no harness can drive. This is the seam:
+ * `run_ott.py` can now walk it, and so can anyone reading the serial line who has not got
+ * a finger free. It presses; it does not decide, so the flow rules stay in one place. */
+static int prv_start_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)in_context;
+
+    shell_press_start();
+
+    return CLI_OK_STATUS;
+}
+
 static void prv_init_platform(void)
 {
     systick_bsp_init();
@@ -110,100 +128,74 @@ static void prv_poll_input(void)
     {
         if (joystick_is_pressed(k_stick[index].key))
         {
-            game_session_set_direction(k_stick[index].direction);
+            shell_set_direction(k_stick[index].direction);
         }
     }
 
-    /* The centre press starts the next run once this one is over (FR-003). Taken as an
-     * edge, so a thumb resting on it does not restart the game every frame. */
-    if (joystick_take_press(JOYSTICK_KEY_CENTER) && (game_session_get_state() != GAME_STATE_RUNNING))
+    /* Start comes from either key, and both are taken as an *edge* so a thumb resting on
+     * one does not keep pressing it. FR-003 names the Nucleo's own button; the centre of
+     * the stick is where a player's hand already is, and having both costs one line. */
+    if (joystick_take_press(JOYSTICK_KEY_CENTER) || user_button_take_press())
     {
-        game_session_start();
+        shell_press_start();
     }
 }
 
-/* Offer a finished run to the high-score table (FR-009).
- *
- * Here rather than in `game`, and once per run rather than as the score climbs: writing
- * flash erases a page and stalls the CPU for milliseconds, which inside a frame is a
- * visible stutter. A run ends once, so this costs nothing anyone can see. */
-static void prv_record_score(void)
-{
-    const uint32_t score = game_session_get_score();
-
-    if (!high_score_offer(score))
-    {
-        return;
-    }
-
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
-    {
-        if (high_score_get(place) == score)
-        {
-            cli_print("a new high score - %lu takes place %u", (unsigned long)score, (unsigned)(place + 1U));
-
-            break;
-        }
-    }
-}
-
-/* Say what the run is doing, on the console, when it changes.
+/* Say what the board is doing, on the console, when it changes.
  *
  * FR-107's principle applied to the game itself: the board reports over the serial line so
  * nothing needs a debugger to be understood. It also makes the game observable to someone
- * who cannot see the panel — which is how the missing timer re-arm above was found, because
- * the loop was silent where it should have been reporting.
+ * who cannot see the panel — which is how the missing timer re-arm was found, because the
+ * loop was silent where it should have been reporting.
  *
- * Only on a change, and the things that change are rare: a level, a life, the end of a run.
- * A line per pellet would flood the console and upset the silence `run_ott.py` waits for. */
+ * Only on a change, and the things that change are rare: a screen, a level, a life. A line
+ * per pellet would flood the console and upset the silence `run_ott.py` waits for. */
 static void prv_report_progress(void)
 {
-    static game_state_e g_reported_state = GAME_STATE_IDLE;
+    static const char* const k_screen_names[] = {"loading", "menu", "game", "score"};
+    static shell_screen_e g_reported_screen = SHELL_SCREEN_GAME;
     static uint8_t g_reported_level;
     static uint8_t g_reported_lives;
 
-    const game_state_e state = game_session_get_state();
+    const shell_screen_e screen = shell_get_screen();
     const uint8_t level = game_session_get_level();
     const uint8_t lives = game_session_get_lives();
 
-    if ((state == g_reported_state) && (level == g_reported_level) && (lives == g_reported_lives))
+    if ((screen == g_reported_screen) && (level == g_reported_level) && (lives == g_reported_lives))
     {
         return;
     }
 
-    g_reported_state = state;
+    if (screen != g_reported_screen)
+    {
+        cli_print("%s screen", k_screen_names[screen]);
+    }
+
+    if (screen == SHELL_SCREEN_GAME)
+    {
+        cli_print("  level %u - %u lives, %lu points", (unsigned)level, (unsigned)lives,
+                  (unsigned long)game_session_get_score());
+    }
+    else if (screen == SHELL_SCREEN_SCORE)
+    {
+        cli_print("  %lu points on level %u%s", (unsigned long)game_session_get_score(), (unsigned)level,
+                  (game_session_get_state() == GAME_STATE_WON) ? " - all levels cleared" : "");
+    }
+    else
+    {
+        /* Loading and the menu have nothing to add. */
+    }
+
+    g_reported_screen = screen;
     g_reported_level = level;
     g_reported_lives = lives;
-
-    switch (state)
-    {
-        case GAME_STATE_RUNNING:
-            cli_print("level %u - %u lives, %lu points", (unsigned)level, (unsigned)lives,
-                      (unsigned long)game_session_get_score());
-            break;
-
-        case GAME_STATE_OVER:
-            cli_print("game over on level %u with %lu points - centre key to play again", (unsigned)level,
-                      (unsigned long)game_session_get_score());
-            prv_record_score();
-            break;
-
-        case GAME_STATE_WON:
-            cli_print("all %u levels cleared with %lu points - centre key to play again",
-                      (unsigned)DIFFICULTY_FINAL_LEVEL, (unsigned long)game_session_get_score());
-            prv_record_score();
-            break;
-
-        default: break;
-    }
 }
 
 /* Normal operation: the game, with the console alongside it. Never returns — the way out
  * is `ott <name>` or `reset`, and both reboot the board. */
 static void prv_run_game(void)
 {
-    game_session_init();
-    game_session_start();
+    shell_init();
 
     for (;;)
     {
@@ -213,10 +205,9 @@ static void prv_run_game(void)
         sw_timer_process();
         prv_poll_input();
 
-        if (game_session_service())
-        {
-            prv_report_progress();
-        }
+        (void)shell_service();
+
+        prv_report_progress();
     }
 }
 
@@ -236,7 +227,10 @@ void app_main(void)
         cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL,
                                             "Show the three best scores; 'highscore reset' clears them"};
 
+        cli_binding_t start_binding = {"start", prv_start_command, NULL, "Press start: begins a run from the menu"};
+
         cli_register(&high_score_binding);
+        cli_register(&start_binding);
     }
 
     high_score_init();

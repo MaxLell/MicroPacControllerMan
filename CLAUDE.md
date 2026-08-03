@@ -74,6 +74,11 @@ silently working around a wart.
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
+- **The game sits inside a shell** (DEC-026): loading screen, menu with the three high
+  scores, the run, the score screen, back to the menu (FR-001/002/003/023). The title is set
+  in the tile ROM's own font — `PACMAN`, because the decoded font has no hyphen. `start` on
+  the console presses the start key, so the whole flow is walkable from `run_ott.py`
+  (VT-INT-011 is now automatic).
 - **The high scores are in flash** (DEC-025): three of them, behind a magic word, a version
   and a CRC, in one 8 KB page the **linker** reserves so the firmware cannot grow into it.
   `highscore` on the console prints them, `highscore reset` clears them, and `ott high_score`
