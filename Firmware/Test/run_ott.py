@@ -38,9 +38,17 @@ BANNER = "MicroPacControllerMan booted"
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
 AUTOMATIC = ["display_id"]
-MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button"]
+MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman"]
 
 INTERACTIVE = set(MANUAL)
+
+# A manual test gets a couple of minutes to be confirmed, which is plenty for "does the
+# panel show the right colours". `pacman` is played rather than looked at, and the things
+# worth confirming — a ghost leaving the house, a power pellet, a level turning over — take
+# minutes at the arcade's own pace. The scenario itself allows 600 s, so the harness has to
+# outlast it or it would report a timeout on a test that is still going.
+INTERACTIVE_TIMEOUT_S = 130.0
+LONG_TIMEOUT_S = {"pacman": 620.0}
 
 
 def detect_port() -> str:
@@ -157,7 +165,7 @@ def wait_until_idle(fd: int, quiet: float = 0.3, timeout: float = 3.0) -> None:
 def run_single(port: str, baud: str, test: str, timeout: float) -> int:
     interactive = test in INTERACTIVE
     if timeout is None:
-        timeout = 130.0 if interactive else 8.0
+        timeout = LONG_TIMEOUT_S.get(test, INTERACTIVE_TIMEOUT_S) if interactive else 8.0
 
     warn_if_port_is_busy(port)
     configure_tty(port, baud)
@@ -272,7 +280,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button); omit to run the suite")
+                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button/pacman); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--manual", action="store_true",
                     help="run every test that needs a human at the board, in sequence")

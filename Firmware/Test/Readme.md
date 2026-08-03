@@ -122,6 +122,14 @@ the USER button B1, and a safety cap returns the board to nominal mode regardles
 - `ott_animation` — five actors at a constant speed with the frame rate varying under
   them, then the rate handed to the joystick. Answers whether motion *looks* smooth,
   which no throughput figure can.
+- `ott_pacman` — the game itself, played at the board (VT-INT-022). Starts a run at once,
+  no menu and no start screen, and runs the same `game_session` frame the firmware and the
+  host application run — so what it exercises is the firmware rather than a lookalike. It
+  is the only scenario in which the rules, the panel, the stick and the frame budget are all
+  real at once; the cost of a frame is measured over 300 frames before the joystick is
+  handed over. Ten minutes to confirm, because a level takes a while to turn over — which is
+  also why this is the one scenario that keeps polling the console, so `reset` or another
+  `ott` gets you out without reaching for the board.
 
 **Adding a scenario:** create `scripts/ott_<name>.c`/`.h` with a setup and a run
 function, add one row to the table in `ott_scenarios.c`, and add the source to

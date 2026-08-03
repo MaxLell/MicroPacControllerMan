@@ -19,11 +19,14 @@
  * both places, which is the only reason developing the view on the host is worth
  * anything.
  *
- * The loop is shaped like the target's future super-loop rather than like an SDL game
- * loop: a `Services/sw_timer` re-armed from its own callback paces the frames, and the
- * game is advanced by a **fixed** slice. Fixed rather than measured on purpose — a run
- * then plays out identically whatever the host was doing at the time, which is what
- * makes a bug seen here reproducible.
+ * The frame is not this file's: `game_session` owns it, and the target's `app_main` and
+ * the `pacman` on-target test call the same one. That is what makes a bug found in this
+ * window a bug in the firmware rather than in a lookalike. What is left here is the
+ * window, the keyboard and the printing — SDL never sees the game and the game never
+ * sees SDL.
+ *
+ * The session advances the game by a **fixed** slice rather than a measured one, so a run
+ * plays out identically whatever the host was doing at the time.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -38,10 +41,9 @@
 #include "display_host.h"
 #include "framebuffer.h"
 #include "game.h"
-#include "game_view.h"
+#include "game_session.h"
 #include "msg.h"
 #include "playfield.h"
-#include "render.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
 
@@ -49,19 +51,15 @@
  * host_main - private
  * ========================================================================= */
 
-#define WINDOW_TITLE    "MicroPacControllerMan"
+#define WINDOW_TITLE "MicroPacControllerMan"
 
 /* One panel pixel per two window pixels: 240 x 320 is small on a desktop, and doubling
  * keeps the sprites' pixel grid honest instead of smoothing it away. */
-#define WINDOW_SCALE    (2)
+#define WINDOW_SCALE (2)
 
-/* 60 FPS, the rate NFR-002 asks for. The slice handed to the game is this same number,
- * so the simulation advances by exactly one frame per frame. */
-#define FRAME_PERIOD_MS (16U)
-
-#define RED_MASK_5      (0xF800U)
-#define GREEN_MASK_6    (0x07E0U)
-#define BLUE_MASK_5     (0x001FU)
+#define RED_MASK_5   (0xF800U)
+#define GREEN_MASK_6 (0x07E0U)
+#define BLUE_MASK_5  (0x001FU)
 
 typedef struct
 {
@@ -71,21 +69,9 @@ typedef struct
 } host_window_t;
 
 static host_window_t g_window;
-static game_t g_game;
-static game_view_t g_view;
-static sw_timer_t g_frame_timer;
-
 static bool g_is_running = true;
-static bool g_is_frame_due = false;
 static game_state_e g_reported_state = GAME_STATE_IDLE;
 static uint8_t g_reported_level = 0U;
-
-static void prv_on_frame_due(void)
-{
-    g_is_frame_due = true;
-
-    sw_timer_start(&g_frame_timer, FRAME_PERIOD_MS, prv_on_frame_due);
-}
 
 static bool prv_open_window(void)
 {
@@ -189,24 +175,24 @@ static void prv_handle_key(SDL_Keycode in_key)
     switch (in_key)
     {
         case SDLK_UP:
-        case SDLK_w: game_set_direction(&g_game, DIRECTION_NORTH); break;
+        case SDLK_w: game_session_set_direction(DIRECTION_NORTH); break;
 
         case SDLK_DOWN:
-        case SDLK_s: game_set_direction(&g_game, DIRECTION_SOUTH); break;
+        case SDLK_s: game_session_set_direction(DIRECTION_SOUTH); break;
 
         case SDLK_LEFT:
-        case SDLK_a: game_set_direction(&g_game, DIRECTION_WEST); break;
+        case SDLK_a: game_session_set_direction(DIRECTION_WEST); break;
 
         case SDLK_RIGHT:
-        case SDLK_d: game_set_direction(&g_game, DIRECTION_EAST); break;
+        case SDLK_d: game_session_set_direction(DIRECTION_EAST); break;
 
         case SDLK_SPACE:
         case SDLK_RETURN:
             /* The button of FR-003: starts a run, and starts the next one once this has
          * ended. Ignored mid-run, so a stray press cannot restart a good game. */
-            if (game_get_state(&g_game) != GAME_STATE_RUNNING)
+            if (game_session_get_state() != GAME_STATE_RUNNING)
             {
-                game_start(&g_game);
+                game_session_start();
             }
             break;
 
@@ -244,8 +230,8 @@ static void prv_poll_input(void)
  * hear over the bus; here it is the only way to see that a level really did change. */
 static void prv_report_progress(void)
 {
-    const game_state_e state = game_get_state(&g_game);
-    const uint8_t level = game_get_level(&g_game);
+    const game_state_e state = game_session_get_state();
+    const uint8_t level = game_session_get_level();
 
     if ((state == g_reported_state) && (level == g_reported_level))
     {
@@ -258,49 +244,21 @@ static void prv_report_progress(void)
     switch (state)
     {
         case GAME_STATE_RUNNING:
-            (void)printf("level %u — %u lives, %u points\n", level, game_get_lives(&g_game), game_get_score(&g_game));
+            (void)printf("level %u — %u lives, %u points\n", level, game_session_get_lives(), game_session_get_score());
             break;
 
         case GAME_STATE_OVER:
             (void)printf("game over on level %u with %u points. Space to play again.\n", level,
-                         game_get_score(&g_game));
+                         game_session_get_score());
             break;
 
         case GAME_STATE_WON:
             (void)printf("all %u levels cleared with %u points. Space to play again.\n",
-                         (unsigned)DIFFICULTY_FINAL_LEVEL, game_get_score(&g_game));
+                         (unsigned)DIFFICULTY_FINAL_LEVEL, game_session_get_score());
             break;
 
         default: break;
     }
-}
-
-/* One frame, through exactly the path the target will use: the game advances, the view
- * turns its state into pixels, and Render decides what to transfer. */
-static void prv_run_frame(void)
-{
-    msg_game_state_t state;
-    msg_display_list_t list;
-
-    game_tick(&g_game, FRAME_PERIOD_MS);
-
-    game_get_state_message(&g_game, &state);
-    game_view_set_state(&g_view, &state);
-
-    /* A level change hands the whole field over across several lists; an ordinary frame
-     * is one. Both are drained here so a frame is never left half-drawn. */
-    do
-    {
-        if (game_view_get_display_list(&g_view, &list))
-        {
-            render_draw(&list);
-        }
-    } while (game_view_is_field_pending(&g_view));
-
-    display_service();
-
-    prv_present_window();
-    prv_report_progress();
 }
 
 /* ==========================================================================
@@ -314,10 +272,6 @@ int main(int in_argument_count, char** in_arguments)
 
     systick_bsp_init();
     sw_timer_init();
-    render_init();
-
-    game_init(&g_game);
-    game_view_init(&g_view);
 
     if (!prv_open_window())
     {
@@ -328,19 +282,19 @@ int main(int in_argument_count, char** in_arguments)
 
     (void)printf("%s — arrows or WASD to move, space to start, escape to quit.\n", WINDOW_TITLE);
 
-    sw_timer_create(&g_frame_timer);
-    sw_timer_start(&g_frame_timer, FRAME_PERIOD_MS, prv_on_frame_due);
+    game_session_init();
 
     while (g_is_running)
     {
         sw_timer_process();
         prv_poll_input();
 
-        if (g_is_frame_due)
+        if (game_session_service())
         {
-            g_is_frame_due = false;
-
-            prv_run_frame();
+            /* The window shows what the driver was handed, so it is blitted after the
+             * frame rather than instead of it. */
+            prv_present_window();
+            prv_report_progress();
         }
         else
         {

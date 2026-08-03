@@ -89,6 +89,7 @@ if(PACMAN_HOST_BUILD)
         App/agent/agent.c
         App/difficulty/difficulty.c
         App/game/game.c
+        App/game_session/game_session.c
         App/game_view/game_view.c
         App/render/render.c
         App/ghost/ghost.c
@@ -115,6 +116,7 @@ if(PACMAN_HOST_BUILD)
         App/agent
         App/difficulty
         App/game
+        App/game_session
         App/game_view
         App/render
         App/ghost
@@ -181,6 +183,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/agent/agent.c
     App/difficulty/difficulty.c
     App/game/game.c
+    App/game_session/game_session.c
     App/game_view/game_view.c
     App/ghost/ghost.c
     App/ghost_path/ghost_path.c
@@ -218,6 +221,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/scripts/ott_display_test.c
     Test/Target/scripts/ott_joystick.c
     Test/Target/scripts/ott_joystick_dot.c
+    Test/Target/scripts/ott_pacman.c
     Test/Target/scripts/ott_user_button.c
     ThirdParty/EmbeddedCli/Cli.c
     ThirdParty/embedded_utils/custom_assert.c)
@@ -231,6 +235,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/agent
     App/difficulty
     App/game
+    App/game_session
     App/game_view
     App/ghost
     App/ghost_path

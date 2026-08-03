@@ -10,6 +10,7 @@
 #include "ott_display_test.h"
 #include "ott_joystick.h"
 #include "ott_joystick_dot.h"
+#include "ott_pacman.h"
 #include "ott_user_button.h"
 
 /* ==========================================================================
@@ -21,7 +22,8 @@
 static const ott_scenario_t g_scenarios[] = {
     {"animation", NULL, ott_animation_run},       {"display_id", NULL, ott_display_id_run},
     {"display_test", NULL, ott_display_test_run}, {"joystick", NULL, ott_joystick_run},
-    {"joystick_dot", NULL, ott_joystick_dot_run}, {"user_button", NULL, ott_user_button_run},
+    {"joystick_dot", NULL, ott_joystick_dot_run}, {"pacman", NULL, ott_pacman_run},
+    {"user_button", NULL, ott_user_button_run},
 };
 
 #define OTT_SCENARIO_COUNT (sizeof(g_scenarios) / sizeof(g_scenarios[0]))

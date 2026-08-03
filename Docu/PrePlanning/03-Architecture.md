@@ -187,6 +187,10 @@ flowchart TB
 
 The seam between 2 and 3 is the same one the rest of the firmware uses: everything above it is pure logic, host-tested without mocks; everything below it is a platform port with a target and a host implementation.
 
+**Game-Session — the one frame everybody runs.** Those three steps in that order, paced by a `Services/sw_timer`, are `game_session`. It exists because three callers need the identical frame — the target's `app_main`, the host application, and the `pacman` on-target test — and the frame has two traps that are not visible from outside: the pacing timer is one-shot and its callback has to re-arm it (forget it and exactly one frame runs, which shows a maze and then nothing), and a level change hands the whole field over across several display lists rather than one. A copy per caller would have to rediscover both, and the on-target test would then be exercising the copy instead of the firmware.
+
+What it deliberately does not own is **input and reporting**: the three callers read a joystick, a keyboard, and a joystick plus a confirm button, and say different things about what they see. The session takes a direction, answers questions about the run, and leaves the talking to whoever is running it.
+
 ## 3.7 On-Target Test (OTT) CLI Framework
 
 Each testable capability is exposed as its own command on the serial console: a **setup** step validates the command's arguments, and a **run** step performs the action and checks the result. On failure the reason is printed to the console, so **no debugger is needed to read the outcome** (FR-107), and an external Python harness can drive the automatable tests (NFR-104). The console CLI itself is provided by the vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) framework ([D-007](05-Risks-Assumptions-and-Dependencies.md#53-dependencies)).
