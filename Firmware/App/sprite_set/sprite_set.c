@@ -790,6 +790,441 @@ static const char* const g_maze_house_gate[] = {
     "22222222",
 };
 
+/* The font, and a blank the size of an actor.
+ *
+ * Also the arcade's, from the same tile ROM as the walls. Its glyph tiles sit at their own
+ * ASCII codes — '0' at 0x30, 'A' at 0x41 — which is why #sprite_set_get_glyph can be
+ * arithmetic rather than a table.
+ *
+ * The whole alphabet is here although the HUD spells only two words with it. Thirty-seven
+ * 8 x 8 tiles is under 4 kB of a 512 kB part, and the screens FR-001, FR-002 and FR-023
+ * still want are all text. */
+static const char* const g_glyph_space[] = {
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_0[] = {
+    "22211122",
+    "22122112",
+    "21122211",
+    "21122211",
+    "21122211",
+    "22112212",
+    "22211122",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_1[] = {
+    "22221122",
+    "22211122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22111111",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_2[] = {
+    "22111112",
+    "21122211",
+    "22222111",
+    "22211112",
+    "22111122",
+    "21112222",
+    "21111111",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_3[] = {
+    "22111111",
+    "22222112",
+    "22221122",
+    "22211112",
+    "22222211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_4[] = {
+    "22221112",
+    "22211112",
+    "22112112",
+    "21122112",
+    "21111111",
+    "22222112",
+    "22222112",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_5[] = {
+    "21111112",
+    "21122222",
+    "21111112",
+    "22222211",
+    "22222211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_6[] = {
+    "22211112",
+    "22112222",
+    "21122222",
+    "21111112",
+    "21122211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_7[] = {
+    "21111111",
+    "21122211",
+    "22222112",
+    "22221122",
+    "22211222",
+    "22211222",
+    "22211222",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_8[] = {
+    "22111122",
+    "21122212",
+    "21112212",
+    "22111122",
+    "21221111",
+    "21222211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_digit_9[] = {
+    "22111112",
+    "21122211",
+    "21122211",
+    "22111111",
+    "22222211",
+    "22222112",
+    "22111122",
+    "22222222",
+};
+
+static const char* const g_glyph_a[] = {
+    "22211122",
+    "22112112",
+    "21122211",
+    "21122211",
+    "21111111",
+    "21122211",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_b[] = {
+    "21111112",
+    "21122211",
+    "21122211",
+    "21111112",
+    "21122211",
+    "21122211",
+    "21111112",
+    "22222222",
+};
+
+static const char* const g_glyph_c[] = {
+    "22211112",
+    "22112211",
+    "21122222",
+    "21122222",
+    "21122222",
+    "22112211",
+    "22211112",
+    "22222222",
+};
+
+static const char* const g_glyph_d[] = {
+    "21111122",
+    "21122112",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122112",
+    "21111122",
+    "22222222",
+};
+
+static const char* const g_glyph_e[] = {
+    "22111111",
+    "22112222",
+    "22112222",
+    "22111112",
+    "22112222",
+    "22112222",
+    "22111111",
+    "22222222",
+};
+
+static const char* const g_glyph_f[] = {
+    "21111111",
+    "21122222",
+    "21122222",
+    "21111112",
+    "21122222",
+    "21122222",
+    "21122222",
+    "22222222",
+};
+
+static const char* const g_glyph_g[] = {
+    "22211111",
+    "22112222",
+    "21122222",
+    "21122111",
+    "21122211",
+    "22112211",
+    "22211111",
+    "22222222",
+};
+
+static const char* const g_glyph_h[] = {
+    "21122211",
+    "21122211",
+    "21122211",
+    "21111111",
+    "21122211",
+    "21122211",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_i[] = {
+    "22111111",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22111111",
+    "22222222",
+};
+
+static const char* const g_glyph_j[] = {
+    "22222211",
+    "22222211",
+    "22222211",
+    "22222211",
+    "22222211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_k[] = {
+    "21122211",
+    "21122112",
+    "21121122",
+    "21111222",
+    "21111122",
+    "21121112",
+    "21122111",
+    "22222222",
+};
+
+static const char* const g_glyph_l[] = {
+    "22112222",
+    "22112222",
+    "22112222",
+    "22112222",
+    "22112222",
+    "22112222",
+    "22111111",
+    "22222222",
+};
+
+static const char* const g_glyph_m[] = {
+    "21122211",
+    "21112111",
+    "21111111",
+    "21111111",
+    "21121211",
+    "21122211",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_n[] = {
+    "21122211",
+    "21112211",
+    "21111211",
+    "21111111",
+    "21121111",
+    "21122111",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_o[] = {
+    "22111112",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_p[] = {
+    "21111112",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21111112",
+    "21122222",
+    "21122222",
+    "22222222",
+};
+
+static const char* const g_glyph_q[] = {
+    "22111112",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21121111",
+    "21122112",
+    "22111121",
+    "22222222",
+};
+
+static const char* const g_glyph_r[] = {
+    "21111112",
+    "21122211",
+    "21122211",
+    "21122111",
+    "21111122",
+    "21121112",
+    "21122111",
+    "22222222",
+};
+
+static const char* const g_glyph_s[] = {
+    "22111122",
+    "21122112",
+    "21122222",
+    "22111112",
+    "22222211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_t[] = {
+    "22111111",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22222222",
+};
+
+static const char* const g_glyph_u[] = {
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122211",
+    "21122211",
+    "22111112",
+    "22222222",
+};
+
+static const char* const g_glyph_v[] = {
+    "21122211",
+    "21122211",
+    "21122211",
+    "21112111",
+    "22111112",
+    "22211122",
+    "22221222",
+    "22222222",
+};
+
+static const char* const g_glyph_w[] = {
+    "21122211",
+    "21122211",
+    "21121211",
+    "21111111",
+    "21111111",
+    "21112111",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_x[] = {
+    "21122211",
+    "21112111",
+    "22111112",
+    "22211122",
+    "22111112",
+    "21112111",
+    "21122211",
+    "22222222",
+};
+
+static const char* const g_glyph_y[] = {
+    "22112211",
+    "22112211",
+    "22112211",
+    "22211112",
+    "22221122",
+    "22221122",
+    "22221122",
+    "22222222",
+};
+
+static const char* const g_glyph_z[] = {
+    "21111111",
+    "22222111",
+    "22221112",
+    "22211122",
+    "22111222",
+    "21112222",
+    "21111111",
+    "22222222",
+};
+
+static const char* const g_actor_blank[] = {
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+    "2222222222222222",
+};
+
 /* Ours, not the arcade's: it draws its maze as thin double lines, and this project fills
  * the whole cell instead. A solid tile plus a palette is therefore both a wall and an
  * empty cell, which is what keeps a field cell to one display-list item. */
@@ -860,6 +1295,45 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_TILE] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_tile_solid},
     [SPRITE_SET_TILE_PELLET] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_tile_pellet},
     [SPRITE_SET_TILE_POWER_PELLET] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_tile_power_pellet},
+    [SPRITE_SET_ACTOR_BLANK] = {SPRITE_SET_ACTOR_SIZE, SPRITE_SET_ACTOR_SIZE, g_actor_blank},
+
+    [SPRITE_SET_GLYPH_SPACE] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_space},
+    [SPRITE_SET_GLYPH_DIGIT_0] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_0},
+    [SPRITE_SET_GLYPH_DIGIT_1] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_1},
+    [SPRITE_SET_GLYPH_DIGIT_2] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_2},
+    [SPRITE_SET_GLYPH_DIGIT_3] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_3},
+    [SPRITE_SET_GLYPH_DIGIT_4] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_4},
+    [SPRITE_SET_GLYPH_DIGIT_5] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_5},
+    [SPRITE_SET_GLYPH_DIGIT_6] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_6},
+    [SPRITE_SET_GLYPH_DIGIT_7] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_7},
+    [SPRITE_SET_GLYPH_DIGIT_8] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_8},
+    [SPRITE_SET_GLYPH_DIGIT_9] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_digit_9},
+    [SPRITE_SET_GLYPH_A] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_a},
+    [SPRITE_SET_GLYPH_B] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_b},
+    [SPRITE_SET_GLYPH_C] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_c},
+    [SPRITE_SET_GLYPH_D] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_d},
+    [SPRITE_SET_GLYPH_E] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_e},
+    [SPRITE_SET_GLYPH_F] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_f},
+    [SPRITE_SET_GLYPH_G] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_g},
+    [SPRITE_SET_GLYPH_H] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_h},
+    [SPRITE_SET_GLYPH_I] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_i},
+    [SPRITE_SET_GLYPH_J] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_j},
+    [SPRITE_SET_GLYPH_K] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_k},
+    [SPRITE_SET_GLYPH_L] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_l},
+    [SPRITE_SET_GLYPH_M] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_m},
+    [SPRITE_SET_GLYPH_N] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_n},
+    [SPRITE_SET_GLYPH_O] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_o},
+    [SPRITE_SET_GLYPH_P] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_p},
+    [SPRITE_SET_GLYPH_Q] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_q},
+    [SPRITE_SET_GLYPH_R] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_r},
+    [SPRITE_SET_GLYPH_S] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_s},
+    [SPRITE_SET_GLYPH_T] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_t},
+    [SPRITE_SET_GLYPH_U] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_u},
+    [SPRITE_SET_GLYPH_V] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_v},
+    [SPRITE_SET_GLYPH_W] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_w},
+    [SPRITE_SET_GLYPH_X] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_x},
+    [SPRITE_SET_GLYPH_Y] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_y},
+    [SPRITE_SET_GLYPH_Z] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_z},
 
     [SPRITE_SET_MAZE_CORNER_TOP_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_corner_top_left},
     [SPRITE_SET_MAZE_CORNER_TOP_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_corner_top_right},
@@ -930,6 +1404,10 @@ static const sprite_palette_t g_palettes[SPRITE_SET_PALETTE_COUNT] = {
      * rather than as another wall, which matters because it is the one wall a ghost may
      * cross. */
     [SPRITE_SET_PALETTE_DOOR] = {{0U, FRAMEBUFFER_RGB(255U, 184U, 222U), FRAMEBUFFER_COLOR_BLACK, 0U}},
+
+    /* Words, in the arcade's white on black. Like the field tiles, a glyph carries its own
+     * background so one item paints a whole cell. */
+    [SPRITE_SET_PALETTE_TEXT] = {{0U, FRAMEBUFFER_COLOR_WHITE, FRAMEBUFFER_COLOR_BLACK, 0U}},
     [SPRITE_SET_PALETTE_PELLET] = {{0U, FRAMEBUFFER_RGB(255U, 184U, 151U), FRAMEBUFFER_COLOR_BLACK, 0U}},
 };
 
@@ -1007,6 +1485,23 @@ bool sprite_set_get_maze_tile(char in_map_character, sprite_set_id_e* out_id)
     }
 
     return false;
+}
+
+sprite_set_id_e sprite_set_get_glyph(char in_character)
+{
+    if ((in_character >= '0') && (in_character <= '9'))
+    {
+        return (sprite_set_id_e)(SPRITE_SET_GLYPH_DIGIT_0 + (in_character - '0'));
+    }
+
+    if ((in_character >= 'A') && (in_character <= 'Z'))
+    {
+        return (sprite_set_id_e)(SPRITE_SET_GLYPH_A + (in_character - 'A'));
+    }
+
+    ASSERT(in_character == ' ');
+
+    return SPRITE_SET_GLYPH_SPACE;
 }
 
 bool sprite_set_is_maze_gate(sprite_set_id_e in_id)

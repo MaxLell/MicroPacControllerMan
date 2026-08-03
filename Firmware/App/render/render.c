@@ -146,9 +146,15 @@ void render_draw(const msg_display_list_t* in_list)
     {
         if (in_list->items[index].kind == (uint8_t)DISPLAY_ITEM_BACKGROUND)
         {
+            /* The sprite's own size, not the largest one there is. A field tile is 8 x 8
+             * and sending it as 16 x 16 quadruples the bytes — invisible in a frame that
+             * changes one pellet, and a third of a second of black screen on the 868 tiles
+             * of a level change. */
+            const sprite_t* const sprite = sprite_set_get((sprite_set_id_e)in_list->items[index].sprite);
+
             prv_draw_item(&in_list->items[index]);
-            prv_present_clipped(in_list->items[index].x, in_list->items[index].y, RENDER_SPRITE_MAX_SIZE,
-                                RENDER_SPRITE_MAX_SIZE);
+            prv_present_clipped(in_list->items[index].x, in_list->items[index].y, (int16_t)sprite->width,
+                                (int16_t)sprite->height);
         }
     }
 

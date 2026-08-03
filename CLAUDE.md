@@ -60,8 +60,11 @@ silently working around a wart.
   blue outlines and 244 pellets rather than filled blocks (DEC-018/019). Interpolation
   measures the step already taken rather than guessing the next one — which is what made
   corners stutter. The maze is written down twice on purpose, rules in `playfield` and
-  appearance in `game_view`, with a unit test holding the two together.
-  Still missing: the HUD (score, lives, level) and the target wiring.
+  appearance in `game_view`, with a unit test holding the two together. The **HUD** is in
+  (DEC-020): score, level and lives in the arcade's own font, sent slot by slot so only the
+  digit that moved travels. Still missing: **the target wiring** — and the first thing in
+  its way is that `render` and `Test/Target/ott_framebuffer.c` each own a 153.6 kB frame
+  buffer, which together do not fit in 256 kB.
 
 ## Build · flash · test (all from `Firmware/`)
 

@@ -64,13 +64,37 @@ static framebuffer_color_t prv_centre_of(int16_t in_x, int16_t in_y, int16_t in_
                                  (int16_t)(in_y + (in_size / 2)));
 }
 
+/* The last rectangle handed to the display port, and how many were handed over. What
+ * *reaches the panel* is the whole point of this module on real hardware — the frame
+ * buffer can be perfect while the transfer sends four times the bytes it needs to. */
+static int16_t g_sent_width;
+static int16_t g_sent_height;
+static uint8_t g_sent_count;
+
+static void prv_record_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
+                              int16_t in_height, int in_call_count)
+{
+    (void)in_framebuffer;
+    (void)in_x;
+    (void)in_y;
+    (void)in_call_count;
+
+    g_sent_width = in_width;
+    g_sent_height = in_height;
+    ++g_sent_count;
+}
+
 void setUp(void)
 {
     assert_probe_begin();
 
     display_init_Ignore();
     display_present_Ignore();
-    display_present_region_Ignore();
+    display_present_region_Stub(prv_record_region);
+
+    g_sent_width = 0;
+    g_sent_height = 0;
+    g_sent_count = 0U;
 
     render_init();
     prv_clear_list();
@@ -178,6 +202,35 @@ void test_fewer_actors_than_last_frame_still_erases_them_all(void)
     render_draw(&g_list);
 
     TEST_ASSERT_EQUAL_HEX16(FRAMEBUFFER_COLOR_BLACK, prv_centre_of(80, 140, ACTOR));
+}
+
+/* ==========================================================================
+ * what reaches the panel
+ * ========================================================================= */
+
+void test_a_field_tile_is_sent_as_a_tile_and_not_as_an_actor(void)
+{
+    /* The transfer is the expensive half of a frame — 2.08 ms for two small rectangles
+     * against 252 ms for a whole one — so sending an 8 x 8 tile inside a 16 x 16 rectangle
+     * costs four times what it should. Invisible on a frame that changes one pellet, and a
+     * third of a second of black screen on the 868 tiles of a level change. */
+    prv_add(DISPLAY_ITEM_BACKGROUND, SPRITE_SET_TILE, SPRITE_SET_PALETTE_WALL, 80, 80);
+    render_draw(&g_list);
+
+    TEST_ASSERT_EQUAL_UINT8(1U, g_sent_count);
+    TEST_ASSERT_EQUAL_INT16(TILE, g_sent_width);
+    TEST_ASSERT_EQUAL_INT16(TILE, g_sent_height);
+}
+
+void test_a_standing_actor_is_sent_as_one_actor_sized_rectangle(void)
+{
+    /* The counterpart: an actor really is 16 x 16, and while it is not moving the rectangle
+     * spanning where it was and where it is has to collapse onto it rather than grow. */
+    prv_add(DISPLAY_ITEM_ACTOR, SPRITE_SET_GHOST_EAST_A, SPRITE_SET_PALETTE_BLINKY, 40, 40);
+    render_draw(&g_list);
+
+    TEST_ASSERT_EQUAL_INT16(ACTOR, g_sent_width);
+    TEST_ASSERT_EQUAL_INT16(ACTOR, g_sent_height);
 }
 
 /* ==========================================================================
