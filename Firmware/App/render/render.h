@@ -45,7 +45,14 @@
  * render - public API
  * ========================================================================= */
 
-/*! \brief Bring the display up and blank the frame buffer. */
+/*! \brief Blank the frame buffer, forget what was drawn, and bring the display up the
+ *         first time.
+ *
+ * Call it whenever a screen or a run starts: it is the only way to say "everything on the
+ * panel is now stale". Bringing the display up happens once however often this is called,
+ * because a display controller is configured, not blanked — `display_init` asserts on a
+ * second call and this used to hand it one.
+ */
 void render_init(void);
 
 /*! \brief Draw a display list and transfer what changed.

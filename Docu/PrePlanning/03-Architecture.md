@@ -187,9 +187,15 @@ flowchart TB
 
 The seam between 2 and 3 is the same one the rest of the firmware uses: everything above it is pure logic, host-tested without mocks; everything below it is a platform port with a target and a host implementation.
 
+**Shell — the screens around the game.** The game is one state of a small machine rather than the thing the firmware does, and `App/shell` is that machine: loading, menu, game, score, menu again (FR-001, FR-002, FR-003, FR-023). That is the difference between a demo and a product — a run has to *end* somewhere, the score has to be shown and offered to the high-score table, and the board has to be ready for the next player without being reset.
+
+The two screens made of words are drawn as ordinary display lists through Render, not by writing into the frame buffer behind its back. They are **background** items, because nothing on them moves and asking Render to save the pixels under a screen of text would spend its whole budget restoring pixels that are about to be overwritten. A list holds eight items and a screen holds far more, so the drawing fills and flushes as it goes — safe here in a way it is not for a game frame, since a half-drawn menu is a screen mid-draw rather than a lie about where Pacman is.
+
+Everything it draws is the arcade's own material: the title is set in the tile ROM's font and the row beneath it is Pacman and the four ghosts. There is no logo bitmap in the ROM to decode, and drawing one would be the invention this project has been avoiding — which is also why the title reads `PACMAN` and not `PAC-MAN`, the font having no hyphen.
+
 **Game-Session — the one frame everybody runs.** Those three steps in that order, paced by a `Services/sw_timer`, are `game_session`. It exists because three callers need the identical frame — the target's `app_main`, the host application, and the `pacman` on-target test — and the frame has two traps that are not visible from outside: the pacing timer is one-shot and its callback has to re-arm it (forget it and exactly one frame runs, which shows a maze and then nothing), and a level change hands the whole field over across several display lists rather than one. A copy per caller would have to rediscover both, and the on-target test would then be exercising the copy instead of the firmware.
 
-What it deliberately does not own is **input and reporting**: the three callers read a joystick, a keyboard, and a joystick plus a confirm button, and say different things about what they see. The session takes a direction, answers questions about the run, and leaves the talking to whoever is running it.
+What neither the shell nor the session owns is **input and reporting**: the callers read a joystick, a keyboard, and a joystick plus a confirm button, and say different things about what they see. They take a direction and a start press, answer questions about the run, and leave the talking to whoever is running them.
 
 ## 3.7 On-Target Test (OTT) CLI Framework
 

@@ -46,6 +46,7 @@
 #include "high_score.h"
 #include "msg.h"
 #include "playfield.h"
+#include "shell.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
 
@@ -177,25 +178,22 @@ static void prv_handle_key(SDL_Keycode in_key)
     switch (in_key)
     {
         case SDLK_UP:
-        case SDLK_w: game_session_set_direction(DIRECTION_NORTH); break;
+        case SDLK_w: shell_set_direction(DIRECTION_NORTH); break;
 
         case SDLK_DOWN:
-        case SDLK_s: game_session_set_direction(DIRECTION_SOUTH); break;
+        case SDLK_s: shell_set_direction(DIRECTION_SOUTH); break;
 
         case SDLK_LEFT:
-        case SDLK_a: game_session_set_direction(DIRECTION_WEST); break;
+        case SDLK_a: shell_set_direction(DIRECTION_WEST); break;
 
         case SDLK_RIGHT:
-        case SDLK_d: game_session_set_direction(DIRECTION_EAST); break;
+        case SDLK_d: shell_set_direction(DIRECTION_EAST); break;
 
         case SDLK_SPACE:
         case SDLK_RETURN:
             /* The button of FR-003: starts a run, and starts the next one once this has
          * ended. Ignored mid-run, so a stray press cannot restart a good game. */
-            if (game_session_get_state() != GAME_STATE_RUNNING)
-            {
-                game_session_start();
-            }
+            shell_press_start();
             break;
 
         case SDLK_ESCAPE:
@@ -230,29 +228,6 @@ static void prv_poll_input(void)
 
 /* The console commentary. On the target this is what the System module and the NVM will
  * hear over the bus; here it is the only way to see that a level really did change. */
-/* Offer a finished run to the table, and say where it landed. The host writes a file next
- * to the executable, so the table survives between runs here too — which is the only way to
- * develop against it before the board has one. */
-static void prv_record_score(void)
-{
-    const uint32_t score = game_session_get_score();
-
-    if (!high_score_offer(score))
-    {
-        return;
-    }
-
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
-    {
-        if (high_score_get(place) == score)
-        {
-            (void)printf("a new high score — %u takes place %u\n", score, (unsigned)(place + 1U));
-
-            break;
-        }
-    }
-}
-
 static void prv_report_progress(void)
 {
     const game_state_e state = game_session_get_state();
@@ -275,13 +250,11 @@ static void prv_report_progress(void)
         case GAME_STATE_OVER:
             (void)printf("game over on level %u with %u points. Space to play again.\n", level,
                          game_session_get_score());
-            prv_record_score();
             break;
 
         case GAME_STATE_WON:
             (void)printf("all %u levels cleared with %u points. Space to play again.\n",
                          (unsigned)DIFFICULTY_FINAL_LEVEL, game_session_get_score());
-            prv_record_score();
             break;
 
         default: break;
@@ -311,14 +284,14 @@ int main(int in_argument_count, char** in_arguments)
 
     (void)printf("%s — arrows or WASD to move, space to start, escape to quit.\n", WINDOW_TITLE);
 
-    game_session_init();
+    shell_init();
 
     while (g_is_running)
     {
         sw_timer_process();
         prv_poll_input();
 
-        if (game_session_service())
+        if (shell_service())
         {
             /* The window shows what the driver was handed, so it is blitted after the
              * frame rather than instead of it. */

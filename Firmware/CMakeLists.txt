@@ -98,6 +98,7 @@ if(PACMAN_HOST_BUILD)
         App/pacman/pacman.c
         App/playfield/playfield.c
         App/score/score.c
+        App/shell/shell.c
         App/sprite_set/sprite_set.c
         Bsp/flash_bsp/flash_bsp_host.c
         Bsp/systick_bsp/systick_bsp_host.c
@@ -127,6 +128,7 @@ if(PACMAN_HOST_BUILD)
         App/pacman
         App/playfield
         App/score
+        App/shell
         App/sprite_set
         Bsp/flash_bsp
         Bsp/systick_bsp
@@ -196,6 +198,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/playfield/playfield.c
     App/render/render.c
     App/score/score.c
+    App/shell/shell.c
     App/sprite_set/sprite_set.c
     Services/sprite/sprite.c
     Bsp/dio_bsp/dio_bsp.c
@@ -251,6 +254,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/playfield
     App/render
     App/score
+    App/shell
     App/sprite_set
     Bsp/dio_bsp
     Bsp/flash_bsp

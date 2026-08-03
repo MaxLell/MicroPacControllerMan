@@ -227,6 +227,34 @@ def check_banner(port: str, baud: str, timeout: float = 5.0) -> bool:
         os.close(fd)
 
 
+# The loading screen is allowed 3 s (NFR-001); the margin is for the reset and the banner
+# that come before the shell says anything at all.
+BOOT_SEQUENCE_TIMEOUT_S = 6.0
+
+
+def check_boot_sequence(port: str, baud: str) -> bool:
+    """Reset, then watch the shell announce the two screens FR-001 and FR-002 ask for.
+
+    The screens themselves are pixels and only an operator can judge them; the *order* and
+    the *timing* are exactly what the firmware says over the serial line as it goes, which
+    is what makes this one automatic (VT-INT-011).
+    """
+    configure_tty(port, baud)
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+    try:
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
+
+        loading, _ = read_until(fd, ["loading screen"], BOOT_SEQUENCE_TIMEOUT_S)
+        menu, _ = read_until(fd, ["menu screen"], BOOT_SEQUENCE_TIMEOUT_S) if loading else (None, "")
+
+        ok = menu is not None
+        print(f"[VT-INT-011] boot sequence: {'loading then menu' if ok else 'NOT SEEN'}")
+        return ok
+    finally:
+        os.close(fd)
+
+
 def run_suite(port: str, baud: str) -> int:
     print("=== OTT automatic regression suite ===")
     results = []
@@ -237,6 +265,7 @@ def run_suite(port: str, baud: str) -> int:
         return 1
 
     results.append(("VT-INT-002 boot banner", check_banner(port, baud)))
+    results.append(("VT-INT-011 boot sequence", check_boot_sequence(port, baud)))
 
     for test in AUTOMATIC:
         rc = run_single(port, baud, test, timeout=8.0)

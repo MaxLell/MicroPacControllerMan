@@ -136,6 +136,15 @@ the USER button B1, and a safety cap returns the board to nominal mode regardles
   also why this is the one scenario that keeps polling the console, so `reset` or another
   `ott` gets you out without reaching for the board.
 
+The suite also checks two things that are not scenarios, because they are about the boot
+itself rather than about a peripheral: the board enumerates (VT-INT-001), it says its banner
+after a reset (VT-INT-002), and the shell announces `loading screen` then `menu screen`
+inside the NFR-001 budget (VT-INT-011). The screens are pixels and only an operator can
+judge those; the order and the timing are what the firmware says as it goes.
+
+`start` on the console presses the start key, which is what makes the one path a player
+actually walks — menu, run, score, menu again — drivable without a finger at the board.
+
 **Adding a scenario:** create `scripts/ott_<name>.c`/`.h` with a setup and a run
 function, add one row to the table in `ott_scenarios.c`, and add the source to
 `CMakeLists.txt`. Nothing in the OTT core or the CLI changes.
