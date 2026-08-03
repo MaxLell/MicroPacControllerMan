@@ -20,19 +20,23 @@
 #include "playfield.h"
 #include "unity.h"
 
-#define LEVEL_1          (1U)
 #define ONE_STEP         (1U)
 #define TWO_STEPS        (2U)
 
-/* Row 3 of the reference maze is an open corridor; row 2 above it alternates wall and
- * gap. These cells are picked from that: WALLED_NORTH has a wall above it, OPEN_NORTH a
- * gap, and both have open cells to the left and right. */
-#define OPEN_CELL_X      (4)
-#define OPEN_CELL_Y      (3)
-#define CORRIDOR_START_X (1)
-#define WALLED_NORTH_X   (2)
-#define OPEN_NORTH_X     (3)
+/* Row 5 of the maze runs open from column 1 to column 26; row 4 above it is mostly wall
+ * with gaps at columns 1, 6, 12, 15, 21 and 26. These cells are picked from that pair:
+ * WALLED_NORTH has a wall above it, OPEN_NORTH a gap, and OPEN_NORTH is two steps east of
+ * CORRIDOR_START — which is what lets a pending turn be seen to survive a cell that
+ * cannot honour it. */
+#define OPEN_CELL_X      (9)
+#define OPEN_CELL_Y      (5)
+#define CORRIDOR_START_X (4)
+#define WALLED_NORTH_X   (5)
+#define OPEN_NORTH_X     (6)
 #define CORRIDOR_LAST_X  (PLAYFIELD_WIDTH - 2)
+
+/* The maze's one tunnel row (§10.2). */
+#define TUNNEL_ROW       (14)
 
 static playfield_t g_playfield;
 static pacman_t g_pacman;
@@ -54,7 +58,7 @@ static void prv_place_pacman_in_the_open(void)
 void setUp(void)
 {
     assert_probe_begin();
-    playfield_load_level(&g_playfield, LEVEL_1);
+    playfield_load(&g_playfield);
     pacman_reset(&g_pacman, playfield_get_pacman_start(&g_playfield));
 }
 
@@ -255,7 +259,8 @@ void test_pacman_may_reverse_freely(void)
 
 void test_pacman_travels_through_a_tunnel(void)
 {
-    const cell_t mouth = prv_cell(0, PLAYFIELD_HEIGHT / 2);
+    /* The maze has one tunnel, on row 14, and both its mouths are open (§10.2). */
+    const cell_t mouth = prv_cell(0, TUNNEL_ROW);
 
     pacman_reset(&g_pacman, mouth);
     pacman_set_intent(&g_pacman, DIRECTION_WEST);
@@ -264,12 +269,12 @@ void test_pacman_travels_through_a_tunnel(void)
     TEST_ASSERT_TRUE(playfield_are_cells_equal(prv_cell(PLAYFIELD_WIDTH - 1, mouth.y), pacman_get_cell(&g_pacman)));
 }
 
-void test_pacman_escapes_his_start_pocket(void)
+void test_pacman_leaves_his_start_cell(void)
 {
-    /* §10.2 promises the start pocket is not a trap. In the reference maze it opens both
-     * north and south, the southern one being the vertical tunnel — so this also
-     * exercises FR-012 from a real position. */
-    pacman_set_intent(&g_pacman, DIRECTION_SOUTH);
+    /* §10.2 promises the start is not a trap. The arcade puts him on the bottom corridor
+     * facing along it, so east is the way out — this is that promise from a real
+     * position rather than from the maze table. */
+    pacman_set_intent(&g_pacman, DIRECTION_EAST);
 
     TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
 }

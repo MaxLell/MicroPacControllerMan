@@ -26,15 +26,11 @@
  * playfield - public types
  * ========================================================================= */
 
-#define PLAYFIELD_WIDTH          (11)
-#define PLAYFIELD_HEIGHT         (9)
-
-/*! \brief Levels, each with its own maze (FR-025). Levels are 1-based. */
-#define PLAYFIELD_LEVEL_COUNT    (5)
-#define PLAYFIELD_FIRST_LEVEL    (1)
+#define PLAYFIELD_WIDTH          (28)
+#define PLAYFIELD_HEIGHT         (31)
 
 /*! \brief Cells in the ghost pen (§10.2). */
-#define PLAYFIELD_PEN_CELL_COUNT (3)
+#define PLAYFIELD_PEN_CELL_COUNT (4)
 
 typedef struct
 {
@@ -51,10 +47,11 @@ typedef enum
 
 typedef struct
 {
-    uint8_t level; /*!< 1..#PLAYFIELD_LEVEL_COUNT         */
     bool walls[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
+    bool tunnels[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     playfield_pellet_e pellets[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     uint16_t remaining_pellet_count; /*!< Normal and power together         */
+    uint16_t total_pellet_count;     /*!< What a freshly loaded maze holds  */
     cell_t pacman_start;
     cell_t pen_cells[PLAYFIELD_PEN_CELL_COUNT];
 } playfield_t;
@@ -63,12 +60,15 @@ typedef struct
  * playfield - public API
  * ========================================================================= */
 
-/*! \brief Load a level's maze, with every pellet restored.
+/*! \brief Load the maze, with every pellet restored.
+ *
+ * There is one maze and every level plays it (§10.2). It used to take a level number and
+ * pick one of five layouts; the difficulty a level carries now lives in `difficulty`,
+ * which is where the arcade puts it too.
  *
  * \param[out]      inout_playfield: playfield to load into, must not be `NULL`
- * \param[in]       in_level: `1`..#PLAYFIELD_LEVEL_COUNT
  */
-void playfield_load_level(playfield_t* inout_playfield, uint8_t in_level);
+void playfield_load(playfield_t* inout_playfield);
 
 /*! \brief Bring an out-of-range cell back inside the grid, wrapping each axis.
  *
@@ -92,6 +92,20 @@ cell_t playfield_wrap_cell(cell_t in_cell);
  */
 bool playfield_is_walkable(const playfield_t* in_playfield, cell_t in_cell);
 
+/*! \brief Whether a cell is inside a tunnel.
+ *
+ * The tunnel is the stretch outside the maze body that the two edge mouths wrap onto. It
+ * is marked in the map rather than derived, because "the cells of the row with the
+ * tunnel" would also catch the corridor that merely leads to it — and the difference
+ * matters: a ghost crawls through a tunnel at half its normal pace (§10.9), which is the
+ * one place Pacman can reliably shake one off.
+ *
+ * \param[in]       in_playfield: loaded playfield, must not be `NULL`
+ * \param[in]       in_cell: cell to test, may be outside the grid
+ * \return          `true` when the cell is tunnel
+ */
+bool playfield_is_tunnel(const playfield_t* in_playfield, cell_t in_cell);
+
 /*! \brief What is left to eat on a cell.
  *
  * \param[in]       in_playfield: loaded playfield, must not be `NULL`
@@ -111,6 +125,14 @@ playfield_pellet_e playfield_eat_pellet(playfield_t* inout_playfield, cell_t in_
 
 /*! \brief Pellets, normal and power together, still in the maze. */
 uint16_t playfield_get_remaining_pellet_count(const playfield_t* in_playfield);
+
+/*! \brief Pellets a freshly loaded maze holds — what "remaining" counts down from.
+ *
+ * Cruise Elroy (§10.9) triggers on how many are left, and the arcade's thresholds are
+ * absolute counts against its own 244. Exposing the total lets that comparison be stated
+ * against the maze actually loaded instead of a number baked into the rules.
+ */
+uint16_t playfield_get_total_pellet_count(const playfield_t* in_playfield);
 
 /*! \brief Whether the maze has been cleared (FR-021). */
 bool playfield_is_cleared(const playfield_t* in_playfield);

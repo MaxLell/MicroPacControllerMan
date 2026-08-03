@@ -30,6 +30,9 @@ which is what lets the whole of it be unit-tested on the host.
 | `ghost/` | The four personalities and their targets (§10.4), scatter/chase/frightened. |
 | `score/` | Points and the ghost-eaten chain. The one Active Object here: it reacts to events on the game's internal bus (FR-110) rather than being asked. |
 | `game/` | The orchestrator: the tick, collisions, lives, levels, and the state it hands to the view. |
+| `game_view/` | Cells become pixels: the tile size, where the maze sits, interpolation between two cells, and which drawing and palette each actor gets. Owns the screen layout, so every layout decision is reachable by a unit test. |
+| `render/` | The frame buffer, and the only module that decides **what to transfer**. Erases by save-under — 4 kB, against the 300 kB a second frame buffer would need. Knows nothing about the maze or the layout. |
+| `host_main.c` | The SDL application (CON-103 / FR-104): a window, the keyboard standing in for the joystick, and the same game/view/render path the target runs. The only file allowed to talk to SDL. |
 | `sprite_set/` | The drawings and their palettes. *This game's* art, which is why it is here and not in `Services/sprite` — that module knows how to draw any sprite, this one is the one set we have. Not inside the render port either: SDL on the host must draw the same figures as the panel. |
 
 `game` is also the bridge between the two brokers (FR-110): game-internal events —

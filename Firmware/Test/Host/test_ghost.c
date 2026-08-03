@@ -30,9 +30,14 @@
 /* Pacman parked mid-maze facing east, with Blinky somewhere behind him — the arrangement
  * §10.4's formulas are written about. */
 #define PACMAN_X           (5)
-#define PACMAN_Y           (3)
+#define PACMAN_Y           (5)
 #define BLINKY_X           (2)
-#define BLINKY_Y           (3)
+#define BLINKY_Y           (5)
+
+/* A cell on the maze's open row 5 whose only neighbours are east and west, so "it did not
+ * turn around" is a statement about the rule and not about which of three ways it picked. */
+#define CORRIDOR_X         (3)
+#define CORRIDOR_Y         (5)
 
 #define PINKY_LOOK_AHEAD   (2)
 #define INKY_LOOK_AHEAD    (1)
@@ -70,7 +75,7 @@ static cell_t prv_chase_target(ghost_personality_e in_personality, cell_t in_gho
 void setUp(void)
 {
     assert_probe_begin();
-    playfield_load_level(&g_playfield, LEVEL_1);
+    playfield_load(&g_playfield);
     ghost_reset(&g_ghost, GHOST_BLINKY, playfield_get_pen_cell(&g_playfield, 0U));
 }
 
@@ -236,7 +241,7 @@ void test_a_ghost_does_not_turn_around_of_its_own_accord(void)
 {
     /* Walk it one step so it has a facing, then put the target behind it: it must carry on
      * rather than double back. */
-    const cell_t start = prv_cell(3, 3);
+    const cell_t start = prv_cell(CORRIDOR_X, CORRIDOR_Y);
     direction_e facing;
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
@@ -253,7 +258,7 @@ void test_a_ghost_does_not_turn_around_of_its_own_accord(void)
 
 void test_a_mode_change_earns_exactly_one_reversal(void)
 {
-    const cell_t start = prv_cell(3, 3);
+    const cell_t start = prv_cell(CORRIDOR_X, CORRIDOR_Y);
     direction_e facing;
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);
@@ -274,7 +279,7 @@ void test_setting_the_same_mode_again_earns_nothing(void)
 {
     /* The orchestrator drives the mode every tick, so a no-op change must not hand out a
      * reversal — otherwise the ghosts jitter on the spot. */
-    const cell_t start = prv_cell(3, 3);
+    const cell_t start = prv_cell(CORRIDOR_X, CORRIDOR_Y);
     direction_e facing;
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start);

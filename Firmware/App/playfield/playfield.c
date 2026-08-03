@@ -18,87 +18,76 @@
 #define MAP_POWER_PELLET     'o'
 #define MAP_PACMAN_START     'P'
 #define MAP_PEN              'G'
+#define MAP_TUNNEL           'T'
 #define MAP_OPEN             ' '
 
 #define SCATTER_CORNER_COUNT (4U)
 
-/* The five mazes (FR-025). Level 1 is the reference layout from §10.2; levels 2-5 are
- * authored here, to the constraints that section sets out: left-right symmetric, fully
- * connected, a central pen open above and below, and at least one tunnel. The
- * connectivity and symmetry are checked mechanically by the unit tests rather than by
- * eye, because a single mistyped wall can seal off a region and would otherwise only
- * turn up as an unreachable pellet mid-game.
+/* The maze — **28 x 31 cells, as FR-022 has always said**, in the arcade's proportions.
  *
- * Difficulty rises as §10.9 asks: more dead ends, longer committed corridors, fewer
- * safe corners, and fewer power pellets at the top levels. Ghost speed and the
- * frightened window are per level too, but those live in the game rules, not here.
+ * It used to be an 11 x 9 reduction, and that was right at the time: 28 columns of 8 px
+ * is 224, and the panel this project started on was 128 px wide. That panel is gone, and
+ * a 240 x 320 one holds the arcade layout at its native 8 px per cell with room to spare.
+ * The reduction outlived its reason by one hardware change.
+ *
+ * **One maze, every level** (FR-025 as re-baselined). The arcade never changed its maze
+ * either; difficulty comes from the ghosts getting faster, Cruise Elroy waking up and the
+ * frightened window shrinking (§10.9), which is where it belongs — those live in
+ * `difficulty` and the game rules, not here.
+ *
+ * It is **the arcade's layout, not a likeness of it**, and it did not start that way: it
+ * was hand-drawn to the right proportions first, and 94 of its 868 cells were wrong. What
+ * settled it was needing the arcade's own wall tiles to draw with (`game_view`), because a
+ * tile map only fits the maze it was drawn for. Both now come from the same source, so the
+ * picture and the rules cannot disagree about where a wall is.
+ *
+ * That also makes the pellet count **exactly the arcade's 244**, which matters: §10.9's
+ * Cruise Elroy thresholds are absolute counts against that number. They used to transfer
+ * on the strength of a coincidence — the hand-drawn maze happened to hold 243.
+ * #playfield_get_total_pellet_count and a unit test keep it that way.
+ *
+ * Its properties are checked mechanically by the unit tests rather than by eye:
+ * left-right symmetric, fully connected *through the tunnel*, a central pen with one
+ * cell per ghost. A single mistyped wall can seal off a region, and that would otherwise
+ * only turn up as an unreachable pellet halfway through a game.
  *
  * The formatter is turned off across the table on purpose: one row per line *is* the
  * maze. Reflowed to fill 120 columns the layout stops being readable, and a mistyped
  * wall — the one mistake this table actually suffers from — becomes invisible. */
 /* clang-format off */
-static const char* const k_mazes[PLAYFIELD_LEVEL_COUNT][PLAYFIELD_HEIGHT] = {
-    /* Level 1 — the reference maze of §10.2. Open and forgiving. */
-    {"#####.#####",
-     "#o..#.#..o#",
-     "#.#.#.#.#.#",
-     "#.........#",
-     "...#GGG#...",
-     "#.........#",
-     "#.#.#.#.#.#",
-     "#o..#P#..o#",
-     "#####.#####"},
-
-    /* Level 2 — the long open rows are broken up, adding short dead ends. */
-    {"#####.#####",
-     "#o.......o#",
-     "#.##.#.##.#",
-     "#..#...#..#",
-     "...#GGG#...",
-     "#..#...#..#",
-     "#.##.#.##.#",
-     "#o..#P#..o#",
-     "#####.#####"},
-
-    /* Level 3 — committed vertical corridors; the pen now opens straight onto Pacman's
-     * column, so ghosts can come down it at him. */
-    {"#####.#####",
-     "#o..#.#..o#",
-     "#.#.....#.#",
-     "#.#.#.#.#.#",
-     "...#GGG#...",
-     "#.#.#.#.#.#",
-     "#.#.....#.#",
-     "#o..#P#..o#",
-     "#####.#####"},
-
-    /* Level 4 — a comb of narrow columns, cross-linked on only two rows, and just two
-     * power pellets (§10.9 allows fewer as the levels get harder). Those two crossing
-     * rows are load-bearing: without them columns 3 and 7 are wall on every row and the
-     * maze falls into three vertical bands with Pacman and the pen sealed in the middle
-     * one. The connectivity test caught exactly that. */
-    {"#####.#####",
-     "#o.#...#.o#",
-     "#....#....#",
-     "##.#.#.#.##",
-     "...#GGG#...",
-     "##.#.#.#.##",
-     "#....#....#",
-     "#..#.P.#..#",
-     "#####.#####"},
-
-    /* Level 5 — a ring around a sealed-looking core reachable only through the middle
-     * column, so there is almost nowhere to break away sideways. Two power pellets, and
-     * at this level the frightened window is zero anyway, so they are only points. */
-    {"#####.#####",
-     "#.........#",
-     "#.###.###.#",
-     "#.#.....#.#",
-     "...#GGG#...",
-     "#.#.....#.#",
-     "#.###.###.#",
-     "#o..#P#..o#",
-     "#####.#####"}};
+static const char* const g_maze[PLAYFIELD_HEIGHT] = {
+    "############################",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#o####.#####.##.#####.####o#",
+    "#.####.#####.##.#####.####.#",
+    "#..........................#",
+    "#.####.##.########.##.####.#",
+    "#.####.##.########.##.####.#",
+    "#......##....##....##......#",
+    "######.##### ## #####.######",
+    "######.##### ## #####.######",
+    "######.##          ##.######",
+    "######.## ###  ### ##.######",
+    "######.## #      # ##.######",
+    "TTTTTT.   # GGGG #   .TTTTTT",
+    "######.## #      # ##.######",
+    "######.## ######## ##.######",
+    "######.##          ##.######",
+    "######.## ######## ##.######",
+    "######.## ######## ##.######",
+    "#............##............#",
+    "#.####.#####.##.#####.####.#",
+    "#.####.#####.##.#####.####.#",
+    "#o..##.......P .......##..o#",
+    "###.##.##.########.##.##.###",
+    "###.##.##.########.##.##.###",
+    "#......##....##....##......#",
+    "#.##########.##.##########.#",
+    "#.##########.##.##########.#",
+    "#..........................#",
+    "############################",
+};
 /* clang-format on */
 
 /* Positive modulo, so a coordinate one step off the low edge lands on the high one. */
@@ -118,22 +107,19 @@ static int16_t prv_wrap_coordinate(int16_t in_value, int16_t in_size)
  * playfield - public
  * ========================================================================= */
 
-void playfield_load_level(playfield_t* inout_playfield, uint8_t in_level)
+void playfield_load(playfield_t* inout_playfield)
 {
     uint8_t pen_index = 0U;
 
     ASSERT(inout_playfield != NULL);
-    ASSERT(in_level >= PLAYFIELD_FIRST_LEVEL);
-    ASSERT(in_level <= PLAYFIELD_LEVEL_COUNT);
 
-    inout_playfield->level = in_level;
     inout_playfield->remaining_pellet_count = 0U;
     inout_playfield->pacman_start.x = 0;
     inout_playfield->pacman_start.y = 0;
 
     for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {
-        const char* const row = k_mazes[in_level - PLAYFIELD_FIRST_LEVEL][y];
+        const char* const row = g_maze[y];
 
         for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
         {
@@ -141,6 +127,7 @@ void playfield_load_level(playfield_t* inout_playfield, uint8_t in_level)
             const cell_t cell = {x, y};
 
             inout_playfield->walls[y][x] = (tile == MAP_WALL);
+            inout_playfield->tunnels[y][x] = (tile == MAP_TUNNEL);
             inout_playfield->pellets[y][x] = PLAYFIELD_PELLET_NONE;
 
             if (tile == MAP_PELLET)
@@ -174,6 +161,8 @@ void playfield_load_level(playfield_t* inout_playfield, uint8_t in_level)
      * condition. */
     ASSERT(pen_index == PLAYFIELD_PEN_CELL_COUNT);
     ASSERT(inout_playfield->remaining_pellet_count > 0U);
+
+    inout_playfield->total_pellet_count = inout_playfield->remaining_pellet_count;
 }
 
 cell_t playfield_wrap_cell(cell_t in_cell)
@@ -193,6 +182,15 @@ bool playfield_is_walkable(const playfield_t* in_playfield, cell_t in_cell)
     ASSERT(in_playfield != NULL);
 
     return !in_playfield->walls[cell.y][cell.x];
+}
+
+bool playfield_is_tunnel(const playfield_t* in_playfield, cell_t in_cell)
+{
+    const cell_t cell = playfield_wrap_cell(in_cell);
+
+    ASSERT(in_playfield != NULL);
+
+    return in_playfield->tunnels[cell.y][cell.x];
 }
 
 playfield_pellet_e playfield_get_pellet(const playfield_t* in_playfield, cell_t in_cell)
@@ -231,6 +229,13 @@ uint16_t playfield_get_remaining_pellet_count(const playfield_t* in_playfield)
     ASSERT(in_playfield != NULL);
 
     return in_playfield->remaining_pellet_count;
+}
+
+uint16_t playfield_get_total_pellet_count(const playfield_t* in_playfield)
+{
+    ASSERT(in_playfield != NULL);
+
+    return in_playfield->total_pellet_count;
 }
 
 bool playfield_is_cleared(const playfield_t* in_playfield)

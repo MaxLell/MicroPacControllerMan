@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "assert_probe.h"
@@ -143,52 +144,131 @@ void test_every_sprite_in_the_set_has_pixels(void)
     }
 }
 
+/* How many pixels of a drawing are not transparent. */
+static uint16_t prv_count_solid_pixels(sprite_set_id_e in_id)
+{
+    const sprite_t* const sprite = sprite_set_get(in_id);
+    uint16_t count = 0U;
+
+    for (uint8_t row = 0U; row < sprite->height; ++row)
+    {
+        for (uint8_t column = 0U; column < sprite->width; ++column)
+        {
+            count += (sprite->rows[row][column] != SPRITE_CHAR_TRANSPARENT) ? 1U : 0U;
+        }
+    }
+
+    return count;
+}
+
 void test_each_ghost_direction_has_its_own_drawing(void)
 {
-    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_NORTH, sprite_set_get_ghost_sprite(DIRECTION_NORTH));
-    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_SOUTH, sprite_set_get_ghost_sprite(DIRECTION_SOUTH));
-    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_WEST, sprite_set_get_ghost_sprite(DIRECTION_WEST));
-    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST, sprite_set_get_ghost_sprite(DIRECTION_EAST));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_NORTH_A, sprite_set_get_ghost_sprite(DIRECTION_NORTH, 0U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_SOUTH_A, sprite_set_get_ghost_sprite(DIRECTION_SOUTH, 0U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_WEST_A, sprite_set_get_ghost_sprite(DIRECTION_WEST, 0U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST_A, sprite_set_get_ghost_sprite(DIRECTION_EAST, 0U));
 }
 
 void test_a_ghost_in_the_pen_still_looks_somewhere(void)
 {
-    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST, sprite_set_get_ghost_sprite(DIRECTION_NONE));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST_A, sprite_set_get_ghost_sprite(DIRECTION_NONE, 0U));
 }
 
-void test_pacman_chews_in_the_middle_of_a_step(void)
+void test_a_ghosts_skirt_waves_across_a_step(void)
 {
+    /* Two frames per cell, and they have to be different drawings — one frame and a ghost
+     * reads as a sticker being slid across the maze. */
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST_A, sprite_set_get_ghost_sprite(DIRECTION_EAST, 0U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_EAST_B, sprite_set_get_ghost_sprite(DIRECTION_EAST, 255U));
+
+    TEST_ASSERT_NOT_EQUAL_UINT16(prv_count_solid_pixels(SPRITE_SET_GHOST_EAST_A),
+                                 prv_count_solid_pixels(SPRITE_SET_GHOST_EAST_B));
+}
+
+void test_a_frightened_ghost_waves_too_and_has_no_direction(void)
+{
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_FRIGHTENED_A, sprite_set_get_frightened_sprite(0U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_GHOST_FRIGHTENED_B, sprite_set_get_frightened_sprite(255U));
+}
+
+void test_pacman_chews_shut_half_wide_half_across_a_step(void)
+{
+    /* The arcade's own three-frame cycle, clocked by the step. Half on the way open and
+     * half again on the way shut — skip either and the chew becomes a blink. */
     TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_CLOSED, sprite_set_get_pacman_sprite(DIRECTION_EAST, 0U));
-    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_OPEN_EAST, sprite_set_get_pacman_sprite(DIRECTION_EAST, 128U));
-    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_CLOSED, sprite_set_get_pacman_sprite(DIRECTION_EAST, 255U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_HALF_EAST, sprite_set_get_pacman_sprite(DIRECTION_EAST, 64U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_WIDE_EAST, sprite_set_get_pacman_sprite(DIRECTION_EAST, 128U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_HALF_EAST, sprite_set_get_pacman_sprite(DIRECTION_EAST, 192U));
 }
 
 void test_pacmans_mouth_faces_the_way_he_moves(void)
 {
-    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_OPEN_NORTH, sprite_set_get_pacman_sprite(DIRECTION_NORTH, 128U));
-    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_OPEN_SOUTH, sprite_set_get_pacman_sprite(DIRECTION_SOUTH, 128U));
-    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_OPEN_WEST, sprite_set_get_pacman_sprite(DIRECTION_WEST, 128U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_WIDE_NORTH, sprite_set_get_pacman_sprite(DIRECTION_NORTH, 128U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_WIDE_SOUTH, sprite_set_get_pacman_sprite(DIRECTION_SOUTH, 128U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_WIDE_WEST, sprite_set_get_pacman_sprite(DIRECTION_WEST, 128U));
+    TEST_ASSERT_EQUAL(SPRITE_SET_PACMAN_WIDE_EAST, sprite_set_get_pacman_sprite(DIRECTION_EAST, 128U));
 }
 
-void test_the_open_mouth_actually_removes_pixels(void)
+void test_the_mouth_takes_a_bigger_bite_each_frame(void)
 {
-    const sprite_t* const closed = sprite_set_get(SPRITE_SET_PACMAN_CLOSED);
-    const sprite_t* const open = sprite_set_get(SPRITE_SET_PACMAN_OPEN_EAST);
-    uint16_t closed_count = 0U;
-    uint16_t open_count = 0U;
+    /* Otherwise the animation is three identical discs, and nobody notices until the
+     * panel is in front of them. */
+    const uint16_t closed = prv_count_solid_pixels(SPRITE_SET_PACMAN_CLOSED);
+    const uint16_t half = prv_count_solid_pixels(SPRITE_SET_PACMAN_HALF_EAST);
+    const uint16_t wide = prv_count_solid_pixels(SPRITE_SET_PACMAN_WIDE_EAST);
 
-    for (uint8_t row = 0U; row < closed->height; ++row)
+    TEST_ASSERT_GREATER_THAN_UINT16(half, closed);
+    TEST_ASSERT_GREATER_THAN_UINT16(wide, half);
+}
+
+void test_the_mirrored_pacman_frames_really_are_mirrors(void)
+{
+    /* The cabinet has no west- or north-facing Pacman: it flips the east and south ones in
+     * hardware, and those two below are that flip folded into the data. A mirror pasted in
+     * by hand is the one mistake that a table cannot show and a panel shows instantly, so
+     * it is checked rather than trusted.
+     *
+     * The flip is about the sprite's own centre, not the 16 px box: the figure sits a
+     * pixel left of and above centre, which the cabinet corrects with a position offset
+     * when it flips. Here the correction is in the data, so the mirror is off by one. */
+    static const struct
     {
-        for (uint8_t column = 0U; column < closed->width; ++column)
+        sprite_set_id_e original;
+        sprite_set_id_e mirrored;
+        bool is_horizontal;
+    } cases[] = {
+        {SPRITE_SET_PACMAN_WIDE_EAST, SPRITE_SET_PACMAN_WIDE_WEST, true},
+        {SPRITE_SET_PACMAN_HALF_EAST, SPRITE_SET_PACMAN_HALF_WEST, true},
+        {SPRITE_SET_PACMAN_WIDE_SOUTH, SPRITE_SET_PACMAN_WIDE_NORTH, false},
+        {SPRITE_SET_PACMAN_HALF_SOUTH, SPRITE_SET_PACMAN_HALF_NORTH, false},
+    };
+
+    for (uint8_t index = 0U; index < (sizeof(cases) / sizeof(cases[0])); ++index)
+    {
+        const sprite_t* const original = sprite_set_get(cases[index].original);
+        const sprite_t* const mirrored = sprite_set_get(cases[index].mirrored);
+        const uint8_t last = (uint8_t)(original->width - 1U);
+
+        for (uint8_t row = 0U; row < original->height; ++row)
         {
-            closed_count += (closed->rows[row][column] != SPRITE_CHAR_TRANSPARENT) ? 1U : 0U;
-            open_count += (open->rows[row][column] != SPRITE_CHAR_TRANSPARENT) ? 1U : 0U;
+            for (uint8_t column = 0U; column < original->width; ++column)
+            {
+                const uint8_t mirror_row = cases[index].is_horizontal ? row : (uint8_t)(last - row - 1U);
+                const uint8_t mirror_column = cases[index].is_horizontal ? (uint8_t)(last - column - 1U) : column;
+                char message[80];
+
+                if ((mirror_row >= original->height) || (mirror_column >= original->width))
+                {
+                    continue; /* the pixel the offset pushed off the edge */
+                }
+
+                (void)snprintf(message, sizeof(message), "sprite %u differs from its mirror at %u,%u",
+                               (unsigned)cases[index].mirrored, column, row);
+                TEST_ASSERT_EQUAL_CHAR_MESSAGE(original->rows[row][column], mirrored->rows[mirror_row][mirror_column],
+                                               message);
+            }
         }
     }
-
-    /* Otherwise the animation is two identical discs and nobody notices until the panel
-     * is in front of them. */
-    TEST_ASSERT_GREATER_THAN_UINT16(open_count, closed_count);
 }
 
 void test_the_four_ghosts_differ_only_in_colour(void)

@@ -7,6 +7,7 @@
 
 #include "agent.h"
 #include "custom_assert.h"
+#include "difficulty.h"
 #include "ghost.h"
 #include "msg.h"
 #include "msg_broker.h"
@@ -18,42 +19,10 @@
  * game - private
  * ========================================================================= */
 
-/*! \brief Per-level difficulty, transcribed from §10.9.
- *
- * The scatter/chase plan is expressed as a repeat count rather than a list, which covers
- * every row of that table: `scatter_repeat_count` alternations of scatter-then-chase, then
- * chase for good. Level 5 has a count of zero, which is exactly "chase only". */
-typedef struct
-{
-    uint32_t ghost_move_period_ms;
-    uint32_t frightened_duration_ms;
-    uint32_t scatter_duration_ms;
-    uint32_t chase_duration_ms;
-    uint8_t scatter_repeat_count;
-} game_level_config_t;
-
-static const game_level_config_t k_level_configs[PLAYFIELD_LEVEL_COUNT] = {
-    {200U, 6000U, 5000U, 20000U, 2U}, /* level 1 — slower than Pacman        */
-    {170U, 5000U, 4000U, 20000U, 2U},
-    {150U, 4000U, 3000U, 20000U, 1U}, /* level 3 — matches Pacman's speed    */
-    {130U, 2000U, 2000U, 20000U, 1U},
-    {110U, 0U, 0U, 20000U, 0U}}; /* level 5 — faster, no frightened     */
-
-/* §10.5: a frightened ghost moves at half its current speed. */
-#define FRIGHTENED_SPEED_DIVISOR (2U)
-
 /* A whole step in \ref cell_progress_t units, and the largest value that still means
  * "not yet arrived" — 256 would be the next cell, which is the model's job to say. */
-#define PROGRESS_FULL_STEP       (256U)
-#define PROGRESS_MAX             (255U)
-
-static const game_level_config_t* prv_get_config(const game_t* const in_game)
-{
-    ASSERT(in_game->level >= PLAYFIELD_FIRST_LEVEL);
-    ASSERT(in_game->level <= PLAYFIELD_LEVEL_COUNT);
-
-    return &k_level_configs[in_game->level - PLAYFIELD_FIRST_LEVEL];
-}
+#define PROGRESS_FULL_STEP (256U)
+#define PROGRESS_MAX       (255U)
 
 static void prv_publish(game_t* const inout_game, msg_id_e in_topic, const void* const in_payload,
                         uint16_t in_payload_size)
@@ -111,37 +80,42 @@ static void prv_place_entities(game_t* const inout_game)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        /* Three pen cells for four ghosts, so they share — they leave immediately anyway. */
         const cell_t pen_cell =
             playfield_get_pen_cell(&inout_game->playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT));
 
         ghost_reset(&inout_game->ghosts[index], (ghost_personality_e)index, pen_cell);
+        inout_game->ghost_move_elapsed_ms[index] = 0U;
+        inout_game->did_ghost_move[index] = false;
     }
 
     inout_game->pacman_move_elapsed_ms = 0U;
-    inout_game->ghost_move_elapsed_ms = 0U;
+    inout_game->did_pacman_eat_last_step = false;
+    inout_game->did_pacman_move = false;
     inout_game->frightened_remaining_ms = 0U;
     inout_game->phase_index = 0U;
-    inout_game->phase_remaining_ms = prv_get_config(inout_game)->scatter_duration_ms;
+    inout_game->phase_remaining_ms = inout_game->difficulty.phase_durations_ms[0];
 }
 
 static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 {
     inout_game->level = in_level;
 
-    playfield_load_level(&inout_game->playfield, in_level);
+    /* Before the entities are placed: placing them arms the first scatter phase, and how
+     * long that lasts is the level's business (§10.9). */
+    difficulty_get(in_level, &inout_game->difficulty);
+
+    playfield_load(&inout_game->playfield);
     prv_place_entities(inout_game);
 }
 
 /* --- scatter / chase / frightened ---------------------------------------- */
 
-/* Which non-frightened mode the plan of §10.4 calls for right now. Even phases are scatter,
- * odd ones chase; once the repeats are used up it is chase for good. */
+/* Which non-frightened mode the plan of §10.4/§10.9 calls for right now. The plan
+ * alternates from scatter, so even entries are scatter and odd ones chase; once it is
+ * used up it is chase for the rest of the level. */
 static ghost_mode_e prv_get_scheduled_mode(const game_t* const in_game)
 {
-    const game_level_config_t* const config = prv_get_config(in_game);
-
-    if (in_game->phase_index >= (uint8_t)(config->scatter_repeat_count * 2U))
+    if (in_game->phase_index >= in_game->difficulty.phase_count)
     {
         return GHOST_MODE_CHASE;
     }
@@ -149,12 +123,35 @@ static ghost_mode_e prv_get_scheduled_mode(const game_t* const in_game)
     return ((in_game->phase_index % 2U) == 0U) ? GHOST_MODE_SCATTER : GHOST_MODE_CHASE;
 }
 
+/* Which Cruise Elroy stage Blinky is in: 0 for none, 1 or 2 as the maze empties (§10.9).
+ *
+ * Stage 2's threshold is the lower of the two, so it is tested first — at 10 pellets left
+ * on level 1 both conditions hold and only the faster one is meant. */
+static uint8_t prv_get_elroy_stage(const game_t* const in_game)
+{
+    const uint16_t remaining = playfield_get_remaining_pellet_count(&in_game->playfield);
+
+    if (remaining <= in_game->difficulty.elroy2_pellets_left)
+    {
+        return 2U;
+    }
+
+    if (remaining <= in_game->difficulty.elroy1_pellets_left)
+    {
+        return 1U;
+    }
+
+    return 0U;
+}
+
 static uint32_t prv_get_phase_duration(const game_t* const in_game)
 {
-    const game_level_config_t* const config = prv_get_config(in_game);
+    if (in_game->phase_index >= in_game->difficulty.phase_count)
+    {
+        return 0U;
+    }
 
-    return (prv_get_scheduled_mode(in_game) == GHOST_MODE_SCATTER) ? config->scatter_duration_ms
-                                                                   : config->chase_duration_ms;
+    return in_game->difficulty.phase_durations_ms[in_game->phase_index];
 }
 
 /* Push the mode every entity should be in. Safe to call every tick: setting a mode a ghost
@@ -163,10 +160,21 @@ static void prv_apply_mode(game_t* const inout_game)
 {
     const bool is_frightened = inout_game->frightened_remaining_ms > 0U;
     const ghost_mode_e scheduled = prv_get_scheduled_mode(inout_game);
+    const bool is_elroy_awake = prv_get_elroy_stage(inout_game) > 0U;
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        ghost_set_mode(&inout_game->ghosts[index], is_frightened ? GHOST_MODE_FRIGHTENED : scheduled);
+        ghost_mode_e mode = is_frightened ? GHOST_MODE_FRIGHTENED : scheduled;
+
+        /* Cruise Elroy does not go home. Once the maze is empty enough to wake him,
+         * Blinky keeps hunting through the scatter phases the others take off — which is
+         * what turns the end of a level from a breather into the hard part. */
+        if ((index == (uint8_t)GHOST_BLINKY) && is_elroy_awake && (mode == GHOST_MODE_SCATTER))
+        {
+            mode = GHOST_MODE_CHASE;
+        }
+
+        ghost_set_mode(&inout_game->ghosts[index], mode);
     }
 }
 
@@ -183,6 +191,13 @@ static void prv_advance_timers(game_t* const inout_game, uint32_t in_elapsed_ms)
         return;
     }
 
+    if (inout_game->phase_index >= inout_game->difficulty.phase_count)
+    {
+        /* The plan is used up and it is chase for the rest of the level. Without this the
+         * index would keep climbing every tick against a duration of zero. */
+        return;
+    }
+
     if (inout_game->phase_remaining_ms > in_elapsed_ms)
     {
         inout_game->phase_remaining_ms -= in_elapsed_ms;
@@ -196,11 +211,11 @@ static void prv_advance_timers(game_t* const inout_game, uint32_t in_elapsed_ms)
 
 static void prv_start_frightened(game_t* const inout_game)
 {
-    const uint32_t duration = prv_get_config(inout_game)->frightened_duration_ms;
+    const uint32_t duration = inout_game->difficulty.frightened_duration_ms;
 
     if (duration == 0U)
     {
-        /* Level 5: a power pellet is only points (§10.9). */
+        /* Level 17, and every level from 19 on: a power pellet is only points (§10.9). */
         return;
     }
 
@@ -222,6 +237,10 @@ static void prv_eat_under_pacman(game_t* const inout_game)
     const cell_t cell = pacman_get_cell(&inout_game->pacman);
     const playfield_pellet_e eaten = playfield_eat_pellet(&inout_game->playfield, cell);
     msg_pellet_eaten_t payload = {0};
+
+    /* Read by the *next* step, which is slower for it (§10.9). Set either way: a step onto
+     * an already-cleared cell is what makes him quick again. */
+    inout_game->did_pacman_eat_last_step = (eaten != PLAYFIELD_PELLET_NONE);
 
     if (eaten == PLAYFIELD_PELLET_NONE)
     {
@@ -310,9 +329,9 @@ static bool prv_check_level_cleared(game_t* const inout_game)
         return true;
     }
 
-    if (inout_game->level >= PLAYFIELD_LEVEL_COUNT)
+    if (difficulty_is_final_level(inout_game->level))
     {
-        /* The final maze: the run is won (FR-027). */
+        /* The whole difficulty curve has been walked: the run is won (FR-027). */
         inout_game->state = GAME_STATE_WON;
 
         return false;
@@ -331,7 +350,7 @@ static bool prv_move_pacman(game_t* const inout_game)
     const cell_t previous_cell = pacman_get_cell(&inout_game->pacman);
     cell_t ghost_previous_cells[GHOST_COUNT];
 
-    (void)pacman_advance(&inout_game->pacman, &inout_game->playfield);
+    inout_game->did_pacman_move = pacman_advance(&inout_game->pacman, &inout_game->playfield);
 
     prv_eat_under_pacman(inout_game);
 
@@ -350,7 +369,10 @@ static bool prv_move_pacman(game_t* const inout_game)
     return prv_check_level_cleared(inout_game);
 }
 
-static bool prv_move_ghosts(game_t* const inout_game)
+/* One ghost takes one step. They used to move as a block, and could, because they shared a
+ * speed; Cruise Elroy and the tunnel ended that (§10.9), so each one is stepped on its own
+ * clock and its meeting with Pacman is settled straight away. */
+static bool prv_move_ghost(game_t* const inout_game, uint8_t in_index)
 {
     const cell_t pacman_cell = pacman_get_cell(&inout_game->pacman);
     const direction_e pacman_direction = pacman_get_direction(&inout_game->pacman);
@@ -362,53 +384,91 @@ static bool prv_move_ghosts(game_t* const inout_game)
         ghost_previous_cells[index] = ghost_get_cell(&inout_game->ghosts[index]);
     }
 
-    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
-    {
-        (void)ghost_advance(&inout_game->ghosts[index], &inout_game->playfield, pacman_cell, pacman_direction,
-                            blinky_cell);
-    }
+    inout_game->did_ghost_move[in_index] = ghost_advance(&inout_game->ghosts[in_index], &inout_game->playfield,
+                                                         pacman_cell, pacman_direction, blinky_cell);
 
     /* Pacman stood still during this step, so his previous cell is his current one. */
     return prv_resolve_meetings(inout_game, pacman_cell, ghost_previous_cells);
 }
 
-static uint32_t prv_get_ghost_period_ms(const game_t* const in_game)
+/* How long Pacman takes over one cell right now (§10.9).
+ *
+ * Three things move it: the level, whether the ghosts are frightened — he is bolder and
+ * quicker while they are — and whether he is chewing. The last is why a corridor you have
+ * already cleared is faster than a full one, and it is the whole reason a good player
+ * clears an escape route before going for a power pellet. */
+static uint32_t prv_get_pacman_period_ms(const game_t* const in_game)
 {
-    const uint32_t period = prv_get_config(in_game)->ghost_move_period_ms;
+    const difficulty_t* const difficulty = &in_game->difficulty;
+    const bool is_eating = in_game->did_pacman_eat_last_step;
 
     if (in_game->frightened_remaining_ms > 0U)
     {
-        return period * FRIGHTENED_SPEED_DIVISOR;
+        return is_eating ? difficulty->pacman_frightened_eating_period_ms : difficulty->pacman_frightened_period_ms;
     }
 
-    return period;
+    return is_eating ? difficulty->pacman_eating_period_ms : difficulty->pacman_period_ms;
+}
+
+/* How long one ghost takes over one cell right now (§10.9). No two of them need agree.
+ *
+ * The tunnel wins over everything else, frightened included: it is the arcade's hard cap
+ * on how fast anything crosses that stretch, and it is what makes the tunnel the one
+ * place a cornered Pacman can reliably break away. */
+static uint32_t prv_get_ghost_period_ms(const game_t* const in_game, uint8_t in_index)
+{
+    const ghost_t* const ghost = &in_game->ghosts[in_index];
+    const difficulty_t* const difficulty = &in_game->difficulty;
+
+    if (playfield_is_tunnel(&in_game->playfield, ghost_get_cell(ghost)))
+    {
+        return difficulty->ghost_tunnel_period_ms;
+    }
+
+    if (ghost_is_frightened(ghost))
+    {
+        return difficulty->ghost_frightened_period_ms;
+    }
+
+    if (in_index == (uint8_t)GHOST_BLINKY)
+    {
+        const uint8_t stage = prv_get_elroy_stage(in_game);
+
+        if (stage == 2U)
+        {
+            return difficulty->elroy2_period_ms;
+        }
+
+        if (stage == 1U)
+        {
+            return difficulty->elroy1_period_ms;
+        }
+    }
+
+    return difficulty->ghost_period_ms;
 }
 
 /* --- the state the view sees --------------------------------------------- */
 
-/* How far an entity has travelled from its cell towards the next, in 1/256ths.
+/* How far an entity has come into its cell from the one before it, in 1/256ths.
  *
- * Zero when the step it is facing is blocked: an entity stopped against a wall keeps its
- * facing (§10.1) and its movement timer keeps running, so interpolating along that facing
- * would slide the sprite into the wall and snap it back. Nothing in the rules reads this —
- * it exists so the view can draw motion in pixels while the logic stays on whole cells.
+ * This measures the step **already taken**, which is what makes it exact: the cell it came
+ * from is a fact, whereas the cell it will go to next is not decided until the next step.
+ * The version before this one interpolated forward along the current facing, and that is
+ * wrong precisely at a corner — see \ref cell_progress_t.
+ *
+ * An entity that did not move reports "arrived": one stopped against a wall keeps its
+ * facing (§10.1) and its timer keeps running, and without this it would be drawn sliding
+ * in from the cell behind it once per period, on the spot.
  */
-static cell_progress_t prv_get_progress(const game_t* const in_game, cell_t in_cell, direction_e in_direction,
-                                        uint32_t in_elapsed_ms, uint32_t in_period_ms)
+static cell_progress_t prv_get_progress(bool in_did_move, direction_e in_direction, uint32_t in_elapsed_ms,
+                                        uint32_t in_period_ms)
 {
-    agent_t probe;
     uint32_t progress;
 
-    if ((in_period_ms == 0U) || (in_direction == DIRECTION_NONE))
+    if (!in_did_move || (in_period_ms == 0U) || (in_direction == DIRECTION_NONE))
     {
-        return 0U;
-    }
-
-    agent_place(&probe, in_cell, in_direction);
-
-    if (!agent_can_step(&probe, &in_game->playfield, in_direction))
-    {
-        return 0U;
+        return MSG_CELL_PROGRESS_ARRIVED;
     }
 
     progress = (in_elapsed_ms * PROGRESS_FULL_STEP) / in_period_ms;
@@ -416,7 +476,7 @@ static cell_progress_t prv_get_progress(const game_t* const in_game, cell_t in_c
     return (cell_progress_t)((progress > PROGRESS_MAX) ? PROGRESS_MAX : progress);
 }
 
-static msg_actor_t prv_describe_actor(const game_t* const in_game, cell_t in_cell, direction_e in_direction,
+static msg_actor_t prv_describe_actor(cell_t in_cell, direction_e in_direction, bool in_did_move,
                                       uint32_t in_elapsed_ms, uint32_t in_period_ms)
 {
     msg_actor_t actor;
@@ -424,7 +484,7 @@ static msg_actor_t prv_describe_actor(const game_t* const in_game, cell_t in_cel
     actor.column = (uint8_t)in_cell.x;
     actor.row = (uint8_t)in_cell.y;
     actor.direction = (uint8_t)in_direction;
-    actor.progress = prv_get_progress(in_game, in_cell, in_direction, in_elapsed_ms, in_period_ms);
+    actor.progress = prv_get_progress(in_did_move, in_direction, in_elapsed_ms, in_period_ms);
 
     return actor;
 }
@@ -442,7 +502,7 @@ void game_init(game_t* inout_game)
     inout_game->state = GAME_STATE_IDLE;
     inout_game->lives = 0U;
 
-    prv_load_level(inout_game, PLAYFIELD_FIRST_LEVEL);
+    prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
 void game_start(game_t* inout_game)
@@ -456,7 +516,7 @@ void game_start(game_t* inout_game)
     inout_game->lives = GAME_STARTING_LIVES;
     inout_game->state = GAME_STATE_RUNNING;
 
-    prv_load_level(inout_game, PLAYFIELD_FIRST_LEVEL);
+    prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
 void game_set_direction(game_t* inout_game, direction_e in_direction)
@@ -473,9 +533,6 @@ void game_set_direction(game_t* inout_game, direction_e in_direction)
 
 void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
 {
-    const uint32_t pacman_period = GAME_PACMAN_MOVE_PERIOD_MS;
-    uint32_t ghost_period;
-
     ASSERT(inout_game != NULL);
 
     if (inout_game->state != GAME_STATE_RUNNING)
@@ -487,11 +544,21 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
     prv_apply_mode(inout_game);
 
     inout_game->pacman_move_elapsed_ms += in_elapsed_ms;
-    inout_game->ghost_move_elapsed_ms += in_elapsed_ms;
 
-    while ((inout_game->pacman_move_elapsed_ms >= pacman_period) && (inout_game->state == GAME_STATE_RUNNING))
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        inout_game->pacman_move_elapsed_ms -= pacman_period;
+        inout_game->ghost_move_elapsed_ms[index] += in_elapsed_ms;
+    }
+
+    /* The period is read again after every step, because a step is what changes it: eating
+     * a pellet slows the next one down, and clearing the corridor speeds it back up. A
+     * period of zero would spin here forever, so it ends the loop rather than being
+     * asserted away under NDEBUG. */
+    for (uint32_t period = prv_get_pacman_period_ms(inout_game);
+         (period > 0U) && (inout_game->pacman_move_elapsed_ms >= period) && (inout_game->state == GAME_STATE_RUNNING);
+         period = prv_get_pacman_period_ms(inout_game))
+    {
+        inout_game->pacman_move_elapsed_ms -= period;
 
         if (!prv_move_pacman(inout_game))
         {
@@ -499,48 +566,72 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
         }
     }
 
-    ghost_period = prv_get_ghost_period_ms(inout_game);
-
-    while ((inout_game->ghost_move_elapsed_ms >= ghost_period) && (inout_game->state == GAME_STATE_RUNNING))
+    for (uint8_t index = 0U; (index < GHOST_COUNT) && (inout_game->state == GAME_STATE_RUNNING); ++index)
     {
-        inout_game->ghost_move_elapsed_ms -= ghost_period;
-
-        if (!prv_move_ghosts(inout_game))
+        /* Likewise per ghost: a step can carry it into or out of the tunnel, and Blinky's
+         * own step can be the one that empties the maze far enough to wake Elroy. */
+        for (uint32_t period = prv_get_ghost_period_ms(inout_game, index);
+             (period > 0U) && (inout_game->ghost_move_elapsed_ms[index] >= period)
+             && (inout_game->state == GAME_STATE_RUNNING);
+             period = prv_get_ghost_period_ms(inout_game, index))
         {
-            break;
+            inout_game->ghost_move_elapsed_ms[index] -= period;
+
+            if (!prv_move_ghost(inout_game, index))
+            {
+                break;
+            }
         }
     }
 
     prv_deliver_events(inout_game);
 }
 
+/* Whether the frightened ghosts should be drawn in their warning colour this instant.
+ *
+ * The window closes after `frightened_flash_count` flashes, each a dark half and a light
+ * half, so the warning starts that far from the end and then alternates. Deciding it here
+ * rather than in the view keeps "flashing" a fact about the game that a test can assert,
+ * instead of an animation the view invents. */
+static bool prv_are_frightened_ghosts_flashing(const game_t* const in_game)
+{
+    const uint32_t half_period = GAME_FRIGHTENED_FLASH_HALF_PERIOD_MS;
+    const uint32_t warning_ms = (uint32_t)in_game->difficulty.frightened_flash_count * 2U * half_period;
+
+    if ((in_game->frightened_remaining_ms == 0U) || (in_game->frightened_remaining_ms > warning_ms))
+    {
+        return false;
+    }
+
+    return ((in_game->frightened_remaining_ms / half_period) % 2U) == 0U;
+}
+
 void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state)
 {
-    uint32_t ghost_period;
-
     ASSERT(in_game != NULL);
     ASSERT(out_state != NULL);
 
-    ghost_period = prv_get_ghost_period_ms(in_game);
-
     memset(out_state, 0, sizeof(*out_state));
 
-    out_state->pacman =
-        prv_describe_actor(in_game, pacman_get_cell(&in_game->pacman), pacman_get_direction(&in_game->pacman),
-                           in_game->pacman_move_elapsed_ms, GAME_PACMAN_MOVE_PERIOD_MS);
+    out_state->pacman = prv_describe_actor(pacman_get_cell(&in_game->pacman), pacman_get_direction(&in_game->pacman),
+                                           in_game->did_pacman_move, in_game->pacman_move_elapsed_ms,
+                                           prv_get_pacman_period_ms(in_game));
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
         const ghost_t* const ghost = &in_game->ghosts[index];
 
-        out_state->ghosts[index] = prv_describe_actor(in_game, ghost_get_cell(ghost), ghost_get_direction(ghost),
-                                                      in_game->ghost_move_elapsed_ms, ghost_period);
+        out_state->ghosts[index] =
+            prv_describe_actor(ghost_get_cell(ghost), ghost_get_direction(ghost), in_game->did_ghost_move[index],
+                               in_game->ghost_move_elapsed_ms[index], prv_get_ghost_period_ms(in_game, index));
 
         if (ghost_is_frightened(ghost))
         {
             out_state->frightened_ghosts |= (uint8_t)(1U << index);
         }
     }
+
+    out_state->are_frightened_ghosts_flashing = prv_are_frightened_ghosts_flashing(in_game);
 
     for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {

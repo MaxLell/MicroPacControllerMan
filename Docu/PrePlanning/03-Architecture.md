@@ -9,7 +9,7 @@ This document describes *how* the firmware is structured, at a functional-specif
 The game is built as Model-View-Control (FR-101), so the game logic is identical on host and target and is unit-testable without hardware (NFR-101):
 
 - **Model** — owns the entire game state: the active maze, Pacman position/direction, ghost positions/modes, frightened timer, score, lives, current level (1–5), and an in-memory copy of the high score. Pure data plus small accessor functions; no I/O.
-- **View** — turns a copy of the Model into what should be on screen, and draws it. Split in two: **Game-View** is pure logic (cell-to-pixel, interpolation between simulation steps, sprite and HUD layout) and is unit-tested on the host; **Render** is the platform port behind one interface, drawing to the shield's ST7789V panel on the target and to an SDL window on the host (CON-103 / FR-104).
+- **View** — turns a copy of the Model into what should be on screen, and draws it. Split in two: **Game-View** is pure logic (cell-to-pixel, interpolation between simulation steps, sprite and HUD layout, and the maze's *appearance* map — see [10 §10.2](10-Pacman-Game-Design.md)) and is unit-tested on the host; **Render** is the platform port behind one interface, drawing to the shield's ST7789V panel on the target and to an SDL window on the host (CON-103 / FR-104).
 - **Control** — the game rules: given the current Model and an input event (or a tick), it produces the next Model state. Stateless (FR-102), so it is trivially unit-testable (NFR-101) and identical on host and target.
 
 > **Decided (R-008):** the maze is a **reduced, display-fit maze** — a custom layout smaller than the classic 28×31 grid, sized so tiles, Pacman, four ghosts and pellets stay legible on 128×128. Exact dimensions are set during Pacman Development (FR-022). See [R-008](05-Risks-Assumptions-and-Dependencies.md#51-risks).
@@ -101,9 +101,10 @@ Every topic is a value in one compile-time `enum msg_id_e`; the payload is a sma
 > handle to a double-buffered snapshot, as the one sanctioned exception to copy-by-value
 > ([R-007](05-Risks-Assumptions-and-Dependencies.md#51-risks)). That exception is
 > **withdrawn**, because the premise behind it was wrong: what is large is the *rendered
-> image*, not the game state. An 11 × 9 maze is two 99-bit pellet maps, five actors and a handful
-> of counters — **56 bytes**, measured, which copies like any other payload. The image never needs
-> to travel at all, because Render draws it.
+> image*, not the game state. The 28 × 31 maze is two 868-bit pellet maps, five actors and a
+> handful of counters — **246 bytes**, measured, which copies like any other payload. The image
+> is 153,600 bytes and never needs to travel at all, because Render draws it. The margin is
+> three orders of magnitude, not four as it was at 11 × 9, and still not close.
 >
 > Three things fall out. There is no pointer in any message, so no module can hold a
 > reference into another's memory. There is no second frame buffer to find room for — one is
@@ -154,12 +155,14 @@ flowchart TB
     PBUS{{"Pacman Message Broker"}}
     PATH["Ghost Path-Planning (library)"]
     FIELD[Playfield]
+    DIFF[Difficulty]
     SCORE[Score]
     GAMEROOT --> PBUS
     PAC --> PBUS
     GH --> PBUS
     PBUS --> PATH
     PBUS --> FIELD
+    PBUS --> DIFF
     PBUS --> SCORE
 ```
 
@@ -171,13 +174,14 @@ flowchart TB
 | **Pacman** | The player character: consumes the current direction intent and moves Pacman along the playfield, eating pellets. |
 | **Ghosts** | The four ghosts: their positions and current mode (chase / scatter / frightened + timer). |
 | **Ghost Path-Planning** | A stateless *library* that, given a ghost, Pacman, and the playfield, returns the ghost's next step — the four distinct behaviors (FR-014) and scatter/chase (FR-015). |
-| **Playfield** | The maze: walls, pellets, power pellets, tunnels; answers "is this cell walkable", removes eaten pellets (FR-011/FR-017), detects an empty maze (FR-021). |
+| **Playfield** | The maze: walls, pellets, power pellets, tunnel; answers "is this cell walkable" and "is this cell tunnel", removes eaten pellets (FR-011/FR-017), detects an empty maze (FR-021). There is one maze and every level plays it ([10 §10.2](10-Pacman-Game-Design.md)). |
+| **Difficulty** | A stateless lookup from level number to how that level plays (FR-026, [10 §10.9](10-Pacman-Game-Design.md)): every speed, the frightened window and its warning, the scatter/chase plan, and the pellet counts at which Blinky accelerates. It is the whole of the game's progression in one table, separate so that table can be reviewed against the source it was transcribed from. |
 | **Score** | The running score and the scoring rules (pellet / power-pellet / ghost-eaten values, A-006). |
 | **Agent (base)** | The shared base for movable entities: a position, a facing direction, and a step/move policy that respects the playfield (walls FR-010, tunnel wrap FR-012). **Pacman and each Ghost *are* Agents** and specialize it — Pacman follows the input direction, Ghosts follow Ghost Path-Planning. |
 
 **Rendering interface — how a moved Pacman reaches the panel.** Three modules and two messages, each doing one thing:
 
-1. **Game** publishes `MSG_GAME_STATE` once per simulation step (§10.1): the five actors with their cells, directions, modes and *progress towards the next cell*, plus the two pellet bitmaps, score, lives and level. 56 bytes, copied.
+1. **Game** publishes `MSG_GAME_STATE` once per simulation step (§10.1): the five actors with their cells, directions, modes and *progress towards the next cell*, plus the two pellet bitmaps, score, lives and level. 246 bytes, copied — most of it the two 868-cell pellet maps of the 28 × 31 maze.
 2. **Game-View** holds the last state and runs at the **frame rate, not the step rate** — that is the point of it. Between two steps it draws the same actors nine times at advancing interpolated positions (§10.1), and publishes `MSG_DISPLAY_LIST`: what should be on screen *now*, in pixels.
 3. **Render** draws it, and is the only module that works out **what changed** since the last frame. It knows what it drew and it is the only one that knows the cost: two 16 x 16 rectangles are 2.08 ms, a full frame is 252 ms ([M2 Board Bring-Up §3](../Design/M2-Board-Bring-Up.md)). Nobody else should be making that trade.
 
