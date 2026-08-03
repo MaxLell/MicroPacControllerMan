@@ -563,19 +563,52 @@ void test_opposite_directions_pair_up(void)
     TEST_ASSERT_EQUAL(DIRECTION_NONE, playfield_get_opposite_direction(DIRECTION_NONE));
 }
 
-void test_the_scatter_corners_are_four_distinct_walkable_cells(void)
+void test_the_scatter_targets_are_four_distinct_tiles_no_ghost_can_reach(void)
 {
+    /* §10.4: the targets sit in the dead space above and below the maze, and being
+     * unreachable is the mechanism rather than an oversight — a ghost walks to the nearest
+     * corner and circles it, because it can get no closer and may not turn round. Aim them
+     * at real cells and the ghost arrives and stops.
+     *
+     * `playfield_is_walkable` wraps a cell back into the grid, so it cannot answer this;
+     * being off the grid is the property, and that is what is checked. */
     for (uint8_t index = 0U; index < SCATTER_CORNER_COUNT; ++index)
     {
-        const cell_t corner = playfield_get_scatter_corner(index);
+        const cell_t target = playfield_get_scatter_target(index);
+        char message[64];
 
-        TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, corner));
+        (void)snprintf(message, sizeof(message), "scatter target %u is inside the maze", index);
+        TEST_ASSERT_TRUE_MESSAGE((target.y < 0) || (target.y >= PLAYFIELD_HEIGHT), message);
 
         for (uint8_t other = 0U; other < index; ++other)
         {
-            TEST_ASSERT_FALSE(playfield_are_cells_equal(corner, playfield_get_scatter_corner(other)));
+            TEST_ASSERT_FALSE(playfield_are_cells_equal(target, playfield_get_scatter_target(other)));
         }
     }
+}
+
+void test_each_ghost_scatters_to_the_corner_the_arcade_gives_him(void)
+{
+    /* Blinky top-right, Pinky top-left, Inky bottom-right, Clyde bottom-left. All four were
+     * swapped within their pairs, which sent every one of them to the opposite side of the
+     * maze — the most visible thing on the panel that was still wrong. */
+    const cell_t blinky = playfield_get_scatter_target(0U);
+    const cell_t pinky = playfield_get_scatter_target(1U);
+    const cell_t inky = playfield_get_scatter_target(2U);
+    const cell_t clyde = playfield_get_scatter_target(3U);
+    const int16_t middle = PLAYFIELD_WIDTH / 2;
+
+    TEST_ASSERT_GREATER_THAN_INT16(middle, blinky.x);
+    TEST_ASSERT_LESS_THAN_INT16(0, blinky.y);
+
+    TEST_ASSERT_LESS_THAN_INT16(middle, pinky.x);
+    TEST_ASSERT_LESS_THAN_INT16(0, pinky.y);
+
+    TEST_ASSERT_GREATER_THAN_INT16(middle, inky.x);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(PLAYFIELD_HEIGHT, inky.y);
+
+    TEST_ASSERT_LESS_THAN_INT16(middle, clyde.x);
+    TEST_ASSERT_GREATER_OR_EQUAL_INT16(PLAYFIELD_HEIGHT, clyde.y);
 }
 
 /* --- preconditions ------------------------------------------------------- */

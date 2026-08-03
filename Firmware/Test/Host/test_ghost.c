@@ -160,7 +160,7 @@ void test_clyde_breaks_off_for_his_corner_when_close(void)
     const cell_t target = prv_chase_target(GHOST_CLYDE, near_cell);
 
     TEST_ASSERT_LESS_THAN_UINT32(CLYDE_SHY_SQUARED, playfield_get_squared_distance(near_cell, prv_pacman_cell()));
-    TEST_ASSERT_TRUE(playfield_are_cells_equal(playfield_get_scatter_corner(GHOST_CLYDE), target));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(playfield_get_scatter_target(GHOST_CLYDE), target));
 }
 
 void test_each_personality_gets_its_own_corner(void)
@@ -171,8 +171,8 @@ void test_each_personality_gets_its_own_corner(void)
 
         for (uint8_t other = 0U; other < personality; ++other)
         {
-            TEST_ASSERT_FALSE(playfield_are_cells_equal(playfield_get_scatter_corner(personality),
-                                                        playfield_get_scatter_corner(other)));
+            TEST_ASSERT_FALSE(playfield_are_cells_equal(playfield_get_scatter_target(personality),
+                                                        playfield_get_scatter_target(other)));
         }
     }
 }
@@ -185,7 +185,7 @@ void test_scattering_ignores_pacman_entirely(void)
     ghost_set_mode(&g_ghost, GHOST_MODE_SCATTER);
 
     TEST_ASSERT_TRUE(playfield_are_cells_equal(
-        playfield_get_scatter_corner(GHOST_BLINKY),
+        playfield_get_scatter_target(GHOST_BLINKY),
         ghost_get_target(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell())));
 }
 

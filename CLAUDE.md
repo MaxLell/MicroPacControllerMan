@@ -70,6 +70,12 @@ silently working around a wart.
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
+- **The ghosts are the Dossier's** (DEC-023): straight-line distance, the arcade's look-aheads
+  and shy radius, reversals only on the transitions that earn them, a ghost house nobody may
+  re-enter and Pacman may never enter, arcade spawn positions and dot-counter release, and
+  the scatter targets in the unreachable dead space with the corners assigned the right way
+  round. Seeking is a route search rather than the arcade's one-cell greedy choice — the one
+  deliberate departure, asked for by the owner.
 
 ## Build · flash · test (all from `Firmware/`)
 
