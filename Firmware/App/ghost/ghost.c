@@ -56,7 +56,7 @@ static cell_t prv_get_inky_target(cell_t in_pacman_cell, direction_e in_pacman_d
  * corner once he gets close, which is what makes him the one that lets you past. */
 static cell_t prv_get_clyde_target(const ghost_t* const in_ghost, cell_t in_pacman_cell)
 {
-    const cell_t corner = playfield_get_scatter_corner((uint8_t)in_ghost->personality);
+    const cell_t corner = playfield_get_scatter_target((uint8_t)in_ghost->personality);
 
     if (playfield_get_squared_distance(agent_get_cell(&in_ghost->agent), in_pacman_cell) >= CLYDE_SHY_SQUARED_DISTANCE)
     {
@@ -171,7 +171,7 @@ cell_t ghost_get_target(const ghost_t* in_ghost, const playfield_t* in_playfield
 
     if (in_ghost->mode == GHOST_MODE_SCATTER)
     {
-        return playfield_get_scatter_corner((uint8_t)in_ghost->personality);
+        return playfield_get_scatter_target((uint8_t)in_ghost->personality);
     }
 
     switch (in_ghost->personality)

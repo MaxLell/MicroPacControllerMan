@@ -85,18 +85,24 @@ Per [10.1] all entities are Agents (the movable-entity base, [03 Architecture §
 
 ## 10.4 Ghost Behaviour (FR-014)
 
-At each move, a ghost looks at the non-wall neighbours of its cell (excluding the reverse direction) and steps to the one whose **Manhattan distance to its target cell** is smallest. Ties are broken in the fixed order **Up, Left, Down, Right**. Only the *target cell* differs per ghost and per mode.
+At each move a ghost takes the first step of the **shortest route to the reachable cell nearest its target**, never turning round (§10.1). Distance is the **straight line**, compared as a square because that is what the arcade compares and it keeps the ordering exact. Ties — equal routes to equally near cells — are broken in the fixed order **Up, Left, Down, Right**. Only the *target* differs per ghost and per mode.
+
+The arcade itself looks only one cell ahead and takes the neighbour nearest the target. This searches the route instead, at the owner's request; where the target is reachable the two agree, and where it is not — which is most of the time for Pinky and Inky, whose targets land in walls or off the board — the search heads for the nearest cell that exists. Fleeing stays one-cell greedy: there is no destination to plan a route to.
 
 **Chase-mode targets:**
 
 | Ghost | Target |
 |---|---|
 | **Blinky** (direct) | Pacman's current cell. |
-| **Pinky** (ambush) | The cell 2 ahead of Pacman in his current direction. |
-| **Inky** (flank) | Take the cell 1 ahead of Pacman, then double the vector from Blinky to that cell (target = point + (point − Blinky)). |
-| **Clyde** (shy) | Pacman's cell when farther than 4 cells away; otherwise his own scatter corner. |
+| **Pinky** (ambush) | The cell 4 ahead of Pacman in his current direction. |
+| **Inky** (flank) | Take the cell 2 ahead of Pacman, then double the vector from Blinky to that cell (target = point + (point − Blinky)). |
+| **Clyde** (shy) | Pacman's cell when eight cells away or more; otherwise his own scatter tile. |
 
-**Scatter mode:** every ghost targets its own fixed corner (each ghost is assigned one of the four maze corners) — except a Blinky who has become Cruise Elroy, who keeps chasing (§10.9).
+**Scatter mode:** every ghost aims at its own fixed tile — **Blinky top-right, Pinky top-left, Inky bottom-right, Clyde bottom-left** — except a Blinky who has become Cruise Elroy, who keeps chasing (§10.9).
+
+Those tiles sit in the **dead space above and below the maze and cannot be reached**, and that is the mechanism rather than an oversight. A ghost walks to the corner nearest its target and then, forbidden from turning round, circles it until the mode changes. As the Dossier puts it: *"the only reason a ghost has a favourite corner of the maze at all is due to the location of a fixed target tile it will never reach."* Aim it at a real cell instead and it arrives, and stops being interesting.
+
+Clyde's shy rule reuses the same tile: when Pacman is within eight cells, that is what he heads for.
 
 **Scatter/Chase schedule:** per level, in §10.9. A mode change lets a ghost reverse once.
 

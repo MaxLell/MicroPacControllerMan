@@ -10,8 +10,9 @@
  * unwritable, which is why this is not an Active Object.
  *
  * Coordinates are signed and may legitimately point outside the grid: a ghost's target
- * cell can be off-maze (§10.4's Pinky and Inky compute one), and Manhattan distance to
- * an off-maze target is still meaningful. Stepping is what wraps (#playfield_wrap_cell).
+ * cell can be off-maze — §10.4's Pinky and Inky compute one, and every scatter target is
+ * one on purpose — and the distance to it is still meaningful. Stepping is what wraps
+ * (#playfield_wrap_cell).
  */
 
 #ifndef PLAYFIELD_H
@@ -176,14 +177,19 @@ bool playfield_is_house(const playfield_t* in_playfield, cell_t in_cell);
  *         be enforced. */
 bool playfield_is_gate(const playfield_t* in_playfield, cell_t in_cell);
 
-/*! \brief The maze corner a ghost scatters to (§10.4).
+/*! \brief The fixed tile a ghost aims at while scattering (§10.4).
  *
- * Corners are returned in a fixed order so each ghost keeps its own: `0` top-left,
- * `1` top-right, `2` bottom-left, `3` bottom-right.
+ * Indexed as `ghost_personality_e` numbers them: Blinky top-right, Pinky top-left, Inky
+ * bottom-right, Clyde bottom-left.
+ *
+ * **Deliberately outside the maze and therefore unreachable**, which is how the arcade gets
+ * the behaviour: a ghost walks to the corner nearest its target and then, forbidden from
+ * turning round, circles it until the mode changes. A reachable target would have it arrive
+ * and stop being interesting.
  *
  * \param[in]       in_index: `0`..`3`
  */
-cell_t playfield_get_scatter_corner(uint8_t in_index);
+cell_t playfield_get_scatter_target(uint8_t in_index);
 
 /*! \brief Step one cell in a direction, with the tunnel wrap applied.
  *

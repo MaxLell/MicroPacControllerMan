@@ -298,16 +298,30 @@ bool playfield_is_gate(const playfield_t* in_playfield, cell_t in_cell)
     return in_playfield->gates[cell.y][cell.x];
 }
 
-cell_t playfield_get_scatter_corner(uint8_t in_index)
+cell_t playfield_get_scatter_target(uint8_t in_index)
 {
-    /* Just inside the outer wall, so the corner is a cell a ghost can actually reach
-     * rather than one it can only aim at. */
-    static const cell_t k_corners[SCATTER_CORNER_COUNT] = {
-        {1, 1}, {PLAYFIELD_WIDTH - 2, 1}, {1, PLAYFIELD_HEIGHT - 2}, {PLAYFIELD_WIDTH - 2, PLAYFIELD_HEIGHT - 2}};
+    /* The arcade's four, indexed as `ghost_personality_e` numbers them: Blinky top-right,
+     * Pinky top-left, Inky bottom-right, Clyde bottom-left.
+     *
+     * All four sit in the **dead space** above and below the maze and are therefore
+     * unreachable. §10.4 is explicit that this is the point: a ghost heads for the corner
+     * nearest its target and, unable to turn round, circles there until the mode changes.
+     * "The only reason a ghost has a favourite corner at all is due to the location of a
+     * fixed target tile it will never reach."
+     *
+     * They used to be the four cells just inside the outer wall — reachable, and, worse,
+     * assigned to the wrong ghosts: each pair was swapped, so all four scattered to the
+     * opposite side of the maze from where they belong. */
+    static const cell_t k_targets[SCATTER_CORNER_COUNT] = {
+        {PLAYFIELD_WIDTH - 3, -3},
+        {2, -3},
+        {PLAYFIELD_WIDTH - 1, PLAYFIELD_HEIGHT + 1},
+        {0, PLAYFIELD_HEIGHT + 1},
+    };
 
     ASSERT(in_index < SCATTER_CORNER_COUNT);
 
-    return k_corners[in_index];
+    return k_targets[in_index];
 }
 
 cell_t playfield_step(cell_t in_cell, direction_e in_direction)
