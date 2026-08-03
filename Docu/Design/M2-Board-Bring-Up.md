@@ -28,11 +28,11 @@ CN2 mates with the board's CN7, its CN3 with the board's CN10.
 | Display DCX (WR) | CN3-25 | CN10-25 | **PB10** | GPIO, data/command select |
 | Display RESET | CN2-30 | CN7-30 | **PA1** | GPIO, active low |
 | Display TE (FMARK) | CN2-28 | CN7-28 | **PA0** | GPIO in, optional |
-| Joystick LEFT | CN3-17 | CN10-17 | **PC9** | GPIO in, active low |
+| Joystick WEST | CN3-17 | CN10-17 | **PC9** | GPIO in, active low. UM2750 calls it LEFT |
 | Joystick CENTER | CN3-19 | CN10-19 | **PC6** | GPIO in, active low |
-| Joystick DOWN | CN3-27 | CN10-27 | **PB4** | GPIO in, active low |
-| Joystick RIGHT | CN2-34 | CN7-34 | **PB0** | GPIO in, active low |
-| Joystick UP | CN2-38 | CN7-38 | **PC0** | GPIO in, active low |
+| Joystick SOUTH | CN3-27 | CN10-27 | **PB4** | GPIO in, active low. UM2750 calls it DOWN |
+| Joystick EAST | CN2-34 | CN7-34 | **PB0** | GPIO in, active low. UM2750 calls it RIGHT |
+| Joystick NORTH | CN2-38 | CN7-38 | **PC0** | GPIO in, active low. UM2750 calls it UP |
 
 Display interface mode is strapped on the shield by IM0..IM3: **4-line, 8-bit data SPI**.
 
@@ -55,7 +55,7 @@ this board, **three of the twelve positions carry different pins:**
 | Signal | Position | NUCLEO-G431RB | NUCLEO-U545RE-Q |
 |---|---|---|---|
 | Display CS | CN10-21 | PA9 | **PC7** |
-| Joystick LEFT | CN10-17 | PB6 | **PC9** |
+| Joystick WEST | CN10-17 | PB6 | **PC9** |
 | Joystick CENTER | CN10-19 | PC7 | **PC6** |
 
 The other nine agree, which is exactly what makes the mistake tempting.
