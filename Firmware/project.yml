@@ -68,6 +68,7 @@
     - Drivers/**
     - Services/**
     - Bsp/dio_bsp
+    - Bsp/flash_bsp
     - Bsp/systick_bsp
     - ThirdParty/embedded_utils
   :support:

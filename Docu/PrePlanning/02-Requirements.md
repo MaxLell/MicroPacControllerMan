@@ -67,7 +67,7 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 | Unique-ID | Name | Description |
 |---|---|---|
 | FR-008 | High Score Update | If the final score of a completed game exceeds the stored high score, then the system shall store the new value as the high score in NVM. |
-| FR-009 | High Score Persistence | The system shall retain the high score value in NVM across power cycles. |
+| FR-009 | High Score Persistence | The system shall retain the three highest scores in NVM across power cycles, and shall provide a console command to clear them. |
 
 The concrete rules and values that realise the gameplay requirements — the maze layout, movement/tick model, ghost targeting algorithms, power-pellet/frightened behaviour, scoring and end conditions — are specified in [10 Pacman Game Design](10-Pacman-Game-Design.md). The numeric constants there remain tunable for game feel (see [A-006](05-Risks-Assumptions-and-Dependencies.md#52-assumptions)).
 

@@ -93,11 +93,13 @@ if(PACMAN_HOST_BUILD)
         App/game_view/game_view.c
         App/render/render.c
         App/ghost/ghost.c
+        App/high_score/high_score.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
         App/playfield/playfield.c
         App/score/score.c
         App/sprite_set/sprite_set.c
+        Bsp/flash_bsp/flash_bsp_host.c
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
         Services/crc/crc.c
@@ -121,10 +123,12 @@ if(PACMAN_HOST_BUILD)
         App/render
         App/ghost
         App/ghost_path
+        App/high_score
         App/pacman
         App/playfield
         App/score
         App/sprite_set
+        Bsp/flash_bsp
         Bsp/systick_bsp
         Drivers/display
         Services/crc
@@ -187,6 +191,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/game_view/game_view.c
     App/ghost/ghost.c
     App/ghost_path/ghost_path.c
+    App/high_score/high_score.c
     App/pacman/pacman.c
     App/playfield/playfield.c
     App/render/render.c
@@ -194,6 +199,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/sprite_set/sprite_set.c
     Services/sprite/sprite.c
     Bsp/dio_bsp/dio_bsp.c
+    Bsp/flash_bsp/flash_bsp.c
     Bsp/joystick/joystick.c
     Bsp/retain_ram/retain_ram.c
     Bsp/spi_bsp/spi_bsp.c
@@ -219,6 +225,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/scripts/ott_animation.c
     Test/Target/scripts/ott_display_id.c
     Test/Target/scripts/ott_display_test.c
+    Test/Target/scripts/ott_high_score.c
     Test/Target/scripts/ott_joystick.c
     Test/Target/scripts/ott_joystick_dot.c
     Test/Target/scripts/ott_pacman.c
@@ -239,12 +246,14 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/game_view
     App/ghost
     App/ghost_path
+    App/high_score
     App/pacman
     App/playfield
     App/render
     App/score
     App/sprite_set
     Bsp/dio_bsp
+    Bsp/flash_bsp
     Bsp/joystick
     Bsp/retain_ram
     Bsp/spi_bsp

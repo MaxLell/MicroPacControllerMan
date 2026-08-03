@@ -109,6 +109,11 @@ the USER button B1, and a safety cap returns the board to nominal mode regardles
 
 - `ott_display_id` — resets the controller and reads its ID at both chip-select
   polarities. **Automatic** — the display either answers or it does not.
+- `ott_high_score` — erases the reserved flash page, writes three known scores through the
+  ordinary path, reads them back and puts the table back as it found it. **Automatic.** The
+  unit tests mock the flash away, which is right; what only silicon can answer is whether the
+  page the linker reserved is the page the driver erases and whether the instruction cache is
+  answering reads with what the page used to hold. It was.
 - `ott_user_button` — live button state plus every debounced press; passes after three.
 - `ott_joystick` — names each of the five shield keys as it is pressed; passes when all
   five have been seen. Reads the pins straight through `dio_bsp`, because what it exists

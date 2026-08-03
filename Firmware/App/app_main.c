@@ -2,13 +2,16 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "Cli.h"
 #include "console.h"
 #include "difficulty.h"
 #include "dio_bsp.h"
+#include "flash_bsp.h"
 #include "game.h"
 #include "game_session.h"
+#include "high_score.h"
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
@@ -34,11 +37,45 @@ static void prv_on_systick(void)
     console_poll_receive();
 }
 
+/* `highscore` with no argument shows the table; `highscore reset` empties it (FR-009).
+ *
+ * A console command rather than a menu entry, because the reason to clear the table is
+ * almost always a developer's: a score set while testing sits in the top three for good,
+ * and there is no way to play a worse game than one that has already happened. */
+static int prv_high_score_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_context;
+
+    if ((in_argument_count > 1) && (strcmp(in_arguments[1], "reset") == 0))
+    {
+        if (!high_score_reset())
+        {
+            cli_print("could not erase the stored scores");
+
+            return CLI_FAIL_STATUS;
+        }
+
+        cli_print("high scores cleared");
+
+        return CLI_OK_STATUS;
+    }
+
+    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    {
+        cli_print("  %u. %lu", (unsigned)(place + 1U), (unsigned long)high_score_get(place));
+    }
+
+    cli_print("'highscore reset' clears them.");
+
+    return CLI_OK_STATUS;
+}
+
 static void prv_init_platform(void)
 {
     systick_bsp_init();
     dio_bsp_init();
     console_init();
+    flash_bsp_init();
     spi_bsp_init();
     sw_timer_init();
     user_button_init();
@@ -85,6 +122,31 @@ static void prv_poll_input(void)
     }
 }
 
+/* Offer a finished run to the high-score table (FR-009).
+ *
+ * Here rather than in `game`, and once per run rather than as the score climbs: writing
+ * flash erases a page and stalls the CPU for milliseconds, which inside a frame is a
+ * visible stutter. A run ends once, so this costs nothing anyone can see. */
+static void prv_record_score(void)
+{
+    const uint32_t score = game_session_get_score();
+
+    if (!high_score_offer(score))
+    {
+        return;
+    }
+
+    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    {
+        if (high_score_get(place) == score)
+        {
+            cli_print("a new high score - %lu takes place %u", (unsigned long)score, (unsigned)(place + 1U));
+
+            break;
+        }
+    }
+}
+
 /* Say what the run is doing, on the console, when it changes.
  *
  * FR-107's principle applied to the game itself: the board reports over the serial line so
@@ -123,11 +185,13 @@ static void prv_report_progress(void)
         case GAME_STATE_OVER:
             cli_print("game over on level %u with %lu points - centre key to play again", (unsigned)level,
                       (unsigned long)game_session_get_score());
+            prv_record_score();
             break;
 
         case GAME_STATE_WON:
             cli_print("all %u levels cleared with %lu points - centre key to play again",
                       (unsigned)DIFFICULTY_FINAL_LEVEL, (unsigned long)game_session_get_score());
+            prv_record_score();
             break;
 
         default: break;
@@ -167,6 +231,15 @@ void app_main(void)
     /* The command line comes up first: it clears the screen, and everything below
      * reports through it — including a pending test's verdict. */
     ott_init();
+
+    {
+        cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL,
+                                            "Show the three best scores; 'highscore reset' clears them"};
+
+        cli_register(&high_score_binding);
+    }
+
+    high_score_init();
 
     cli_print(APP_MAIN_BOOT_BANNER);
 

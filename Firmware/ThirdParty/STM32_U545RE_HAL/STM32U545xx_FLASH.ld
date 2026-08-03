@@ -41,8 +41,28 @@ MEMORY
 {
   RAM	(xrw)	: ORIGIN = 0x20000000,	LENGTH = 256K
   SRAM4	(xrw)	: ORIGIN = 0x28000000,	LENGTH = 16K
-  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 512K
+  /* =========================================================================
+   * MicroPacControllerMan — the last flash page belongs to the high scores.
+   * NON-GENERATED: re-add this after any STM32CubeMX code generation, as CubeMX
+   * overwrites this linker script.
+   *
+   * FLASH is shortened by one 8 KB page so the *linker* guarantees no code or
+   * constant can ever land in the page `Bsp/flash_bsp` erases. Reserving it by
+   * convention instead — "nothing will grow that far, we are at 16 %" — is the
+   * version of this that erases part of the program the first time a score is
+   * saved. The link fails instead if the firmware ever grows into it.
+   *
+   * The page is the last of bank 2 (8 KB pages, 32 per bank on the U545), which
+   * is as far from the vector table as the part allows.
+   * ========================================================================= */
+  FLASH	(rx)	: ORIGIN = 0x08000000,	LENGTH = 504K
+  NVM	(r)	: ORIGIN = 0x0807E000,	LENGTH = 8K
 }
+
+/* Backs Bsp/flash_bsp. Taken from the linker rather than written down in C, so the
+ * address the driver erases and the address the linker keeps free cannot drift apart. */
+__nvm_start__ = ORIGIN(NVM);
+__nvm_size__  = LENGTH(NVM);
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM);	/* end of "RAM" Ram type memory */
 _sstack = _estack - _Min_Stack_Size;
