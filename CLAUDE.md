@@ -74,6 +74,11 @@ silently working around a wart.
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
+- **The high scores are in flash** (DEC-025): three of them, behind a magic word, a version
+  and a CRC, in one 8 KB page the **linker** reserves so the firmware cannot grow into it.
+  `highscore` on the console prints them, `highscore reset` clears them, and `ott high_score`
+  proves the round trip on real silicon — which is how the ICACHE was caught answering
+  reads with what the page used to hold.
 - **The ghosts are the Dossier's** (DEC-023): straight-line distance, the arcade's look-aheads
   and shy radius, reversals only on the transitions that earn them, a ghost house nobody may
   re-enter and Pacman may never enter, arcade spawn positions and dot-counter release, and

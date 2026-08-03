@@ -39,9 +39,11 @@
 #include "custom_assert.h"
 #include "display.h"
 #include "display_host.h"
+#include "flash_bsp.h"
 #include "framebuffer.h"
 #include "game.h"
 #include "game_session.h"
+#include "high_score.h"
 #include "msg.h"
 #include "playfield.h"
 #include "sw_timer.h"
@@ -228,6 +230,29 @@ static void prv_poll_input(void)
 
 /* The console commentary. On the target this is what the System module and the NVM will
  * hear over the bus; here it is the only way to see that a level really did change. */
+/* Offer a finished run to the table, and say where it landed. The host writes a file next
+ * to the executable, so the table survives between runs here too — which is the only way to
+ * develop against it before the board has one. */
+static void prv_record_score(void)
+{
+    const uint32_t score = game_session_get_score();
+
+    if (!high_score_offer(score))
+    {
+        return;
+    }
+
+    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    {
+        if (high_score_get(place) == score)
+        {
+            (void)printf("a new high score — %u takes place %u\n", score, (unsigned)(place + 1U));
+
+            break;
+        }
+    }
+}
+
 static void prv_report_progress(void)
 {
     const game_state_e state = game_session_get_state();
@@ -250,11 +275,13 @@ static void prv_report_progress(void)
         case GAME_STATE_OVER:
             (void)printf("game over on level %u with %u points. Space to play again.\n", level,
                          game_session_get_score());
+            prv_record_score();
             break;
 
         case GAME_STATE_WON:
             (void)printf("all %u levels cleared with %u points. Space to play again.\n",
                          (unsigned)DIFFICULTY_FINAL_LEVEL, game_session_get_score());
+            prv_record_score();
             break;
 
         default: break;
@@ -272,6 +299,8 @@ int main(int in_argument_count, char** in_arguments)
 
     systick_bsp_init();
     sw_timer_init();
+    flash_bsp_init();
+    high_score_init();
 
     if (!prv_open_window())
     {

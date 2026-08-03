@@ -225,3 +225,17 @@ The maze is 224 × 248 px of a 240 × 320 panel, which leaves three rows of cell
 **How it reaches the panel.** The HUD is a *fixed-length list of slots* — three for `1UP`, seven for the score, five for `LEVEL`, two for the level, three for lives — and what each slot should show is a pure function of the game state. Asking the same question of the state last drawn says what is already on the panel, and the difference is exactly what has to be sent.
 
 That matters because the score changes on almost every pellet. Re-sending seven digits each time would cost more of a frame than the five actors do; sending the one digit that moved costs nothing. A spent life is *painted over* rather than skipped — a slot that simply stopped being drawn would leave the last Pacman on the panel for the rest of the run.
+
+## 10.11 The High Scores (FR-009)
+
+Three scores, not one. A single number tells a player whether they were the best; a table tells them how close they came, and the cabinets this game is copied from all showed a list. Best first, and a score equal to one already there does not displace it — first to get there keeps the place.
+
+A finished run is offered to the table **once, when it ends**. That is not tidiness: storing a score erases a flash page and stalls the CPU for the milliseconds it takes, so offering the score as it climbed would be a visible stutter every few pellets. Measured on the board, an erase is about a millisecond and three writes about ten; a frame is sixteen.
+
+**Every stored byte is suspect.** A page can be erased, half-programmed by a power cut mid-write, or left over from a different build of this firmware, and all three read back as numbers. A magic word says *this is a high-score table*, a version says *of this shape*, and a CRC-32 says *and it is intact*. Anything that fails those starts from an empty table, because showing a score nobody scored is worse than showing none.
+
+Clearing the table is a **console command**, `highscore reset`, rather than a menu entry. The reason to clear it is almost always a developer's — a score set while testing sits in the top three for good, and there is no way to play a worse game than one that has already happened. `highscore` on its own prints the three.
+
+**Where they live.** `Bsp/flash_bsp` owns one 8 KB page, and the *linker* reserves it: the `FLASH` region is one page shorter than the part and the page beyond it is its own region, so a firmware that grew into it fails to link rather than erasing part of itself the first time a score is saved. The driver offers read and **replace** rather than write, because flash erases whole pages and can only clear bits — offering a partial write would be a promise the hardware cannot keep.
+
+The host build has the same store behind a file next to the executable, so scores survive between runs there too. That is not a convenience: the property being stood in for is *surviving a power cycle*, and an array in a process that exits stands in for nothing.
