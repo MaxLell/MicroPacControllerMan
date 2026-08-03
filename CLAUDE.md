@@ -64,8 +64,12 @@ silently working around a wart.
   (DEC-020): score, level and lives in the arcade's own font, sent slot by slot so only the
   digit that moved travels. The **double frame buffer is resolved** (DEC-021): `render`
   owns the one buffer, `ott_framebuffer` borrows it, and `render` is in the target build.
-  Still missing: **the target wiring** — `app_main` runs only the OTT loop, so the game
-  itself has never executed on the board.
+- **M3 runs on the board.** `app_main` starts the game at power-on and polls the console in
+  the same loop; `ott <name>` reboots into the test and `reset` returns to the game
+  (DEC-022). Measured on the target: **RAM 64.8 %, flash 15.4 %**. Wiring it in broke
+  `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
+  that now spends milliseconds inside a frame drops most of a command line; the console
+  samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
 
 ## Build · flash · test (all from `Firmware/`)
 

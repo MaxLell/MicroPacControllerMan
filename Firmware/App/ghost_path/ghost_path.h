@@ -50,7 +50,7 @@
  *                      worse than turning around.
  */
 direction_e ghost_path_find_step_towards(const playfield_t* in_playfield, cell_t in_from, cell_t in_target,
-                                         direction_e in_forbidden_direction);
+                                         direction_e in_forbidden_direction, bool in_may_pass_gate);
 
 /*! \brief Choose the step that gets furthest from a cell — the frightened behaviour.
  *
@@ -67,6 +67,6 @@ direction_e ghost_path_find_step_towards(const playfield_t* in_playfield, cell_t
  * \return          The direction to step, with the same dead-end rule
  */
 direction_e ghost_path_find_step_away_from(const playfield_t* in_playfield, cell_t in_from, cell_t in_avoid,
-                                           direction_e in_forbidden_direction);
+                                           direction_e in_forbidden_direction, bool in_may_pass_gate);
 
 #endif /* GHOST_PATH_H */

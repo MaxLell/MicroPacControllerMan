@@ -178,9 +178,16 @@ add_subdirectory(${CUBE}/cmake/stm32cubemx stm32cubemx)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
-    # The frame buffer lives in Render and the OTTs borrow it, so these come along even
-    # though the game itself is not wired to the target yet. Two frame buffers do not fit.
+    App/agent/agent.c
+    App/difficulty/difficulty.c
+    App/game/game.c
+    App/game_view/game_view.c
+    App/ghost/ghost.c
+    App/ghost_path/ghost_path.c
+    App/pacman/pacman.c
+    App/playfield/playfield.c
     App/render/render.c
+    App/score/score.c
     App/sprite_set/sprite_set.c
     Services/sprite/sprite.c
     Bsp/dio_bsp/dio_bsp.c
@@ -224,6 +231,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/agent
     App/difficulty
     App/game
+    App/game_view
     App/ghost
     App/ghost_path
     App/pacman

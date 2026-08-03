@@ -67,6 +67,22 @@ typedef struct
     uint16_t elroy2_pellets_left;
     uint32_t elroy2_period_ms; /*!< Faster than Pacman himself from level 5 on */
 
+    /*! \brief How many pellets Pacman must eat before Inky and Clyde may leave the ghost
+     *         house (§10.4). Pinky's limit is always zero, so he never waits.
+     *
+     * Only one ghost's counter runs at a time, in the order Pinky, Inky, Clyde, so these
+     * are consecutive rather than parallel: on level 1 Inky leaves at 30 and Clyde 60 dots
+     * later. Both fall to zero as the levels rise, which is why the later levels feel busy
+     * from the first second. */
+    uint16_t inky_dot_limit;
+    uint16_t clyde_dot_limit;
+
+    /*! \brief How long Pacman may go without eating before the most-preferred waiting ghost
+     *         is pushed out anyway (§10.4).
+     *
+     * Without it he could simply stop eating and keep three of them boxed up for ever. */
+    uint32_t house_idle_limit_ms;
+
     /*! \brief How long a power pellet frightens for; **zero from level 17 on and off
      *         for good from 19**, where a power pellet becomes 50 points and nothing
      *         else. */

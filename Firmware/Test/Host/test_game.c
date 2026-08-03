@@ -130,9 +130,29 @@ static void prv_jump_to_level(uint8_t in_level)
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
     {
-        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index,
-                    playfield_get_pen_cell(&g_game.playfield, (uint8_t)(index % PLAYFIELD_PEN_CELL_COUNT)));
+        const cell_t start = playfield_get_ghost_start(&g_game.playfield, index);
+
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index, start,
+                    playfield_is_house(&g_game.playfield, start));
         g_game.ghost_move_elapsed_ms[index] = 0U;
+
+        /* Loading a level lets out everyone whose dot limit is already zero (§10.4), and a
+         * test that jumps straight to a level has to do the same or its ghosts never move. */
+        if (index != (uint8_t)GHOST_INKY && index != (uint8_t)GHOST_CLYDE)
+        {
+            ghost_release_from_house(&g_game.ghosts[index]);
+        }
+    }
+
+    /* Inky and Clyde only from the level their limit falls to zero. */
+    if (g_game.difficulty.inky_dot_limit == 0U)
+    {
+        ghost_release_from_house(&g_game.ghosts[GHOST_INKY]);
+    }
+
+    if (g_game.difficulty.clyde_dot_limit == 0U)
+    {
+        ghost_release_from_house(&g_game.ghosts[GHOST_CLYDE]);
     }
 
     g_game.pacman_move_elapsed_ms = 0U;
@@ -491,7 +511,7 @@ void test_the_frightened_window_runs_out(void)
 void test_walking_into_a_ghost_costs_a_life_and_resets_the_positions(void)
 {
     game_start(&g_game);
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
 
     prv_step_onto_the_pellet();
 
@@ -504,7 +524,7 @@ void test_the_eaten_pellets_survive_a_lost_life(void)
 {
     game_start(&g_game);
     prv_step_onto_the_pellet();
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y), false);
 
     game_set_direction(&g_game, BACK_DIRECTION);
     game_tick(&g_game, prv_pacman_period_ms());
@@ -518,7 +538,7 @@ void test_the_last_life_ends_the_run(void)
 {
     game_start(&g_game);
     g_game.lives = 1U;
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
 
     prv_step_onto_the_pellet();
 
@@ -530,7 +550,7 @@ void test_a_finished_run_ignores_further_time(void)
 {
     game_start(&g_game);
     g_game.lives = 1U;
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
     prv_step_onto_the_pellet();
 
     const msg_game_state_t before = prv_state();
@@ -550,7 +570,7 @@ void test_eating_a_frightened_ghost_scores_and_sends_it_back_to_the_pen(void)
     prv_step_onto_the_pellet();
 
     /* Frightened now, so the next meeting goes the other way (§10.5). */
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y), false);
     ghost_set_mode(&g_game.ghosts[GHOST_BLINKY], GHOST_MODE_FRIGHTENED);
 
     game_set_direction(&g_game, BACK_DIRECTION);
@@ -566,7 +586,7 @@ void test_passing_through_a_ghost_still_counts_as_meeting_it(void)
 
     /* The ghost is where Pacman is and Pacman is heading for where the ghost will be —
      * they swap cells in one step and would otherwise slip past each other. */
-    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y));
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
     ghost_set_mode(&g_game.ghosts[GHOST_BLINKY], GHOST_MODE_CHASE);
 
     /* Only the ghosts move in this slice, straight down onto Pacman's cell as he leaves
@@ -776,6 +796,143 @@ void test_the_frightened_window_shrinks_and_is_gone_by_the_last_level(void)
     TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
 }
 
+/* --- who is in the house, and when they come out (§10.4) ------------------ */
+
+/* Eat exactly `in_count` pellets, by putting Pacman next to one and letting him take a
+ * step onto it, over and over.
+ *
+ * A bigger liberty than the rest of this file takes, and deliberate: these tests are about
+ * *when the other three leave the house*, and making Pacman walk there would decide them by
+ * how the maze is shaped instead. Walking was tried first and does not work — the corridor
+ * he starts in holds fourteen pellets and then he paces an empty row for ever.
+ *
+ * Approached from the bottom of the maze, which is the far side from the ghost house. */
+static void prv_eat_pellets(uint16_t in_count)
+{
+    static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+
+    for (uint16_t eaten = 0U; eaten < in_count; ++eaten)
+    {
+        bool has_eaten = false;
+
+        for (int16_t y = PLAYFIELD_HEIGHT - 1; (y >= 0) && !has_eaten; --y)
+        {
+            for (int16_t x = 0; (x < PLAYFIELD_WIDTH) && !has_eaten; ++x)
+            {
+                const cell_t pellet = prv_make_cell(x, y);
+
+                if (playfield_get_pellet(&g_game.playfield, pellet) == PLAYFIELD_PELLET_NONE)
+                {
+                    continue;
+                }
+
+                for (uint8_t index = 0U; (index < 4U) && !has_eaten; ++index)
+                {
+                    const cell_t approach = playfield_step(pellet, k_directions[index]);
+
+                    if (!playfield_is_walkable(&g_game.playfield, approach)
+                        || playfield_is_house(&g_game.playfield, approach))
+                    {
+                        continue;
+                    }
+
+                    pacman_reset(&g_game.pacman, approach);
+                    game_set_direction(&g_game, playfield_get_opposite_direction(k_directions[index]));
+                    game_tick(&g_game, prv_pacman_period_ms());
+
+                    has_eaten = playfield_get_pellet(&g_game.playfield, pellet) == PLAYFIELD_PELLET_NONE;
+                }
+            }
+        }
+
+        TEST_ASSERT_TRUE_MESSAGE(has_eaten, "ran out of reachable pellets");
+        TEST_ASSERT_EQUAL_MESSAGE(GAME_STATE_RUNNING, game_get_state(&g_game), "a ghost ended the run mid-count");
+    }
+}
+
+/* Shut Blinky in the house so he cannot end the run while a dot counter is being watched.
+ *
+ * A liberty with the Model, and the same kind the file's header already owns up to: these
+ * tests are about *when the other three come out*, and Blinky hunting Pacman across ninety
+ * pellets would decide them by killing him instead. He is not in the release preference
+ * order, so parking him there leaves him there. */
+static void prv_shut_blinky_in(void)
+{
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY,
+                playfield_get_ghost_start(&g_game.playfield, (uint8_t)GHOST_PINKY), true);
+}
+
+void test_only_blinky_and_pinky_are_out_when_a_run_begins(void)
+{
+    /* §10.4: Blinky starts outside altogether, Pinky's dot limit is zero so he leaves as the
+     * level begins, and Inky and Clyde have to be eaten out. All four leaving at once was
+     * what made level 1 feel like level 10. */
+    game_start(&g_game);
+
+    TEST_ASSERT_FALSE(ghost_is_in_house(&g_game.ghosts[GHOST_BLINKY]));
+    TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_PINKY]));
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
+}
+
+void test_inky_comes_out_at_his_dot_limit_and_clyde_later(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+    game_start(&g_game);
+    prv_shut_blinky_in();
+
+    /* One short of Inky's limit: still shut in. Counting is what releases him, not time. */
+    prv_eat_pellets((uint16_t)(difficulty.inky_dot_limit - 1U));
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
+
+    prv_eat_pellets(1U);
+    TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
+
+    /* Clyde's counter only starts once Inky's has stopped, so his limit is a further
+     * stretch rather than a total from the beginning of the level. */
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
+    prv_eat_pellets(difficulty.clyde_dot_limit);
+    TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
+}
+
+void test_standing_still_cannot_keep_the_ghosts_locked_up(void)
+{
+    /* Without the idle timer a player could stop eating and keep three of them indoors for
+     * the whole level, which the arcade explicitly guards against. */
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+    game_start(&g_game);
+
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
+
+    /* Pacman is never given a direction, so not a single pellet is eaten. */
+    prv_tick_for(difficulty.house_idle_limit_ms + 100U, 10U);
+
+    TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
+}
+
+void test_a_lost_life_switches_to_the_global_counter(void)
+{
+    /* §10.4: after a death the personal counters are set aside for a global one, so the
+     * restart is paced the same however late in the level it happened. */
+    game_start(&g_game);
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
+
+    prv_step_onto_the_pellet();
+
+    TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES - 1U, game_get_lives(&g_game));
+    TEST_ASSERT_TRUE(g_game.is_global_dot_counter_active);
+    TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_PINKY]));
+
+    /* And Pinky now waits for seven dots rather than leaving at once. */
+    prv_shut_blinky_in();
+    prv_eat_pellets(7U);
+    TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_PINKY]));
+}
+
 /* --- Cruise Elroy (§10.9) ------------------------------------------------- */
 
 void test_cruise_elroy_speeds_blinky_up_as_the_maze_empties(void)
@@ -860,7 +1017,7 @@ void test_a_ghost_crawls_through_the_tunnel(void)
     game_start(&g_game);
     TEST_ASSERT_TRUE(playfield_is_tunnel(&g_game.playfield, tunnel_cell));
 
-    ghost_reset(&g_game.ghosts[GHOST_PINKY], GHOST_PINKY, tunnel_cell);
+    ghost_reset(&g_game.ghosts[GHOST_PINKY], GHOST_PINKY, tunnel_cell, false);
     tunnel_ms = prv_measure_ghost_period_ms(GHOST_PINKY);
 
     /* The one stretch where Pacman can reliably shake one off. */

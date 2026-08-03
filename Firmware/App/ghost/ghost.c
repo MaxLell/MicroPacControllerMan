@@ -14,10 +14,17 @@
  * ghost - private
  * ========================================================================= */
 
-/* §10.4's tunable look-aheads and Clyde's shyness radius. */
-#define PINKY_LOOK_AHEAD   (2U)
-#define INKY_LOOK_AHEAD    (1U)
-#define CLYDE_SHY_DISTANCE (4U)
+/* §10.4's look-aheads and Clyde's shyness radius — the arcade's own figures.
+ *
+ * They were 2, 1 and 4 here, which is what made the three of them feel interchangeable:
+ * Pinky aiming two cells ahead is barely an ambush, and Clyde breaking off at four cells
+ * meant he almost never came close enough to matter. */
+#define PINKY_LOOK_AHEAD           (4U)
+#define INKY_LOOK_AHEAD            (2U)
+
+/* Eight cells, compared as a square because that is what the distance function gives. */
+#define CLYDE_SHY_DISTANCE         (8U)
+#define CLYDE_SHY_SQUARED_DISTANCE (CLYDE_SHY_DISTANCE * CLYDE_SHY_DISTANCE)
 
 static cell_t prv_cell_ahead(cell_t in_cell, direction_e in_direction, uint8_t in_step_count)
 {
@@ -51,7 +58,7 @@ static cell_t prv_get_clyde_target(const ghost_t* const in_ghost, cell_t in_pacm
 {
     const cell_t corner = playfield_get_scatter_corner((uint8_t)in_ghost->personality);
 
-    if (playfield_get_distance(agent_get_cell(&in_ghost->agent), in_pacman_cell) > CLYDE_SHY_DISTANCE)
+    if (playfield_get_squared_distance(agent_get_cell(&in_ghost->agent), in_pacman_cell) >= CLYDE_SHY_SQUARED_DISTANCE)
     {
         return in_pacman_cell;
     }
@@ -63,16 +70,46 @@ static cell_t prv_get_clyde_target(const ghost_t* const in_ghost, cell_t in_pacm
  * ghost - public
  * ========================================================================= */
 
-void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_t in_pen_cell)
+void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_t in_start_cell, bool in_is_in_house)
 {
     ASSERT(inout_ghost != NULL);
     ASSERT(in_personality < GHOST_COUNT);
 
-    agent_place(&inout_ghost->agent, in_pen_cell, DIRECTION_NONE);
+    agent_place(&inout_ghost->agent, in_start_cell, DIRECTION_NONE);
 
     inout_ghost->personality = in_personality;
     inout_ghost->mode = GHOST_MODE_SCATTER;
     inout_ghost->may_reverse = false;
+    inout_ghost->is_in_house = in_is_in_house;
+    inout_ghost->is_waiting_in_house = in_is_in_house;
+}
+
+void ghost_release_from_house(ghost_t* inout_ghost)
+{
+    ASSERT(inout_ghost != NULL);
+
+    inout_ghost->is_waiting_in_house = false;
+}
+
+bool ghost_is_waiting_in_house(const ghost_t* in_ghost)
+{
+    ASSERT(in_ghost != NULL);
+
+    return in_ghost->is_waiting_in_house;
+}
+
+bool ghost_is_in_house(const ghost_t* in_ghost)
+{
+    ASSERT(in_ghost != NULL);
+
+    return in_ghost->is_in_house;
+}
+
+void ghost_note_left_house(ghost_t* inout_ghost)
+{
+    ASSERT(inout_ghost != NULL);
+
+    inout_ghost->is_in_house = false;
 }
 
 void ghost_send_to_pen(ghost_t* inout_ghost, cell_t in_pen_cell)
@@ -80,6 +117,13 @@ void ghost_send_to_pen(ghost_t* inout_ghost, cell_t in_pen_cell)
     ASSERT(inout_ghost != NULL);
 
     agent_place(&inout_ghost->agent, in_pen_cell, DIRECTION_NONE);
+
+    /* Home again, so the gate opens for it once more — and it has to leave the way the
+     * others do rather than reappearing in the maze. It does not queue behind the dot
+     * counters, though: the arcade turns a revived ghost straight back out, and making it
+     * wait would let a lucky player park three of them indoors for a whole level. */
+    inout_ghost->is_in_house = true;
+    inout_ghost->is_waiting_in_house = false;
 
     /* Back to hunting from the pen. The caller decides which non-frightened mode the
      * others are in and will set it on the next mode update; scatter is the safe default
@@ -99,14 +143,31 @@ void ghost_set_mode(ghost_t* inout_ghost, ghost_mode_e in_mode)
         return;
     }
 
+    /* Which transitions earn the reversal is not "all of them". §10.1 lists four —
+     * chase→scatter, chase→frightened, scatter→chase, scatter→frightened — and then says
+     * explicitly that **leaving** frightened earns none. Granting it on every change gave
+     * every energizer two visible about-turns instead of one, the second at a moment the
+     * player has no reason to expect and cannot read as a mode change. */
+    if (inout_ghost->mode != GHOST_MODE_FRIGHTENED)
+    {
+        inout_ghost->may_reverse = true;
+    }
+
     inout_ghost->mode = in_mode;
-    inout_ghost->may_reverse = true;
 }
 
-cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell, direction_e in_pacman_direction,
-                        cell_t in_blinky_cell)
+cell_t ghost_get_target(const ghost_t* in_ghost, const playfield_t* in_playfield, cell_t in_pacman_cell,
+                        direction_e in_pacman_direction, cell_t in_blinky_cell)
 {
     ASSERT(in_ghost != NULL);
+    ASSERT(in_playfield != NULL);
+
+    /* Inside the house nothing else matters: it heads for the gate. The house is enclosed,
+     * so a chase or scatter target would leave it pacing the floor forever. */
+    if (in_ghost->is_in_house)
+    {
+        return playfield_get_house_exit(in_playfield);
+    }
 
     if (in_ghost->mode == GHOST_MODE_SCATTER)
     {
@@ -134,6 +195,12 @@ bool ghost_advance(ghost_t* inout_ghost, const playfield_t* in_playfield, cell_t
     ASSERT(inout_ghost != NULL);
     ASSERT(in_playfield != NULL);
 
+    /* Still shut in: it stays where it is until its dot limit comes up (§10.4). */
+    if (inout_ghost->is_waiting_in_house)
+    {
+        return false;
+    }
+
     /* Normally the way back is barred (§10.1); a mode change buys exactly one exemption,
      * spent here whether or not the ghost actually turns around. */
     forbidden = playfield_get_opposite_direction(agent_get_direction(&inout_ghost->agent));
@@ -147,13 +214,15 @@ bool ghost_advance(ghost_t* inout_ghost, const playfield_t* in_playfield, cell_t
     if (inout_ghost->mode == GHOST_MODE_FRIGHTENED)
     {
         chosen = ghost_path_find_step_away_from(in_playfield, agent_get_cell(&inout_ghost->agent), in_pacman_cell,
-                                                forbidden);
+                                                forbidden, inout_ghost->is_in_house);
     }
     else
     {
-        const cell_t target = ghost_get_target(inout_ghost, in_pacman_cell, in_pacman_direction, in_blinky_cell);
+        const cell_t target =
+            ghost_get_target(inout_ghost, in_playfield, in_pacman_cell, in_pacman_direction, in_blinky_cell);
 
-        chosen = ghost_path_find_step_towards(in_playfield, agent_get_cell(&inout_ghost->agent), target, forbidden);
+        chosen = ghost_path_find_step_towards(in_playfield, agent_get_cell(&inout_ghost->agent), target, forbidden,
+                                              inout_ghost->is_in_house);
     }
 
     return agent_step(&inout_ghost->agent, in_playfield, chosen);

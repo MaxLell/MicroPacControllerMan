@@ -53,6 +53,17 @@ typedef struct
     ghost_personality_e personality;
     ghost_mode_e mode;
     bool may_reverse; /*!< Earned by a mode change (§10.1)   */
+
+    /*!< Whether it is still in the ghost house. Only a ghost in here may cross the gate,
+     *   which is what makes the house one-way: once out, the only way back is to be eaten
+     *   (§10.4). While inside it heads for the exit rather than for its usual target — the
+     *   house is enclosed, so a chase target would just have it pacing the floor. */
+    bool is_in_house;
+
+    /*!< In the house and not yet let out. The three inside wait for Pacman to eat his way
+     *   to their dot limit (§10.4), and a waiting ghost does not move at all — the arcade
+     *   bobs them up and down, which is decoration a cell grid cannot carry. */
+    bool is_waiting_in_house;
 } ghost_t;
 
 /* ==========================================================================
@@ -63,9 +74,11 @@ typedef struct
  *
  * \param[out]      inout_ghost: instance to reset, must not be `NULL`
  * \param[in]       in_personality: which ghost this is
- * \param[in]       in_pen_cell: from #playfield_get_pen_cell
+ * \param[in]       in_start_cell: from #playfield_get_ghost_start
+ * \param[in]       in_is_in_house: whether that cell is inside the house. Blinky's is not
+ *                      — the arcade starts him on the tile above the gate (§10.2).
  */
-void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_t in_pen_cell);
+void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_t in_start_cell, bool in_is_in_house);
 
 /*! \brief Send an eaten ghost back to the pen (§10.5).
  *
@@ -101,8 +114,8 @@ void ghost_set_mode(ghost_t* inout_ghost, ghost_mode_e in_mode);
  * \param[in]       in_blinky_cell: Blinky's cell, for Inky's rule
  * \return          The target cell
  */
-cell_t ghost_get_target(const ghost_t* in_ghost, cell_t in_pacman_cell, direction_e in_pacman_direction,
-                        cell_t in_blinky_cell);
+cell_t ghost_get_target(const ghost_t* in_ghost, const playfield_t* in_playfield, cell_t in_pacman_cell,
+                        direction_e in_pacman_direction, cell_t in_blinky_cell);
 
 /*! \brief Move the ghost one cell.
  *
@@ -124,6 +137,27 @@ cell_t ghost_get_cell(const ghost_t* in_ghost);
 
 /*! \brief The direction the ghost faces. */
 direction_e ghost_get_direction(const ghost_t* in_ghost);
+
+/*! \brief Whether the ghost is still in the house. */
+bool ghost_is_in_house(const ghost_t* in_ghost);
+
+/*! \brief Let a waiting ghost out of the house.
+ *
+ * Its dot limit has been reached, or the idle timer ran out (§10.4). From here it heads for
+ * the gate on its own.
+ */
+void ghost_release_from_house(ghost_t* inout_ghost);
+
+/*! \brief Whether the ghost is in the house and still waiting to be let out. */
+bool ghost_is_waiting_in_house(const ghost_t* in_ghost);
+
+/*! \brief Note that the ghost has left the house.
+ *
+ * Called by the game once its cell is outside, which is the moment the gate closes behind
+ * it. Separate from #ghost_advance because "where the house is" is the maze's knowledge,
+ * not the ghost's.
+ */
+void ghost_note_left_house(ghost_t* inout_ghost);
 
 /*! \brief The ghost's current mode. */
 ghost_mode_e ghost_get_mode(const ghost_t* in_ghost);

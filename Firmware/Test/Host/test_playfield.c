@@ -166,19 +166,19 @@ void test_every_pellet_can_be_eaten(void)
     }
 }
 
-void test_the_ghost_pen_is_reachable(void)
+void test_every_ghost_start_is_reachable(void)
 {
     /* A sealed pen means the ghosts never come out — a maze that looks fine and plays as
      * an empty stroll. */
     prv_flood_from_pacman_start();
 
-    for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+    for (uint8_t index = 0U; index < PLAYFIELD_GHOST_COUNT; ++index)
     {
-        const cell_t pen_cell = playfield_get_pen_cell(&g_playfield, index);
+        const cell_t start = playfield_get_ghost_start(&g_playfield, index);
         char message[64];
 
-        (void)snprintf(message, sizeof(message), "pen cell %u is sealed off", index);
-        TEST_ASSERT_TRUE_MESSAGE(g_reached[pen_cell.y][pen_cell.x], message);
+        (void)snprintf(message, sizeof(message), "ghost %u's start is sealed off", index);
+        TEST_ASSERT_TRUE_MESSAGE(g_reached[start.y][start.x], message);
     }
 }
 
@@ -226,12 +226,12 @@ void test_pacmans_start_holds_no_pellet(void)
                       playfield_get_pellet(&g_playfield, playfield_get_pacman_start(&g_playfield)));
 }
 
-void test_the_pen_holds_no_pellets(void)
+void test_no_ghost_start_holds_a_pellet(void)
 {
-    for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+    for (uint8_t index = 0U; index < PLAYFIELD_GHOST_COUNT; ++index)
     {
         TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                          playfield_get_pellet(&g_playfield, playfield_get_pen_cell(&g_playfield, index)));
+                          playfield_get_pellet(&g_playfield, playfield_get_ghost_start(&g_playfield, index)));
     }
 }
 
@@ -258,6 +258,109 @@ void test_the_outer_frame_is_wall_except_at_the_tunnel(void)
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, top_left));
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, west_mouth));
     TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, east_mouth));
+}
+
+/* --- the ghost house ------------------------------------------------------ */
+
+void test_the_gate_is_the_only_way_into_the_house(void)
+{
+    /* The rule the house rests on: seal the gate and the inside becomes unreachable. If
+     * some other cell also let one in, this would still find its way through and the
+     * one-way rule would be enforced in the wrong place. */
+    uint16_t house_cells = 0U;
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            const cell_t cell = {x, y};
+
+            if (playfield_is_gate(&g_playfield, cell))
+            {
+                g_playfield.walls[y][x] = true;
+            }
+            else if (playfield_is_house(&g_playfield, cell))
+            {
+                ++house_cells;
+            }
+            else
+            {
+                /* Ordinary maze. */
+            }
+        }
+    }
+
+    TEST_ASSERT_GREATER_THAN_UINT16(0U, house_cells);
+    prv_flood_from_pacman_start();
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            const cell_t cell = {x, y};
+            char message[64];
+
+            if (!playfield_is_house(&g_playfield, cell))
+            {
+                continue;
+            }
+
+            (void)snprintf(message, sizeof(message), "house cell %d,%d is reachable past a sealed gate", x, y);
+            TEST_ASSERT_FALSE_MESSAGE(g_reached[y][x], message);
+        }
+    }
+}
+
+void test_the_gate_counts_as_house_and_is_not_a_wall(void)
+{
+    /* It has to be crossable — a ghost walks over it in both directions — and it has to
+     * count as house, so a ghost standing on it is still on its way through rather than
+     * already loose. */
+    bool has_gate = false;
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            const cell_t cell = {x, y};
+
+            if (!playfield_is_gate(&g_playfield, cell))
+            {
+                continue;
+            }
+
+            has_gate = true;
+            TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, cell));
+            TEST_ASSERT_TRUE(playfield_is_house(&g_playfield, cell));
+        }
+    }
+
+    TEST_ASSERT_TRUE(has_gate);
+}
+
+void test_blinky_starts_outside_the_house_and_the_others_inside(void)
+{
+    /* §10.2, and it is the whole of the spawning behaviour as far as the maze is concerned:
+     * Blinky is already loose when a level begins, the other three have to come out. */
+    TEST_ASSERT_FALSE(playfield_is_house(&g_playfield, playfield_get_ghost_start(&g_playfield, 0U)));
+
+    for (uint8_t index = 1U; index < PLAYFIELD_GHOST_COUNT; ++index)
+    {
+        char message[48];
+
+        (void)snprintf(message, sizeof(message), "ghost %u does not start inside the house", index);
+        TEST_ASSERT_TRUE_MESSAGE(playfield_is_house(&g_playfield, playfield_get_ghost_start(&g_playfield, index)),
+                                 message);
+    }
+}
+
+void test_the_house_exit_is_outside_and_next_to_the_gate(void)
+{
+    const cell_t exit_cell = playfield_get_house_exit(&g_playfield);
+
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, exit_cell));
+    TEST_ASSERT_FALSE(playfield_is_house(&g_playfield, exit_cell));
+    TEST_ASSERT_TRUE(playfield_is_gate(&g_playfield, playfield_step(exit_cell, DIRECTION_SOUTH)));
 }
 
 /* --- the tunnel, as a place rather than a row ---------------------------- */
@@ -428,14 +531,27 @@ void test_stepping_nowhere_stays_put(void)
     TEST_ASSERT_TRUE(playfield_are_cells_equal(cell, playfield_step(cell, DIRECTION_NONE)));
 }
 
-void test_manhattan_distance_is_symmetric_and_zero_on_itself(void)
+void test_the_distance_is_the_squared_straight_line_and_is_symmetric(void)
 {
     const cell_t first = {1, 2};
     const cell_t second = {4, 6};
 
-    TEST_ASSERT_EQUAL_UINT16(7U, playfield_get_distance(first, second));
-    TEST_ASSERT_EQUAL_UINT16(7U, playfield_get_distance(second, first));
-    TEST_ASSERT_EQUAL_UINT16(0U, playfield_get_distance(first, first));
+    /* Three across and four down: the straight line is five, so the square is 25. A
+     * Manhattan distance would say seven — which is the metric this replaced, and the
+     * difference is exactly why a ghost used to treat a detour as free. */
+    TEST_ASSERT_EQUAL_UINT32(25U, playfield_get_squared_distance(first, second));
+    TEST_ASSERT_EQUAL_UINT32(25U, playfield_get_squared_distance(second, first));
+    TEST_ASSERT_EQUAL_UINT32(0U, playfield_get_squared_distance(first, first));
+}
+
+void test_the_distance_survives_a_target_well_off_the_board(void)
+{
+    /* Pinky aims four cells past Pacman and Inky doubles a vector from Blinky, so a target
+     * can sit twice the board away. In 16 bits the square of that would overflow. */
+    const cell_t corner = {0, 0};
+    const cell_t far_away = {-60, 90};
+
+    TEST_ASSERT_EQUAL_UINT32((60U * 60U) + (90U * 90U), playfield_get_squared_distance(corner, far_away));
 }
 
 void test_opposite_directions_pair_up(void)
@@ -474,8 +590,8 @@ void test_a_null_playfield_asserts(void)
     ASSERT_PROBE_EXPECT((void)playfield_get_total_pellet_count(NULL), "in_playfield != NULL");
 }
 
-void test_asking_for_a_pen_cell_out_of_range_asserts(void)
+void test_asking_for_a_ghost_start_out_of_range_asserts(void)
 {
-    ASSERT_PROBE_EXPECT((void)playfield_get_pen_cell(&g_playfield, PLAYFIELD_PEN_CELL_COUNT),
-                        "in_index < PLAYFIELD_PEN_CELL_COUNT");
+    ASSERT_PROBE_EXPECT((void)playfield_get_ghost_start(&g_playfield, PLAYFIELD_GHOST_COUNT),
+                        "in_index < PLAYFIELD_GHOST_COUNT");
 }

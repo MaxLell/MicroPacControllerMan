@@ -234,7 +234,7 @@ void ott_init(void)
     cli_register(&reset_binding);
 }
 
-void ott_execute_pending(void)
+bool ott_execute_pending(void)
 {
     ott_spec_t spec;
 
@@ -253,7 +253,11 @@ void ott_execute_pending(void)
         has_passed = scenario->run_fn(spec.request.parameter, reason, sizeof(reason));
 
         prv_report(scenario, has_passed, reason);
+
+        return true;
     }
+
+    return false;
 }
 
 void ott_poll(void)

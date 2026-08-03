@@ -74,6 +74,9 @@ typedef struct
     uint8_t elroy2_percent;
     uint8_t frightened_seconds;
     uint8_t frightened_flash_count;
+    uint16_t inky_dots;
+    uint16_t clyde_dots;
+    uint8_t house_idle_seconds;
     const phase_plan_t* plan;
 } difficulty_row_t;
 
@@ -91,28 +94,28 @@ typedef struct
  * source it came from. */
 /* clang-format off */
 static const difficulty_row_t g_levels[DIFFICULTY_FINAL_LEVEL] = {
-    /*  pac eat frPac frEat | gho tun frGho | e1@  e1  e2@  e2 | frS fl | plan            level */
-    {    80, 71,   90,   79,   75,  40,  50,  20,  80,  10,  85,   6,  5, &g_plan_level_1 },      /*  1 */
-    {    90, 79,   95,   83,   85,  45,  55,  30,  90,  15,  95,   5,  5, &g_plan_levels_2_to_4 },/*  2 */
-    {    90, 79,   95,   83,   85,  45,  55,  40,  90,  20,  95,   4,  5, &g_plan_levels_2_to_4 },/*  3 */
-    {    90, 79,   95,   83,   85,  45,  55,  40,  90,  20,  95,   3,  5, &g_plan_levels_2_to_4 },/*  4 */
-    {   100, 87,  100,   87,   95,  50,  60,  40, 100,  20, 105,   2,  5, &g_plan_levels_5_up },  /*  5 */
-    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   5,  5, &g_plan_levels_5_up },  /*  6 */
-    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   2,  5, &g_plan_levels_5_up },  /*  7 */
-    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   2,  5, &g_plan_levels_5_up },  /*  8 */
-    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   1,  3, &g_plan_levels_5_up },  /*  9 */
-    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   5,  5, &g_plan_levels_5_up },  /* 10 */
-    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   2,  5, &g_plan_levels_5_up },  /* 11 */
-    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   1,  3, &g_plan_levels_5_up },  /* 12 */
-    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   1,  3, &g_plan_levels_5_up },  /* 13 */
-    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   3,  5, &g_plan_levels_5_up },  /* 14 */
-    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3, &g_plan_levels_5_up },  /* 15 */
-    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3, &g_plan_levels_5_up },  /* 16 */
-    {   100, 87,    0,    0,   95,  50,   0, 100, 100,  50, 105,   0,  0, &g_plan_levels_5_up },  /* 17 */
-    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3, &g_plan_levels_5_up },  /* 18 */
-    {   100, 87,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0, &g_plan_levels_5_up },  /* 19 */
-    {   100, 87,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0, &g_plan_levels_5_up },  /* 20 */
-    {    90, 79,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0, &g_plan_levels_5_up },  /* 21 */
+    /*  pac eat frPac frEat | gho tun frGho | e1@  e1  e2@  e2 | frS fl | inky clyde idle | plan   level */
+    {    80, 71,   90,   79,   75,  40,  50,  20,  80,  10,  85,   6,  5,  30,  60, 4, &g_plan_level_1 },      /*  1 */
+    {    90, 79,   95,   83,   85,  45,  55,  30,  90,  15,  95,   5,  5,   0,  50, 4, &g_plan_levels_2_to_4 },/*  2 */
+    {    90, 79,   95,   83,   85,  45,  55,  40,  90,  20,  95,   4,  5,   0,   0, 4, &g_plan_levels_2_to_4 },/*  3 */
+    {    90, 79,   95,   83,   85,  45,  55,  40,  90,  20,  95,   3,  5,   0,   0, 4, &g_plan_levels_2_to_4 },/*  4 */
+    {   100, 87,  100,   87,   95,  50,  60,  40, 100,  20, 105,   2,  5,   0,   0, 3, &g_plan_levels_5_up },  /*  5 */
+    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   5,  5,   0,   0, 3, &g_plan_levels_5_up },  /*  6 */
+    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   2,  5,   0,   0, 3, &g_plan_levels_5_up },  /*  7 */
+    {   100, 87,  100,   87,   95,  50,  60,  50, 100,  25, 105,   2,  5,   0,   0, 3, &g_plan_levels_5_up },  /*  8 */
+    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /*  9 */
+    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   5,  5,   0,   0, 3, &g_plan_levels_5_up },  /* 10 */
+    {   100, 87,  100,   87,   95,  50,  60,  60, 100,  30, 105,   2,  5,   0,   0, 3, &g_plan_levels_5_up },  /* 11 */
+    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /* 12 */
+    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /* 13 */
+    {   100, 87,  100,   87,   95,  50,  60,  80, 100,  40, 105,   3,  5,   0,   0, 3, &g_plan_levels_5_up },  /* 14 */
+    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /* 15 */
+    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /* 16 */
+    {   100, 87,    0,    0,   95,  50,   0, 100, 100,  50, 105,   0,  0,   0,   0, 3, &g_plan_levels_5_up },  /* 17 */
+    {   100, 87,  100,   87,   95,  50,  60, 100, 100,  50, 105,   1,  3,   0,   0, 3, &g_plan_levels_5_up },  /* 18 */
+    {   100, 87,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0,   0,   0, 3, &g_plan_levels_5_up },  /* 19 */
+    {   100, 87,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0,   0,   0, 3, &g_plan_levels_5_up },  /* 20 */
+    {    90, 79,    0,    0,   95,  50,   0, 120, 100,  60, 105,   0,  0,   0,   0, 3, &g_plan_levels_5_up },  /* 21 */
 };
 /* clang-format on */
 
@@ -165,6 +168,10 @@ void difficulty_get(uint8_t in_level, difficulty_t* out_difficulty)
     out_difficulty->elroy1_period_ms = prv_get_period_ms(row->elroy1_percent);
     out_difficulty->elroy2_pellets_left = row->elroy2_pellets_left;
     out_difficulty->elroy2_period_ms = prv_get_period_ms(row->elroy2_percent);
+
+    out_difficulty->inky_dot_limit = row->inky_dots;
+    out_difficulty->clyde_dot_limit = row->clyde_dots;
+    out_difficulty->house_idle_limit_ms = (uint32_t)row->house_idle_seconds * 1000U;
 
     out_difficulty->frightened_duration_ms = (uint32_t)row->frightened_seconds * 1000U;
     out_difficulty->frightened_flash_count = row->frightened_flash_count;

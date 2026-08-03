@@ -26,11 +26,12 @@
  * playfield - public types
  * ========================================================================= */
 
-#define PLAYFIELD_WIDTH          (28)
-#define PLAYFIELD_HEIGHT         (31)
+#define PLAYFIELD_WIDTH       (28)
+#define PLAYFIELD_HEIGHT      (31)
 
-/*! \brief Cells in the ghost pen (§10.2). */
-#define PLAYFIELD_PEN_CELL_COUNT (4)
+/*! \brief Ghosts the maze holds a starting cell for, in the order
+ *         `ghost_personality_e` numbers them (§10.2). */
+#define PLAYFIELD_GHOST_COUNT (4)
 
 typedef struct
 {
@@ -49,11 +50,17 @@ typedef struct
 {
     bool walls[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     bool tunnels[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
+
+    /*!< The ghost house, and the gate that is its only way in or out. Kept apart from the
+     *   walls because the house is not a wall to anybody — it is a place only ghosts may
+     *   be in, and only on their way out or after being eaten. */
+    bool house[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
+    bool gates[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     playfield_pellet_e pellets[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
     uint16_t remaining_pellet_count; /*!< Normal and power together         */
     uint16_t total_pellet_count;     /*!< What a freshly loaded maze holds  */
     cell_t pacman_start;
-    cell_t pen_cells[PLAYFIELD_PEN_CELL_COUNT];
+    cell_t ghost_starts[PLAYFIELD_GHOST_COUNT];
 } playfield_t;
 
 /* ==========================================================================
@@ -140,12 +147,34 @@ bool playfield_is_cleared(const playfield_t* in_playfield);
 /*! \brief Where Pacman starts this level (§10.2). */
 cell_t playfield_get_pacman_start(const playfield_t* in_playfield);
 
-/*! \brief One of the ghost pen cells — also where an eaten ghost returns to (§10.5).
+/*! \brief Where a ghost starts a level (§10.2).
+ *
+ * Indexed as `ghost_personality_e` numbers them. Blinky's cell is **outside** the house,
+ * just above the gate; the other three stand inside it, and it is also where an eaten one
+ * is revived (§10.5).
  *
  * \param[in]       in_playfield: loaded playfield
- * \param[in]       in_index: `0`..#PLAYFIELD_PEN_CELL_COUNT `- 1`
+ * \param[in]       in_index: `0`..#PLAYFIELD_GHOST_COUNT `- 1`
  */
-cell_t playfield_get_pen_cell(const playfield_t* in_playfield, uint8_t in_index);
+cell_t playfield_get_ghost_start(const playfield_t* in_playfield, uint8_t in_index);
+
+/*! \brief The cell just outside the gate — where a ghost leaving the house is headed, and
+ *         where the arcade stands Blinky at the start of a level. */
+cell_t playfield_get_house_exit(const playfield_t* in_playfield);
+
+/*! \brief Whether a cell is inside the ghost house, gate included.
+ *
+ * The house is not a wall — it is a *place*, and who may be in it is a rule about actors
+ * rather than about the maze. Pacman never may (§10.2); a ghost may only be on its way out
+ * or after being eaten, and once outside it cannot get back in
+ * ([10 §10.4](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)).
+ */
+bool playfield_is_house(const playfield_t* in_playfield, cell_t in_cell);
+
+/*! \brief Whether a cell is the ghost house gate — the one cell pair that crossing the
+ *         house boundary goes through, and therefore the only place the rule above has to
+ *         be enforced. */
+bool playfield_is_gate(const playfield_t* in_playfield, cell_t in_cell);
 
 /*! \brief The maze corner a ghost scatters to (§10.4).
  *
@@ -167,8 +196,22 @@ cell_t playfield_get_scatter_corner(uint8_t in_index);
  */
 cell_t playfield_step(cell_t in_cell, direction_e in_direction);
 
-/*! \brief Manhattan distance between two cells (§10.4's ghost metric). */
-uint16_t playfield_get_distance(cell_t in_first, cell_t in_second);
+/*! \brief The **square** of the straight-line distance between two cells (§10.4).
+ *
+ * Squared, and that is not an optimisation — it is what the arcade compares. Ghost
+ * targeting only ever asks *which of these is nearer*, and squaring preserves that order
+ * exactly while a square root would add a rounding step the original never had. Clyde's
+ * eight-tile threshold is therefore compared against 64.
+ *
+ * It replaced a Manhattan distance, which is a different metric and picks a different
+ * direction at a good many junctions: Manhattan makes a diagonal detour cost the same as
+ * going straight, so a ghost would treat two visibly different options as equal and fall
+ * through to the tie-break far more often than the original does.
+ *
+ * Returns 32 bits because a target may be well outside the maze — Pinky aims four cells
+ * past Pacman and Inky doubles a vector, so the gap can be twice the board.
+ */
+uint32_t playfield_get_squared_distance(cell_t in_first, cell_t in_second);
 
 /*! \brief Whether two cells are the same. */
 bool playfield_are_cells_equal(cell_t in_first, cell_t in_second);
