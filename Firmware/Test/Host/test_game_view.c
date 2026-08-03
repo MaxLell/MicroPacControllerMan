@@ -83,17 +83,44 @@ static void prv_make_state(void)
     }
 }
 
-/* Drain the level-change handover so a test can look at an ordinary frame. */
+/* Drain the level-change handover *and* the HUD, so a test can look at an ordinary frame.
+ *
+ * Both trickle: the field over as many messages as it takes, then the HUD a few slots at a
+ * time beside the actors. What is left once neither has anything more to say is a frame
+ * carrying actors only, which is what most of the tests below want to start from. */
 static msg_display_list_t prv_settle(void)
 {
+    /* Generous, and bounded only so a view that never converges fails as a test rather
+     * than hanging the suite. */
+    const uint16_t give_up_after = 2000U;
     msg_display_list_t list;
+    uint16_t frames = 0U;
 
     while (game_view_is_field_pending(&g_view))
     {
         (void)game_view_get_display_list(&g_view, &list);
+
+        TEST_ASSERT_LESS_THAN_UINT16(give_up_after, ++frames);
     }
 
-    (void)game_view_get_display_list(&g_view, &list);
+    do
+    {
+        uint8_t background = 0U;
+
+        (void)game_view_get_display_list(&g_view, &list);
+
+        for (uint8_t index = 0U; index < list.count; ++index)
+        {
+            background += (list.items[index].kind == (uint8_t)DISPLAY_ITEM_BACKGROUND) ? 1U : 0U;
+        }
+
+        TEST_ASSERT_LESS_THAN_UINT16(give_up_after, ++frames);
+
+        if (background == 0U)
+        {
+            break;
+        }
+    } while (true);
 
     return list;
 }
@@ -133,6 +160,212 @@ void setUp(void)
 void tearDown(void)
 {
     assert_probe_end();
+}
+
+/* ==========================================================================
+ * the HUD
+ * ========================================================================= */
+
+/* Collect every background item of the next few frames, so the HUD can be inspected as a
+ * whole even though it goes out a few slots at a time. */
+static uint8_t prv_collect_hud(msg_display_item_t* out_items, uint8_t in_capacity)
+{
+    msg_display_list_t list;
+    uint8_t count = 0U;
+
+    for (uint8_t frame = 0U; frame < 40U; ++frame)
+    {
+        (void)game_view_get_display_list(&g_view, &list);
+
+        for (uint8_t index = 0U; index < list.count; ++index)
+        {
+            if (list.items[index].kind != (uint8_t)DISPLAY_ITEM_BACKGROUND)
+            {
+                continue;
+            }
+
+            TEST_ASSERT_LESS_THAN_UINT8(in_capacity, count);
+            out_items[count] = list.items[index];
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+/* The item drawn at a pixel position, or NULL. */
+static const msg_display_item_t* prv_find_at(const msg_display_item_t* in_items, uint8_t in_count, int16_t in_x,
+                                             int16_t in_y)
+{
+    for (uint8_t index = 0U; index < in_count; ++index)
+    {
+        if ((in_items[index].x == in_x) && (in_items[index].y == in_y))
+        {
+            return &in_items[index];
+        }
+    }
+
+    return NULL;
+}
+
+/* Where the score's digit at `in_place` lands, counting places from the units up. */
+static void prv_get_score_digit_pixel(uint8_t in_place, int16_t* const out_x, int16_t* const out_y)
+{
+    game_view_get_cell_pixel((uint8_t)(6U - in_place), 0U, out_x, out_y);
+
+    *out_y = GAME_VIEW_HUD_VALUE_ROW_Y;
+}
+
+void test_the_hud_spells_out_the_score_the_level_and_the_lives(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    uint8_t count;
+    int16_t x;
+    int16_t y;
+
+    g_state.score = 1234U;
+    g_state.level = 7U;
+    g_state.lives = 3U;
+
+    game_view_set_state(&g_view, &g_state);
+    while (game_view_is_field_pending(&g_view))
+    {
+        msg_display_list_t list;
+        (void)game_view_get_display_list(&g_view, &list);
+    }
+
+    count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    /* The units digit, and the one above it. Right-aligned, so 1234 puts the 4 on the last
+     * column and the 3 beside it. */
+    prv_get_score_digit_pixel(0U, &x, &y);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), prv_find_at(items, count, x, y)->sprite);
+    prv_get_score_digit_pixel(1U, &x, &y);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('3'), prv_find_at(items, count, x, y)->sprite);
+
+    /* And the places above the number are blank rather than zeroes — the arcade does not
+     * pad a score out with leading noughts. */
+    prv_get_score_digit_pixel(4U, &x, &y);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(' '), prv_find_at(items, count, x, y)->sprite);
+
+    /* The level, right-aligned in its own two places at the other end. */
+    game_view_get_cell_pixel(26U, 0U, &x, &y);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('7'),
+                            prv_find_at(items, count, x, GAME_VIEW_HUD_VALUE_ROW_Y)->sprite);
+
+    /* Three lives, three little Pacmans along the bottom. */
+    for (uint8_t slot = 0U; slot < 3U; ++slot)
+    {
+        game_view_get_cell_pixel((uint8_t)(2U + (slot * 2U)), 0U, &x, &y);
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_PACMAN_HALF_WEST,
+                                prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->sprite);
+    }
+}
+
+void test_a_score_of_nothing_still_shows_a_nought(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    uint8_t count;
+    int16_t x;
+    int16_t y;
+
+    g_state.score = 0U;
+    game_view_set_state(&g_view, &g_state);
+    while (game_view_is_field_pending(&g_view))
+    {
+        msg_display_list_t list;
+        (void)game_view_get_display_list(&g_view, &list);
+    }
+
+    count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    /* Blanking every leading zero would leave the row empty at the start of a run, which
+     * reads as a HUD that has not come up yet. */
+    prv_get_score_digit_pixel(0U, &x, &y);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('0'), prv_find_at(items, count, x, y)->sprite);
+}
+
+void test_only_the_digits_that_moved_are_sent_again(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    uint8_t count;
+
+    g_state.score = 1230U;
+    game_view_set_state(&g_view, &g_state);
+    (void)prv_settle();
+
+    /* Ten points. One digit moves, and the score is the thing that changes most often in
+     * the whole game — re-sending all seven every pellet would cost more of the frame than
+     * the five actors do. */
+    g_state.score = 1240U;
+    game_view_set_state(&g_view, &g_state);
+    count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    TEST_ASSERT_EQUAL_UINT8(1U, count);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), items[0].sprite);
+}
+
+void test_a_lost_life_is_wiped_rather_than_left_behind(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    uint8_t count;
+    int16_t x;
+    int16_t y;
+
+    g_state.lives = 3U;
+    game_view_set_state(&g_view, &g_state);
+    (void)prv_settle();
+
+    g_state.lives = 2U;
+    game_view_set_state(&g_view, &g_state);
+    count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    /* The slot has to be painted over. Simply not drawing it again would leave the third
+     * Pacman on the panel for the rest of the run, because nothing else ever covers it. */
+    game_view_get_cell_pixel(6U, 0U, &x, &y);
+
+    TEST_ASSERT_EQUAL_UINT8(1U, count);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_ACTOR_BLANK,
+                            prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->sprite);
+}
+
+void test_the_hud_never_lands_on_the_maze(void)
+{
+    /* The maze owns rows 0..30 of its own grid and the HUD lives in what is left above and
+     * below it. Overlap would be silently destructive: a HUD item would paint over a wall
+     * and nothing would ever put it back, because walls are only drawn on a level change. */
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    uint8_t count;
+    int16_t maze_top;
+    int16_t maze_left;
+    const int16_t maze_bottom = (int16_t)(GAME_VIEW_ORIGIN_Y + (PLAYFIELD_HEIGHT * GAME_VIEW_TILE_SIZE));
+
+    game_view_get_cell_pixel(0U, 0U, &maze_left, &maze_top);
+
+    game_view_set_state(&g_view, &g_state);
+    while (game_view_is_field_pending(&g_view))
+    {
+        msg_display_list_t list;
+        (void)game_view_get_display_list(&g_view, &list);
+    }
+
+    count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    TEST_ASSERT_GREATER_THAN_UINT8(0U, count);
+
+    for (uint8_t index = 0U; index < count; ++index)
+    {
+        const int16_t bottom = (int16_t)(items[index].y + GAME_VIEW_ACTOR_SIZE);
+        char message[72];
+
+        (void)snprintf(message, sizeof(message), "a HUD item at %d,%d overlaps the maze", items[index].x,
+                       items[index].y);
+        TEST_ASSERT_TRUE_MESSAGE((bottom <= maze_top) || (items[index].y >= maze_bottom), message);
+
+        (void)snprintf(message, sizeof(message), "a HUD item at %d,%d runs off the panel", items[index].x,
+                       items[index].y);
+        TEST_ASSERT_TRUE_MESSAGE((items[index].y >= 0) && (bottom <= FRAMEBUFFER_HEIGHT), message);
+    }
 }
 
 /* ==========================================================================

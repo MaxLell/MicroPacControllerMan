@@ -213,6 +213,152 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
     prv_add_item(inout_list, DISPLAY_ITEM_BACKGROUND, sprite, palette, x, y);
 }
 
+/* ---- the HUD ------------------------------------------------------------- */
+
+/* Where each part of the HUD starts in the fixed item list. */
+#define HUD_PLAYER_LABEL_INDEX  (0U)
+#define HUD_SCORE_INDEX         (HUD_PLAYER_LABEL_INDEX + 3U)
+#define HUD_LEVEL_LABEL_INDEX   (HUD_SCORE_INDEX + GAME_VIEW_HUD_SCORE_DIGITS)
+#define HUD_LEVEL_INDEX         (HUD_LEVEL_LABEL_INDEX + 5U)
+#define HUD_LIVES_INDEX         (HUD_LEVEL_INDEX + GAME_VIEW_HUD_LEVEL_DIGITS)
+
+/* The maze columns each part sits on. The score runs to column 6 and the level to 26, so
+ * both read outward from the edge they belong to, as the arcade's do. */
+#define HUD_PLAYER_LABEL_COLUMN (3U)
+#define HUD_SCORE_LAST_COLUMN   (6U)
+#define HUD_LEVEL_LABEL_COLUMN  (22U)
+#define HUD_LEVEL_LAST_COLUMN   (26U)
+#define HUD_LIVES_FIRST_COLUMN  (2U)
+
+static const char* const g_hud_player_label = "1UP";
+static const char* const g_hud_level_label = "LEVEL";
+
+_Static_assert(HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
+
+/* One digit of a number, counting places from the units up, or a space where a leading
+ * zero would be. Place zero always gives a digit, so a score of nothing reads `0` rather
+ * than as an empty row. */
+static char prv_get_digit_character(uint32_t in_value, uint8_t in_place)
+{
+    uint32_t divisor = 1U;
+
+    for (uint8_t step = 0U; step < in_place; ++step)
+    {
+        divisor *= 10U;
+    }
+
+    if ((in_place > 0U) && (in_value < divisor))
+    {
+        return ' ';
+    }
+
+    return (char)('0' + (char)((in_value / divisor) % 10U));
+}
+
+static void prv_set_hud_text_item(char in_character, uint8_t in_column, int16_t in_y, sprite_set_id_e* const out_sprite,
+                                  sprite_set_palette_e* const out_palette, int16_t* const out_x, int16_t* const out_y)
+{
+    *out_sprite = sprite_set_get_glyph(in_character);
+    *out_palette = SPRITE_SET_PALETTE_TEXT;
+    *out_x = (int16_t)(GAME_VIEW_ORIGIN_X + ((int16_t)in_column * GAME_VIEW_TILE_SIZE));
+    *out_y = in_y;
+}
+
+/* What one slot of the HUD should show, for a given state.
+ *
+ * A pure function of the state, which is the whole trick: the same call against the state
+ * last drawn says what is on the panel, and the difference between the two is exactly what
+ * has to be sent. */
+static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_t in_index,
+                                  sprite_set_id_e* const out_sprite, sprite_set_palette_e* const out_palette,
+                                  int16_t* const out_x, int16_t* const out_y)
+{
+    ASSERT(in_index < GAME_VIEW_HUD_ITEM_COUNT);
+
+    if (in_index < HUD_SCORE_INDEX)
+    {
+        const uint8_t offset = (uint8_t)(in_index - HUD_PLAYER_LABEL_INDEX);
+
+        prv_set_hud_text_item(g_hud_player_label[offset], (uint8_t)(HUD_PLAYER_LABEL_COLUMN + offset),
+                              GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite, out_palette, out_x, out_y);
+    }
+    else if (in_index < HUD_LEVEL_LABEL_INDEX)
+    {
+        const uint8_t offset = (uint8_t)(in_index - HUD_SCORE_INDEX);
+        const uint8_t place = (uint8_t)(GAME_VIEW_HUD_SCORE_DIGITS - 1U - offset);
+        const uint8_t column = (uint8_t)(HUD_SCORE_LAST_COLUMN - place);
+
+        prv_set_hud_text_item(prv_get_digit_character(in_state->score, place), column, GAME_VIEW_HUD_VALUE_ROW_Y,
+                              out_sprite, out_palette, out_x, out_y);
+    }
+    else if (in_index < HUD_LEVEL_INDEX)
+    {
+        const uint8_t offset = (uint8_t)(in_index - HUD_LEVEL_LABEL_INDEX);
+
+        prv_set_hud_text_item(g_hud_level_label[offset], (uint8_t)(HUD_LEVEL_LABEL_COLUMN + offset),
+                              GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite, out_palette, out_x, out_y);
+    }
+    else if (in_index < HUD_LIVES_INDEX)
+    {
+        const uint8_t offset = (uint8_t)(in_index - HUD_LEVEL_INDEX);
+        const uint8_t place = (uint8_t)(GAME_VIEW_HUD_LEVEL_DIGITS - 1U - offset);
+        const uint8_t column = (uint8_t)(HUD_LEVEL_LAST_COLUMN - place);
+
+        prv_set_hud_text_item(prv_get_digit_character(in_state->level, place), column, GAME_VIEW_HUD_VALUE_ROW_Y,
+                              out_sprite, out_palette, out_x, out_y);
+    }
+    else
+    {
+        /* A life slot: a little Pacman, or a blank the same size once it is spent. Both
+         * are drawn, never merely skipped — a slot that stopped being sent would leave the
+         * last life on the panel for the rest of the run. */
+        const uint8_t slot = (uint8_t)(in_index - HUD_LIVES_INDEX);
+        const bool is_alive = slot < in_state->lives;
+
+        *out_sprite = is_alive ? SPRITE_SET_PACMAN_HALF_WEST : SPRITE_SET_ACTOR_BLANK;
+        *out_palette = is_alive ? SPRITE_SET_PALETTE_PACMAN : SPRITE_SET_PALETTE_EMPTY;
+        *out_x =
+            (int16_t)(GAME_VIEW_ORIGIN_X + ((int16_t)(HUD_LIVES_FIRST_COLUMN + (slot * 2U)) * GAME_VIEW_TILE_SIZE));
+        *out_y = GAME_VIEW_HUD_LIVES_Y;
+    }
+}
+
+/* Forget what the HUD showed, so all of it is described again. */
+static void prv_forget_hud(game_view_t* const inout_view)
+{
+    memset(inout_view->drawn_hud, GAME_VIEW_HUD_NOT_DRAWN, sizeof(inout_view->drawn_hud));
+}
+
+/* The HUD slots that changed. Same idea as the field, and it shares the same room beside
+ * the actors: whatever does not fit this frame is still different next frame. */
+static void prv_fill_changed_hud(game_view_t* const inout_view, msg_display_list_t* const inout_list)
+{
+    const uint8_t room = (uint8_t)(MSG_DISPLAY_ITEM_MAX - MSG_ACTOR_COUNT);
+
+    for (uint8_t index = 0U; index < GAME_VIEW_HUD_ITEM_COUNT; ++index)
+    {
+        sprite_set_id_e sprite;
+        sprite_set_palette_e palette;
+        int16_t x;
+        int16_t y;
+
+        prv_describe_hud_item(&inout_view->state, index, &sprite, &palette, &x, &y);
+
+        if ((uint8_t)sprite == inout_view->drawn_hud[index])
+        {
+            continue;
+        }
+
+        if (inout_list->count >= room)
+        {
+            return;
+        }
+
+        prv_add_item(inout_list, DISPLAY_ITEM_BACKGROUND, sprite, palette, x, y);
+        inout_view->drawn_hud[index] = (uint8_t)sprite;
+    }
+}
+
 /* Hand over a whole field, a message at a time, keeping our place between calls.
  *
  * This is the level-change path only. It deliberately says nothing about the actors: a
@@ -314,6 +460,7 @@ void game_view_init(game_view_t* inout_view)
     ASSERT(inout_view != NULL);
 
     memset(inout_view, 0, sizeof(*inout_view));
+    prv_forget_hud(inout_view);
 }
 
 void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_state)
@@ -332,6 +479,11 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
         inout_view->has_drawn_field = false;
         inout_view->pending_field_cell = 0U;
         inout_view->is_full_field_pending = true;
+
+        /* The HUD goes with it. Not because the maze covers it — it does not — but because
+         * a new level changes the number in it, and a reset has to put back a panel that
+         * may be showing anything at all. */
+        prv_forget_hud(inout_view);
     }
 }
 
@@ -355,6 +507,7 @@ bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out
     }
 
     prv_fill_changed_cells(inout_view, out_list);
+    prv_fill_changed_hud(inout_view, out_list);
     prv_fill_actor_items(inout_view, out_list);
 
     return true;

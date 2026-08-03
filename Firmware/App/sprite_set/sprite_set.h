@@ -75,6 +75,50 @@ typedef enum
     SPRITE_SET_TILE_PELLET,
     SPRITE_SET_TILE_POWER_PELLET,
 
+    /*! An actor-sized blank, so a spent life can be wiped from the HUD in one item rather
+     *  than four tiles. */
+    SPRITE_SET_ACTOR_BLANK,
+
+    /* The font. Contiguous and in ASCII order within each run, which is what lets
+     * #sprite_set_get_glyph be arithmetic. */
+    SPRITE_SET_GLYPH_SPACE,
+    SPRITE_SET_GLYPH_DIGIT_0,
+    SPRITE_SET_GLYPH_DIGIT_1,
+    SPRITE_SET_GLYPH_DIGIT_2,
+    SPRITE_SET_GLYPH_DIGIT_3,
+    SPRITE_SET_GLYPH_DIGIT_4,
+    SPRITE_SET_GLYPH_DIGIT_5,
+    SPRITE_SET_GLYPH_DIGIT_6,
+    SPRITE_SET_GLYPH_DIGIT_7,
+    SPRITE_SET_GLYPH_DIGIT_8,
+    SPRITE_SET_GLYPH_DIGIT_9,
+    SPRITE_SET_GLYPH_A,
+    SPRITE_SET_GLYPH_B,
+    SPRITE_SET_GLYPH_C,
+    SPRITE_SET_GLYPH_D,
+    SPRITE_SET_GLYPH_E,
+    SPRITE_SET_GLYPH_F,
+    SPRITE_SET_GLYPH_G,
+    SPRITE_SET_GLYPH_H,
+    SPRITE_SET_GLYPH_I,
+    SPRITE_SET_GLYPH_J,
+    SPRITE_SET_GLYPH_K,
+    SPRITE_SET_GLYPH_L,
+    SPRITE_SET_GLYPH_M,
+    SPRITE_SET_GLYPH_N,
+    SPRITE_SET_GLYPH_O,
+    SPRITE_SET_GLYPH_P,
+    SPRITE_SET_GLYPH_Q,
+    SPRITE_SET_GLYPH_R,
+    SPRITE_SET_GLYPH_S,
+    SPRITE_SET_GLYPH_T,
+    SPRITE_SET_GLYPH_U,
+    SPRITE_SET_GLYPH_V,
+    SPRITE_SET_GLYPH_W,
+    SPRITE_SET_GLYPH_X,
+    SPRITE_SET_GLYPH_Y,
+    SPRITE_SET_GLYPH_Z,
+
     /* The maze walls: the arcade's own line and corner pieces, one per cell. The letters
      * in the comments are the ones the arcade's map uses for them, kept so the map in
      * `game_view` can be read straight across against its source. */
@@ -128,6 +172,7 @@ typedef enum
     SPRITE_SET_PALETTE_EMPTY,
     SPRITE_SET_PALETTE_WALL,
     SPRITE_SET_PALETTE_DOOR, /*!< The ghost house gate, which is not blue like the rest */
+    SPRITE_SET_PALETTE_TEXT, /*!< The HUD, and every screen made of words                */
     SPRITE_SET_PALETTE_PELLET,
     SPRITE_SET_PALETTE_COUNT
 } sprite_set_palette_e;
@@ -188,6 +233,16 @@ sprite_set_id_e sprite_set_get_pacman_sprite(direction_e in_direction, cell_prog
  * \return          `true` when the character is a piece of maze wall
  */
 bool sprite_set_get_maze_tile(char in_map_character, sprite_set_id_e* out_id);
+
+/*! \brief The drawing for a character of the HUD's alphabet.
+ *
+ * Digits, capital letters and the space. Anything else is a programming error rather than
+ * a runtime condition — the strings this draws are all in the source.
+ *
+ * \param[in]       in_character: `'0'`..`'9'`, `'A'`..`'Z'` or `' '`
+ * \return          A `SPRITE_SET_GLYPH_*` id
+ */
+sprite_set_id_e sprite_set_get_glyph(char in_character);
 
 /*! \brief Whether a maze drawing is the ghost house gate, which is drawn in its own
  *         colour rather than the walls' blue. */

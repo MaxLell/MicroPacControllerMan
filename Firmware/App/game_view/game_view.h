@@ -35,17 +35,49 @@
  * 28 cells across is 224 px of a 240 px panel, and 31 down is 248 of 320. That is the
  * arcade's own playfield at its native scale, which is what FR-022 asks for and what the
  * 128 px panel this project started on could not hold. */
-#define GAME_VIEW_TILE_SIZE  (8)
+#define GAME_VIEW_TILE_SIZE        (8)
 
 /*! \brief An actor sprite spans two cells, as the arcade's do, and is therefore drawn
  *         half a cell up and to the left of the cell it occupies. */
-#define GAME_VIEW_ACTOR_SIZE (16)
+#define GAME_VIEW_ACTOR_SIZE       (16)
 
 /*! \brief Where the maze's top-left corner sits on the panel. Horizontally centred; the
  *         248 px of maze start three cells down, so the rows above and below are free for
  *         the score and lives — the same places the arcade puts them. */
-#define GAME_VIEW_ORIGIN_X   ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
-#define GAME_VIEW_ORIGIN_Y   (24)
+#define GAME_VIEW_ORIGIN_X         ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
+#define GAME_VIEW_ORIGIN_Y         (24)
+
+/*! \brief The HUD, in the rows the maze leaves free above and below it (FR-022).
+ *
+ * Three rows above and six below, and the arcade's own arrangement in them: a label on the
+ * first row and its value on the second, score at the left, and the lives as little
+ * Pacmans along the bottom. Where the arcade puts a fruit for the level, this puts the
+ * number — there is no fruit in this game
+ * ([01 §1.2](../../../Docu/PrePlanning/01-System-Overview-and-Context.md)).
+ *
+ * Seven digits of score, because a full run can pass a million; two of level, because the
+ * last one is 21.
+ */
+#define GAME_VIEW_HUD_LABEL_ROW_Y  (0)
+#define GAME_VIEW_HUD_VALUE_ROW_Y  (GAME_VIEW_TILE_SIZE)
+#define GAME_VIEW_HUD_LIVES_Y      (GAME_VIEW_ORIGIN_Y + (PLAYFIELD_HEIGHT * GAME_VIEW_TILE_SIZE))
+
+#define GAME_VIEW_HUD_SCORE_DIGITS (7U)
+#define GAME_VIEW_HUD_LEVEL_DIGITS (2U)
+
+/*! \brief How many lives the HUD has room to show. A run that starts with more than this
+ *         is drawn as this many — the number is the model's, the picture is ours. */
+#define GAME_VIEW_HUD_LIFE_SLOTS   (3U)
+
+/*! \brief Everything the HUD draws, as a fixed list: `1UP`, the score, `LEVEL`, the level,
+ *         and the life slots. Fixed on purpose — a list that never changes length can be
+ *         compared against what was last drawn item by item. */
+#define GAME_VIEW_HUD_ITEM_COUNT                                                                                       \
+    (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS)
+
+/*! \brief The `drawn_hud` entry for a slot that has never been drawn. Above every
+ *         `sprite_set_id_e`, so the first comparison always reports a change. */
+#define GAME_VIEW_HUD_NOT_DRAWN (0xFFU)
 
 typedef struct
 {
@@ -69,6 +101,11 @@ typedef struct
      * maze was 11 x 9, and the compiler said so the moment the grid grew. */
     uint16_t pending_field_cell;
     bool is_full_field_pending;
+
+    /*!< Which drawing each HUD slot last showed, so only the digits that actually moved go
+     *   out. The score changes on almost every pellet, and re-sending seven digits each
+     *   time would cost more of the frame than the five actors do. */
+    uint8_t drawn_hud[GAME_VIEW_HUD_ITEM_COUNT];
 } game_view_t;
 
 /* ==========================================================================

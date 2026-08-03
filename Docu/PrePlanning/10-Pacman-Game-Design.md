@@ -195,3 +195,27 @@ The plan alternates, always starting with scatter; when it runs out the ghosts c
 The seventeen-minute chase and the single-frame scatter after it are quirks of the original and are transcribed as they are. Nobody will ever see that blip — a level is long over by then — but a tidied-up plan would be a different game, and the kind of difference that is impossible to notice later. A mode change lets a ghost reverse once; the frightened window freezes the plan rather than running it down in the background.
 
 Clearing a level keeps the score and lives and applies the next row; clearing level 21 wins the game.
+
+## 10.10 The HUD (FR-022)
+
+The maze is 224 × 248 px of a 240 × 320 panel, which leaves three rows of cells above it and six below (§10.2). The HUD lives there, arranged as the arcade arranges it: a label on the first row and its value on the second, the score at the left, and the lives as little Pacmans along the bottom.
+
+```
+   1UP                LEVEL
+      1240                7
+  ┌────────────────────────┐
+  │                        │
+  │         the maze       │
+  │                        │
+  └────────────────────────┘
+  ᗧ ᗧ ᗧ
+```
+
+- **Score**, seven digits, right-aligned so the units sit in a fixed place and the number grows leftward. Seven because a full run can pass a million. Leading zeros are drawn as blanks — but a score of nothing still shows a single `0`, or the row would read as a HUD that has not come up yet.
+- **Level**, two digits, right-aligned at the other end. The arcade puts a fruit here; this game has none ([01 §1.2](01-System-Overview-and-Context.md#12-system-boundary)), so it puts the number.
+- **Lives**, one Pacman per remaining life. The arcade shows the *reserve* men, one fewer than the count it is holding; this shows the count itself, so that what is on the panel and what `game_get_lives()` says can never disagree.
+- **The alphabet** is the arcade's own font, from the same tile ROM as the walls. All of it is present although the HUD spells two words with it, because the screens FR-001, FR-002 and FR-023 still want are all text.
+
+**How it reaches the panel.** The HUD is a *fixed-length list of slots* — three for `1UP`, seven for the score, five for `LEVEL`, two for the level, three for lives — and what each slot should show is a pure function of the game state. Asking the same question of the state last drawn says what is already on the panel, and the difference is exactly what has to be sent.
+
+That matters because the score changes on almost every pellet. Re-sending seven digits each time would cost more of a frame than the five actors do; sending the one digit that moved costs nothing. A spent life is *painted over* rather than skipped — a slot that simply stopped being drawn would leave the last Pacman on the panel for the rest of the run.
