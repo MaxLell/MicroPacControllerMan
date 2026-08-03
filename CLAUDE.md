@@ -62,9 +62,10 @@ silently working around a wart.
   corners stutter. The maze is written down twice on purpose, rules in `playfield` and
   appearance in `game_view`, with a unit test holding the two together. The **HUD** is in
   (DEC-020): score, level and lives in the arcade's own font, sent slot by slot so only the
-  digit that moved travels. Still missing: **the target wiring** — and the first thing in
-  its way is that `render` and `Test/Target/ott_framebuffer.c` each own a 153.6 kB frame
-  buffer, which together do not fit in 256 kB.
+  digit that moved travels. The **double frame buffer is resolved** (DEC-021): `render`
+  owns the one buffer, `ott_framebuffer` borrows it, and `render` is in the target build.
+  Still missing: **the target wiring** — `app_main` runs only the OTT loop, so the game
+  itself has never executed on the board.
 
 ## Build · flash · test (all from `Firmware/`)
 

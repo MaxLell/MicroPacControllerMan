@@ -194,7 +194,7 @@ void render_draw(const msg_display_list_t* in_list)
     g_save_count = actor_index;
 }
 
-const framebuffer_t* render_get_framebuffer(void)
+framebuffer_t* render_get_framebuffer(void)
 {
     return &g_framebuffer;
 }

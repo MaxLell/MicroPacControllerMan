@@ -61,10 +61,22 @@ void render_init(void);
  */
 void render_draw(const msg_display_list_t* in_list);
 
-/*! \brief The frame buffer, for a host application that has to blit it into a window.
+/*! \brief Borrow the frame buffer.
+ *
+ * **There is one, and this module owns it.** 153,600 bytes is 60 % of the contiguous SRAM,
+ * so a second one does not fit and nobody else may declare one — which is why this is
+ * handed out rather than kept private. Two callers want it: a host application blitting it
+ * into a window, and the on-target tests, which draw into it with `gfx` and push it out
+ * with `display` because what they are testing is that path itself, below anything this
+ * module does.
+ *
+ * Writable for that reason. A caller that draws into it directly is stepping around
+ * save-under, so what #render_draw restores afterwards is meaningless — harmless in
+ * practice, because the OTT flow runs one scenario per reset and the game is not running
+ * during it ([09 OTT Mechanism](../../../Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md)).
  *
  * \return          The buffer, never `NULL` and owned by this module
  */
-const framebuffer_t* render_get_framebuffer(void);
+framebuffer_t* render_get_framebuffer(void);
 
 #endif /* RENDER_H */
