@@ -7,13 +7,11 @@
 #include "console.h"
 #include "difficulty.h"
 #include "dio_bsp.h"
-#include "display.h"
 #include "game.h"
-#include "game_view.h"
+#include "game_session.h"
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
-#include "render.h"
 #include "spi_bsp.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
@@ -23,27 +21,7 @@
  * app_main - private
  * ========================================================================= */
 
-#define APP_MAIN_BOOT_BANNER     "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
-
-/* 16 ms is the 60 FPS of NFR-002, rounded to the 1 ms tick. M2 measured five moving actors
- * at 5.26 ms of that budget with 20 x 20 sprites, and they are 16 x 16 now. */
-#define APP_MAIN_FRAME_PERIOD_MS (16U)
-
-static game_t g_game;
-static game_view_t g_view;
-static sw_timer_t g_frame_timer;
-static bool g_is_frame_due;
-
-static void prv_on_frame_due(void)
-{
-    g_is_frame_due = true;
-
-    /* `sw_timer` is one-shot and a callback re-arms its own timer to make it periodic.
-     * Forgetting this line ran exactly one frame — and the first frame is the field
-     * handover, which deliberately draws no actors, so the panel showed a maze and then
-     * nothing at all, for ever. */
-    sw_timer_start(&g_frame_timer, APP_MAIN_FRAME_PERIOD_MS, prv_on_frame_due);
-}
+#define APP_MAIN_BOOT_BANNER "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
 
 static void prv_on_systick(void)
 {
@@ -95,15 +73,15 @@ static void prv_poll_input(void)
     {
         if (joystick_is_pressed(k_stick[index].key))
         {
-            game_set_direction(&g_game, k_stick[index].direction);
+            game_session_set_direction(k_stick[index].direction);
         }
     }
 
     /* The centre press starts the next run once this one is over (FR-003). Taken as an
      * edge, so a thumb resting on it does not restart the game every frame. */
-    if (joystick_take_press(JOYSTICK_KEY_CENTER) && (game_get_state(&g_game) != GAME_STATE_RUNNING))
+    if (joystick_take_press(JOYSTICK_KEY_CENTER) && (game_session_get_state() != GAME_STATE_RUNNING))
     {
-        game_start(&g_game);
+        game_session_start();
     }
 }
 
@@ -122,9 +100,9 @@ static void prv_report_progress(void)
     static uint8_t g_reported_level;
     static uint8_t g_reported_lives;
 
-    const game_state_e state = game_get_state(&g_game);
-    const uint8_t level = game_get_level(&g_game);
-    const uint8_t lives = game_get_lives(&g_game);
+    const game_state_e state = game_session_get_state();
+    const uint8_t level = game_session_get_level();
+    const uint8_t lives = game_session_get_lives();
 
     if ((state == g_reported_state) && (level == g_reported_level) && (lives == g_reported_lives))
     {
@@ -139,61 +117,29 @@ static void prv_report_progress(void)
     {
         case GAME_STATE_RUNNING:
             cli_print("level %u - %u lives, %lu points", (unsigned)level, (unsigned)lives,
-                      (unsigned long)game_get_score(&g_game));
+                      (unsigned long)game_session_get_score());
             break;
 
         case GAME_STATE_OVER:
             cli_print("game over on level %u with %lu points - centre key to play again", (unsigned)level,
-                      (unsigned long)game_get_score(&g_game));
+                      (unsigned long)game_session_get_score());
             break;
 
         case GAME_STATE_WON:
             cli_print("all %u levels cleared with %lu points - centre key to play again",
-                      (unsigned)DIFFICULTY_FINAL_LEVEL, (unsigned long)game_get_score(&g_game));
+                      (unsigned)DIFFICULTY_FINAL_LEVEL, (unsigned long)game_session_get_score());
             break;
 
         default: break;
     }
 }
 
-/* One frame — the same path the host application runs, which is what makes the host build
- * evidence about this one. */
-static void prv_run_frame(void)
-{
-    msg_game_state_t state;
-    msg_display_list_t list;
-
-    game_tick(&g_game, APP_MAIN_FRAME_PERIOD_MS);
-
-    game_get_state_message(&g_game, &state);
-    game_view_set_state(&g_view, &state);
-
-    /* A level change hands the whole field over across several lists; an ordinary frame is
-     * one. Both are drained here so a frame is never left half-drawn. */
-    do
-    {
-        if (game_view_get_display_list(&g_view, &list))
-        {
-            render_draw(&list);
-        }
-    } while (game_view_is_field_pending(&g_view));
-
-    display_service();
-    prv_report_progress();
-}
-
 /* Normal operation: the game, with the console alongside it. Never returns — the way out
  * is `ott <name>` or `reset`, and both reboot the board. */
 static void prv_run_game(void)
 {
-    render_init();
-
-    game_init(&g_game);
-    game_view_init(&g_view);
-    game_start(&g_game);
-
-    sw_timer_create(&g_frame_timer);
-    sw_timer_start(&g_frame_timer, APP_MAIN_FRAME_PERIOD_MS, prv_on_frame_due);
+    game_session_init();
+    game_session_start();
 
     for (;;)
     {
@@ -203,11 +149,9 @@ static void prv_run_game(void)
         sw_timer_process();
         prv_poll_input();
 
-        if (g_is_frame_due)
+        if (game_session_service())
         {
-            g_is_frame_due = false;
-
-            prv_run_frame();
+            prv_report_progress();
         }
     }
 }

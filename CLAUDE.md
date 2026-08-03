@@ -46,10 +46,12 @@ silently working around a wart.
   Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
   budget (RF-014), to be chosen against a real game loop.
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
-- **M3 Game — in progress, playable on the host.** `./build-host/pacman_host_app` runs the
-  game in an SDL window through the same path the target will use: `game` publishes a
+- **M3 Game — in progress, playable on the board and on the host.** `game` publishes a
   246-byte state, `game_view` turns cells into pixels and interpolates between simulation
-  steps, `render` owns the one frame buffer and erases by save-under. No Data-Pool — every
+  steps, `render` owns the one frame buffer and erases by save-under, and `game_session`
+  is the frame all three callers run — the target's `app_main`, the SDL window
+  (`./build-host/pacman_host_app`) and `ott pacman`, so the window is evidence about the
+  firmware rather than about a lookalike. No Data-Pool — every
   module talks through messages only, and no message carries a pointer (DEC-016). PR #10
   is closed; `host_main.c` was the last thing salvaged from it.
   The playfield is now the **arcade's own 28 × 31 maze at 8 px per cell**, one maze for
@@ -66,7 +68,9 @@ silently working around a wart.
   owns the one buffer, `ott_framebuffer` borrows it, and `render` is in the target build.
 - **M3 runs on the board.** `app_main` starts the game at power-on and polls the console in
   the same loop; `ott <name>` reboots into the test and `reset` returns to the game
-  (DEC-022). Measured on the target: **RAM 64.8 %, flash 15.4 %**. Wiring it in broke
+  (DEC-022). Playing it is a test in its own right: `ott pacman` (VT-INT-022) starts a run
+  with no menu in front of it and reports what a frame costs. Measured on the target:
+  **RAM 67.2 %, flash 16.1 %**. Wiring it in broke
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
@@ -91,7 +95,7 @@ STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
 python3 Test/run_ott.py --suite                          # the automatic ones, unattended
 python3 Test/run_ott.py --manual                         # the ones needing you at the board
-python3 Test/run_ott.py joystick_dot --port /dev/ttyACM0 # one by name; exit 0 = PASS
+python3 Test/run_ott.py pacman --port /dev/ttyACM0        # one by name; exit 0 = PASS
 
 # Or the umbrella, which wraps every one of these
 ./dev.sh check                                           # format + unit tests + both builds
