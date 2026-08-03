@@ -29,7 +29,7 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 | FR-010 | Maze Confinement | While a game is in progress, the system shall confine Pacman and the ghosts to the open paths of a single fixed maze, preventing any movement through walls. |
 | FR-011 | Pellet Consumption | While a game is in progress, when Pacman enters a maze cell containing a pellet, the system shall remove that pellet and add its point value to the current score. |
 | FR-012 | Tunnel Wrap-Around | While a game is in progress, when Pacman or a ghost exits the maze through a tunnel opening at a maze edge, the system shall re-enter it through the opposite tunnel opening on the same row (horizontal tunnel) or same column (vertical tunnel). |
-| FR-022 | Playfield Size | Each level's maze shall use a 28 × 31 cell grid rendered at 8 × 8 pixels per cell, in portrait orientation, leaving the remaining screen area for the HUD. |
+| FR-022 | Playfield Size | The maze shall use a 28 × 31 cell grid rendered at 8 × 8 pixels per cell, in portrait orientation, leaving the remaining screen area for the HUD. |
 
 ### 2.1.4 Ghosts
 
@@ -56,10 +56,10 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 | FR-006 | Starting Lives | The system shall start each game run with a fixed number of Pacman lives (default 3 — *tunable*). |
 | FR-024 | Life Lost & Respawn | When Pacman is caught and at least one life remains, the system shall decrement the lives, reset Pacman and the ghosts to their level start positions, and continue the current level. |
 | FR-007 | Game Over | When Pacman's remaining lives reach zero, the system shall end the game and return to the menu screen. |
-| FR-025 | Level Count & Mazes | The game shall consist of 5 levels, each with its own distinct maze. |
-| FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last pellet and power pellet of the current level's maze and it is not the final level, the system shall advance to the next level — loading the next maze and applying that level's higher difficulty — while keeping the accumulated score and remaining lives. |
-| FR-026 | Difficulty Scaling | Each successive level shall be harder than the previous one — faster ghosts, shorter frightened duration, and less scatter time — per the progression in [10 Pacman Game Design](10-Pacman-Game-Design.md). |
-| FR-027 | Game Completion | When Pacman clears the final (5th) level, the system shall end the game as fully completed (won). |
+| FR-025 | Level Count & Maze | The game shall consist of 21 levels, all played on the same maze, differing from one another only in difficulty (FR-026). |
+| FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last pellet and power pellet of the maze and it is not the final level, the system shall advance to the next level — restoring the pellets and applying that level's difficulty — while keeping the accumulated score and remaining lives. |
+| FR-026 | Difficulty Scaling | No level shall be easier than the one before it, and the difficulty of each level — the speeds of Pacman and of each ghost, the frightened duration, the scatter/chase schedule, and the thresholds at which Blinky accelerates as the maze empties — shall follow the progression in [10 Pacman Game Design](10-Pacman-Game-Design.md). |
+| FR-027 | Game Completion | When Pacman clears the final (21st) level, the system shall end the game as fully completed (won). |
 | FR-023 | End-of-Game Score Screen | When a game run ends (all lives lost, or the final level cleared), the system shall display the final score on its own screen for 2 seconds before returning to the menu screen. *(2 s default — tunable)* |
 
 ### 2.1.7 High Score & Persistence

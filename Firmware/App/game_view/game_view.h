@@ -30,26 +30,25 @@
  * game_view - public types
  * ========================================================================= */
 
-/*! \brief Side of one maze cell on the panel, in pixels.
+/*! \brief Side of one maze cell on the panel, in pixels — the arcade's 8.
  *
- * 20 falls out of the panel rather than out of taste: 11 cells across the 240 px width
- * is 220, leaving a 10 px margin either side, and 20 is even — so a cell has a real
- * centre, which every interpolation and every sprite placement here depends on. */
-#define GAME_VIEW_TILE_SIZE (20)
+ * 28 cells across is 224 px of a 240 px panel, and 31 down is 248 of 320. That is the
+ * arcade's own playfield at its native scale, which is what FR-022 asks for and what the
+ * 128 px panel this project started on could not hold. */
+#define GAME_VIEW_TILE_SIZE  (8)
+
+/*! \brief An actor sprite spans two cells, as the arcade's do, and is therefore drawn
+ *         half a cell up and to the left of the cell it occupies. */
+#define GAME_VIEW_ACTOR_SIZE (16)
 
 /*! \brief Where the maze's top-left corner sits on the panel. Horizontally centred; the
- *         180 px of maze start near the top so the space below stays free for the score
- *         and lives that FR-002 and FR-006 will need. */
-#define GAME_VIEW_ORIGIN_X  ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
-#define GAME_VIEW_ORIGIN_Y  (10)
+ *         248 px of maze start three cells down, so the rows above and below are free for
+ *         the score and lives — the same places the arcade puts them. */
+#define GAME_VIEW_ORIGIN_X   ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
+#define GAME_VIEW_ORIGIN_Y   (24)
 
 typedef struct
 {
-    /*!< The maze of the current level. 516 bytes, loaded once when the level changes
-     *   rather than per cell — walls do not travel in the state, because they never
-     *   change during a level and 99 unchanging bits per frame would be waste. */
-    playfield_t maze;
-
     /*!< The last state received. Held rather than consumed, because the view is asked
      *   for a picture far more often than the game produces a state. */
     msg_game_state_t state;
@@ -66,7 +65,9 @@ typedef struct
      *   state after a reset. That takes many messages, so the walk keeps its place. A
      *   *changed* cell during play is different: it is rare, it fits beside the actors,
      *   and it goes out in the same frame. */
-    uint8_t pending_field_cell;
+    /* 28 x 31 is 868 cells, so this counts past what a byte holds — it did not while the
+     * maze was 11 x 9, and the compiler said so the moment the grid grew. */
+    uint16_t pending_field_cell;
     bool is_full_field_pending;
 } game_view_t;
 
@@ -117,5 +118,19 @@ bool game_view_is_field_pending(const game_view_t* in_view);
  * \param[out]      out_y: top edge in pixels, must not be `NULL`
  */
 void game_view_get_cell_pixel(uint8_t in_column, uint8_t in_row, int16_t* out_x, int16_t* out_y);
+
+/*! \brief Whether this cell is drawn as a piece of maze wall.
+ *
+ * The maze is written down twice — once in `playfield` as the rules see it, once here as
+ * the panel sees it — because neither form can be derived from the other. This is what
+ * lets the two be checked against each other instead of merely believed.
+ *
+ * The ghost house gate is **not** a wall by this measure: it is drawn, but a ghost may
+ * cross it, which is the one place the two maps disagree on purpose.
+ *
+ * \param[in]       in_column: cell column, below \ref PLAYFIELD_WIDTH
+ * \param[in]       in_row: cell row, below \ref PLAYFIELD_HEIGHT
+ */
+bool game_view_is_wall_drawn_at(uint8_t in_column, uint8_t in_row);
 
 #endif /* GAME_VIEW_H */

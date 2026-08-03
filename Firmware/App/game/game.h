@@ -24,6 +24,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "difficulty.h"
 #include "ghost.h"
 #include "msg.h"
 #include "msg_broker.h"
@@ -36,14 +37,18 @@
  * ========================================================================= */
 
 /*! \brief Lives a run starts with (FR-006, §10.8). */
-#define GAME_STARTING_LIVES           (3U)
-
-/*! \brief Pacman's movement period, constant across levels (§10.1/§10.9). */
-#define GAME_PACMAN_MOVE_PERIOD_MS    (150U)
+#define GAME_STARTING_LIVES                  (3U)
 
 /*! \brief Internal broker depth. A tick can produce at most one pellet, four ghosts eaten
  *         and one frightened start, so this has generous headroom. */
-#define GAME_INTERNAL_BROKER_CAPACITY (16U)
+#define GAME_INTERNAL_BROKER_CAPACITY        (16U)
+
+/*! \brief Half a flash of the frightened warning (§10.9).
+ *
+ * A flash is one dark half and one light half, so the warning lasts
+ * `frightened_flash_count * 2 * ` this. The arcade counts it in frames; a quarter of a
+ * second per half reads the same and survives a frame rate that is not 60 exactly. */
+#define GAME_FRIGHTENED_FLASH_HALF_PERIOD_MS (250U)
 
 typedef enum
 {
@@ -66,9 +71,28 @@ typedef struct
     uint8_t level;
     uint8_t lives;
 
+    /*! \brief What this level plays like, looked up once when it loads (§10.9). */
+    difficulty_t difficulty;
+
     /* --- timing, all in milliseconds --- */
     uint32_t pacman_move_elapsed_ms;
-    uint32_t ghost_move_elapsed_ms;
+
+    /*! \brief One accumulator per ghost, because they no longer share a speed: Blinky
+     *         gets faster as the maze empties and any of them crawls in the tunnel. */
+    uint32_t ghost_move_elapsed_ms[GHOST_COUNT];
+
+    /*! \brief Whether Pacman's last step ended on a pellet — he takes the next one more
+     *         slowly (§10.9). It is why a cleared corridor is an escape route. */
+    bool did_pacman_eat_last_step;
+
+    /*! \brief Whether the last step actually changed a cell, per actor.
+     *
+     * Read only by the interpolation. An entity stopped against a wall keeps its facing
+     * and its timer keeps running (§10.1); without this the view would slide it in from
+     * the cell behind it once per period, on the spot. */
+    bool did_pacman_move;
+    bool did_ghost_move[GHOST_COUNT];
+
     uint32_t frightened_remaining_ms;
     uint32_t phase_remaining_ms;
     uint8_t phase_index; /*!< Position in the scatter/chase plan */
@@ -135,7 +159,7 @@ uint32_t game_get_score(const game_t* in_game);
 /*! \brief Lives left (FR-024). */
 uint8_t game_get_lives(const game_t* in_game);
 
-/*! \brief The level being played, `1`..#PLAYFIELD_LEVEL_COUNT (FR-025). */
+/*! \brief The level being played, `1`..#DIFFICULTY_FINAL_LEVEL (FR-025). */
 uint8_t game_get_level(const game_t* in_game);
 
 /*! \brief Whether ghosts are currently edible (§10.5). */

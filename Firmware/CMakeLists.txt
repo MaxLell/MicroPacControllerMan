@@ -87,9 +87,8 @@ endif()
 if(PACMAN_HOST_BUILD)
     add_library(pacman_host STATIC
         App/agent/agent.c
+        App/difficulty/difficulty.c
         App/game/game.c
-    App/game_view/game_view.c
-    App/render/render.c
         App/game_view/game_view.c
         App/render/render.c
         App/ghost/ghost.c
@@ -114,9 +113,8 @@ if(PACMAN_HOST_BUILD)
 
     target_include_directories(pacman_host PUBLIC
         App/agent
+        App/difficulty
         App/game
-    App/game_view
-    App/render
         App/game_view
         App/render
         App/ghost
@@ -219,6 +217,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App
     App/agent
+    App/difficulty
     App/game
     App/ghost
     App/ghost_path

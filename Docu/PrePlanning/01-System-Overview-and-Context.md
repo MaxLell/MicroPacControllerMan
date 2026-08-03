@@ -16,7 +16,7 @@ Beyond delivering a playable game, the primary motivation for this project is to
 - Reading directional input from that shield's five-key joystick.
 - Reading the Nucleo user button (game start).
 - Persisting a single high-score value in non-volatile memory (NVM).
-- Core Pacman gameplay across **5 levels of increasing difficulty**, each with its own maze; pellets and power pellets; four distinct ghosts; a frightened mode; tunnel wrap-around; multiple lives; and a final win after the last level (see [FR-006..FR-027](02-Requirements.md)).
+- Core Pacman gameplay across **21 levels of increasing difficulty on one maze**, following the arcade's own progression; pellets and power pellets; four distinct ghosts; a frightened mode; tunnel wrap-around; multiple lives; and a final win after the last level (see [FR-006..FR-027](02-Requirements.md)).
 - A host-computer build of the game logic (Model + Control) with an SDL-based View, for development and unit testing purposes ([Milestone 3.4](04-Implementation-Phases-and-Milestones.md)).
 
 **Out of scope (for now):**

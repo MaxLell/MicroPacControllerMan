@@ -39,7 +39,7 @@
 /*! \brief Largest sprite this module can save the pixels under, per side. The sprite set
  *         is built to the tile size; anything bigger would need more save-under memory
  *         than has been set aside, so it is asserted rather than silently clipped. */
-#define RENDER_SPRITE_MAX_SIZE (20U)
+#define RENDER_SPRITE_MAX_SIZE (16U)
 
 /* ==========================================================================
  * render - public API

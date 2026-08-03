@@ -68,8 +68,8 @@ typedef enum
 
 /*! \brief The playfield, in cells ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)),
  *         and the bytes needed to hold one bit per cell. */
-#define MSG_PLAYFIELD_COLUMNS (11U)
-#define MSG_PLAYFIELD_ROWS    (9U)
+#define MSG_PLAYFIELD_COLUMNS (28U)
+#define MSG_PLAYFIELD_ROWS    (31U)
 #define MSG_CELL_BITMAP_BYTES (((MSG_PLAYFIELD_COLUMNS * MSG_PLAYFIELD_ROWS) + 7U) / 8U)
 
 /*! \brief Directions Pacman can be sent in. `NONE` means "no direction yet". */
@@ -120,15 +120,27 @@ typedef struct
     bool has_won;
 } msg_game_over_t;
 
-/*! \brief How far an entity has travelled from its current cell towards the next,
- *         in 1/256ths. `0` means "on the cell".
+/*! \brief How far an entity has come **into** its current cell from the one before it, in
+ *         1/256ths. `0` means "still on the cell it left"; \ref MSG_CELL_PROGRESS_ARRIVED
+ *         means "standing on its cell", which is also what a motionless entity reports.
  *
  * The rules never read this. It exists so the view can draw motion in pixels while the
- * logic stays on whole cells: at 21 px per cell and 150 ms to cross one, drawing
- * cell-by-cell is a 21-pixel jump 6.7 times a second, which is visibly choppy however
+ * logic stays on whole cells: at 8 px per cell and ~167 ms to cross one, drawing
+ * cell-by-cell is an 8-pixel jump six times a second, which is visibly choppy however
  * fast the panel refreshes. See [10 §10.1](../../../Docu/PrePlanning/10-Pacman-Game-Design.md).
+ *
+ * **It measures the step already taken, not the one coming.** That direction is the whole
+ * point. Interpolating *forward* — from the current cell along the current facing — means
+ * guessing a destination that is only decided when the next step happens, and the guess is
+ * wrong exactly at a corner: the entity slides a cell the way it came from and then snaps
+ * sideways, or, if the facing is into a wall, stands still for a whole period and then
+ * jumps. Measuring the step that has already happened needs no guess, so a corner is two
+ * straight runs that meet.
  */
 typedef uint8_t cell_progress_t;
+
+/*! \brief The value of a \ref cell_progress_t that means "on the cell, not between two". */
+#define MSG_CELL_PROGRESS_ARRIVED (255U)
 
 /*! \brief One moving entity, as the view needs to see it.
  *
@@ -140,15 +152,15 @@ typedef struct
 {
     uint8_t column; /*!< Current cell, the one the rules act on     */
     uint8_t row;
-    uint8_t direction;        /*!< A \ref direction_e                          */
-    cell_progress_t progress; /*!< How far towards the next cell (view only)  */
+    uint8_t direction;        /*!< A \ref direction_e — how it got here        */
+    cell_progress_t progress; /*!< How far into that cell it is (view only)   */
 } msg_actor_t;
 
 /*! \brief Payload of \ref MSG_GAME_STATE (FR-005): one coherent state per simulation
  *         step, copied like every other payload.
  *
- * This is the whole dynamic state of the game. The maze itself is not here — it is
- * static per level, so the view owns the five tables and needs only the level number.
+ * This is the whole dynamic state of the game. The maze itself is not here — there is one
+ * maze and it never changes (§10.2), so the view holds its own copy.
  */
 typedef struct
 {
@@ -168,6 +180,15 @@ typedef struct
      * the pen un-frightened while the others are still blue, so a single flag would
      * either colour it wrongly or un-colour the rest. */
     uint8_t frightened_ghosts;
+
+    /* The warning that the frightened window is about to close (§10.9): the ghosts flash
+     * back towards their own colours for the last few moments. One flag for all of them,
+     * because the window is one timer — which ghosts it applies to is `frightened_ghosts`
+     * above.
+     *
+     * The *phase* is decided here rather than in the view, so that "flashing" means the
+     * same thing to a unit test as it does on the panel. The view only picks a palette. */
+    bool are_frightened_ghosts_flashing;
 } msg_game_state_t;
 
 /*! \brief What one entry of a display list asks for.
@@ -256,10 +277,16 @@ static inline void msg_cell_bitmap_set(uint8_t* inout_bitmap, uint8_t in_column,
 /*! \brief Size of the payload area. Must hold the largest payload above; the static
  *         assertions below fail the build if a new payload outgrows it.
  *
- * 16 bytes sufficed while the largest payload was a pointer. The two that set the size
- * now are the whole game state and a whole frame of drawing — which is the point: both
- * are small enough to copy, so nothing has to be shared. */
-#define MSG_PAYLOAD_MAX_SIZE (72U)
+ * 16 bytes sufficed while the largest payload was a pointer. What sets the size now is
+ * the whole game state, and most of that is the two pellet maps — 868 cells of arcade
+ * maze, a bit each, twice.
+ *
+ * That is a much bigger number than the 56 bytes this started at, and it is worth being
+ * honest about: [R-007](../../../Docu/PrePlanning/05-Risks-Assumptions-and-Dependencies.md)
+ * was withdrawn on the argument that the state is small enough to copy. It still is —
+ * 246 bytes against the 153,600 of the image the exception was invented for — but the
+ * margin is three orders of magnitude rather than four. */
+#define MSG_PAYLOAD_MAX_SIZE (256U)
 
 typedef struct
 {

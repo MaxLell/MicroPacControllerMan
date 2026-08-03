@@ -268,7 +268,7 @@ static void prv_report_progress(void)
 
         case GAME_STATE_WON:
             (void)printf("all %u levels cleared with %u points. Space to play again.\n",
-                         (unsigned)PLAYFIELD_LEVEL_COUNT, game_get_score(&g_game));
+                         (unsigned)DIFFICULTY_FINAL_LEVEL, game_get_score(&g_game));
             break;
 
         default: break;

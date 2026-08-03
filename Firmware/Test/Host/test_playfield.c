@@ -1,13 +1,17 @@
 /*
  * Unit tests for App/playfield.
  *
- * The valuable part is the sweep over all five mazes. Levels 2-5 were authored for this
- * project (§10.2 leaves them to M3), and a single mistyped wall can seal off a region or
- * the ghost pen. That would not fail a build, would not fail an OTT, and would surface
- * only as a level that cannot be finished or ghosts that never come out. A flood fill
- * settles it in microseconds, so every constraint §10.2 states is checked mechanically:
- * dimensions, left-right symmetry, one Pacman start, a full pen, a reachable pen, every
- * pellet reachable, and at least one tunnel.
+ * The valuable part is the sweep over the maze table. It is 28 x 31 characters typed out by
+ * hand, and a single mistyped wall can seal off a region or the ghost pen. That would not
+ * fail a build, would not fail an OTT, and would surface only as a level that cannot be
+ * finished or ghosts that never come out. A flood fill settles it in microseconds, so every
+ * constraint §10.2 states is checked mechanically: dimensions, left-right symmetry, one
+ * Pacman start, a full pen, a reachable pen, every pellet reachable, and a tunnel.
+ *
+ * There used to be five mazes and this swept all of them. There is one now (FR-025 as
+ * re-baselined) — difficulty comes from `difficulty`, the way the arcade does it — so the
+ * sweep is over the one table, and it matters more rather than less: everything is played
+ * on it.
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,14 +24,18 @@
 #include "playfield.h"
 #include "unity.h"
 
-/* The reference maze of §10.2 has 4 power pellets and a known pellet total; the rest are
- * checked by property rather than by count, since they are ours to change. */
-#define LEVEL_1                    (1U)
-#define LEVEL_5                    (5U)
-#define LEVEL_1_POWER_PELLET_COUNT (4U)
+/* Transcribed from §10.2, so a change to the maze shows up here as a failing test rather
+ * than as a silently different game. The pellet total is what Cruise Elroy's thresholds are
+ * measured against, which is why it is pinned rather than merely bounded. */
+#define POWER_PELLET_COUNT   (4U)
+#define TOTAL_PELLET_COUNT   (244U)
 
-#define MIN_POWER_PELLETS_PER_MAZE (2U)
-#define SCATTER_CORNER_COUNT       (4U)
+/* The tunnel row, and a cell inside each of its two mouths. */
+#define TUNNEL_ROW           (14)
+#define TUNNEL_WEST_X        (2)
+#define TUNNEL_EAST_X        (25)
+
+#define SCATTER_CORNER_COUNT (4U)
 
 static playfield_t g_playfield;
 
@@ -79,10 +87,32 @@ static uint16_t prv_count_power_pellets(void)
     return count;
 }
 
+/* The first cell holding a normal pellet, so the eating tests do not carry a coordinate
+ * that a redrawn maze would silently invalidate. */
+static cell_t prv_find_a_pellet(void)
+{
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            const cell_t cell = {x, y};
+
+            if (playfield_get_pellet(&g_playfield, cell) == PLAYFIELD_PELLET_NORMAL)
+            {
+                return cell;
+            }
+        }
+    }
+
+    TEST_FAIL_MESSAGE("the maze holds no normal pellet at all");
+
+    return playfield_get_pacman_start(&g_playfield);
+}
+
 void setUp(void)
 {
     assert_probe_begin();
-    playfield_load_level(&g_playfield, LEVEL_1);
+    playfield_load(&g_playfield);
 }
 
 void tearDown(void)
@@ -90,199 +120,203 @@ void tearDown(void)
     assert_probe_end();
 }
 
-/* --- every maze must satisfy §10.2 --------------------------------------- */
+/* --- the maze must satisfy §10.2 ----------------------------------------- */
 
-void test_every_maze_is_fully_connected_from_pacmans_start(void)
+void test_the_maze_is_fully_connected_from_pacmans_start(void)
 {
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
+    prv_flood_from_pacman_start();
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {
-        playfield_load_level(&g_playfield, level);
-        prv_flood_from_pacman_start();
-
-        for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
         {
-            for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+            const cell_t cell = {x, y};
+            char message[64];
+
+            if (!playfield_is_walkable(&g_playfield, cell))
             {
-                const cell_t cell = {x, y};
-                char message[64];
-
-                if (!playfield_is_walkable(&g_playfield, cell))
-                {
-                    continue;
-                }
-
-                (void)snprintf(message, sizeof(message), "level %u: open cell %d,%d is unreachable", level, x, y);
-                TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
+                continue;
             }
+
+            (void)snprintf(message, sizeof(message), "open cell %d,%d is unreachable", x, y);
+            TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
         }
     }
 }
 
 void test_every_pellet_can_be_eaten(void)
 {
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
+    prv_flood_from_pacman_start();
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {
-        playfield_load_level(&g_playfield, level);
-        prv_flood_from_pacman_start();
-
-        for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
         {
-            for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+            const cell_t cell = {x, y};
+            char message[64];
+
+            if (playfield_get_pellet(&g_playfield, cell) == PLAYFIELD_PELLET_NONE)
             {
-                const cell_t cell = {x, y};
-                char message[64];
-
-                if (playfield_get_pellet(&g_playfield, cell) == PLAYFIELD_PELLET_NONE)
-                {
-                    continue;
-                }
-
-                (void)snprintf(message, sizeof(message), "level %u: pellet at %d,%d is unreachable", level, x, y);
-                TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
+                continue;
             }
+
+            (void)snprintf(message, sizeof(message), "pellet at %d,%d is unreachable", x, y);
+            TEST_ASSERT_TRUE_MESSAGE(g_reached[y][x], message);
         }
     }
 }
 
-void test_the_ghost_pen_is_reachable_in_every_maze(void)
+void test_the_ghost_pen_is_reachable(void)
 {
     /* A sealed pen means the ghosts never come out — a maze that looks fine and plays as
      * an empty stroll. */
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
-    {
-        playfield_load_level(&g_playfield, level);
-        prv_flood_from_pacman_start();
+    prv_flood_from_pacman_start();
 
-        for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+    for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+    {
+        const cell_t pen_cell = playfield_get_pen_cell(&g_playfield, index);
+        char message[64];
+
+        (void)snprintf(message, sizeof(message), "pen cell %u is sealed off", index);
+        TEST_ASSERT_TRUE_MESSAGE(g_reached[pen_cell.y][pen_cell.x], message);
+    }
+}
+
+void test_the_maze_is_left_right_symmetric(void)
+{
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < (PLAYFIELD_WIDTH / 2); ++x)
         {
-            const cell_t pen_cell = playfield_get_pen_cell(&g_playfield, index);
+            const cell_t left = {x, y};
+            const cell_t right = {(int16_t)(PLAYFIELD_WIDTH - 1 - x), y};
             char message[64];
 
-            (void)snprintf(message, sizeof(message), "level %u: pen cell %u is sealed off", level, index);
-            TEST_ASSERT_TRUE_MESSAGE(g_reached[pen_cell.y][pen_cell.x], message);
+            (void)snprintf(message, sizeof(message), "row %d is not symmetric", y);
+            TEST_ASSERT_EQUAL_MESSAGE(playfield_is_walkable(&g_playfield, left),
+                                      playfield_is_walkable(&g_playfield, right), message);
         }
     }
 }
 
-void test_every_maze_is_left_right_symmetric(void)
-{
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
-    {
-        playfield_load_level(&g_playfield, level);
-
-        for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
-        {
-            for (int16_t x = 0; x < (PLAYFIELD_WIDTH / 2); ++x)
-            {
-                const cell_t left = {x, y};
-                const cell_t right = {(int16_t)(PLAYFIELD_WIDTH - 1 - x), y};
-                char message[64];
-
-                (void)snprintf(message, sizeof(message), "level %u: row %d is not symmetric", level, y);
-                TEST_ASSERT_EQUAL_MESSAGE(playfield_is_walkable(&g_playfield, left),
-                                          playfield_is_walkable(&g_playfield, right), message);
-            }
-        }
-    }
-}
-
-void test_every_maze_has_a_tunnel(void)
+void test_the_maze_has_a_tunnel(void)
 {
     /* At least one edge pair must wrap onto open cells, or an entity can never leave
-     * through an edge and FR-012 is unimplementable on that maze. */
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
+     * through an edge and FR-012 is unimplementable. */
+    bool has_tunnel = false;
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {
-        bool has_tunnel = false;
+        const cell_t left = {0, y};
+        const cell_t right = {PLAYFIELD_WIDTH - 1, y};
 
-        playfield_load_level(&g_playfield, level);
-
-        for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+        if (playfield_is_walkable(&g_playfield, left) && playfield_is_walkable(&g_playfield, right))
         {
-            const cell_t left = {0, y};
-            const cell_t right = {PLAYFIELD_WIDTH - 1, y};
-
-            if (playfield_is_walkable(&g_playfield, left) && playfield_is_walkable(&g_playfield, right))
-            {
-                has_tunnel = true;
-            }
+            has_tunnel = true;
         }
-
-        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
-        {
-            const cell_t top = {x, 0};
-            const cell_t bottom = {x, PLAYFIELD_HEIGHT - 1};
-
-            if (playfield_is_walkable(&g_playfield, top) && playfield_is_walkable(&g_playfield, bottom))
-            {
-                has_tunnel = true;
-            }
-        }
-
-        TEST_ASSERT_TRUE_MESSAGE(has_tunnel, "a maze has no tunnel");
     }
+
+    TEST_ASSERT_TRUE_MESSAGE(has_tunnel, "the maze has no tunnel");
 }
 
-void test_every_maze_keeps_at_least_two_power_pellets(void)
-{
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
-    {
-        playfield_load_level(&g_playfield, level);
-
-        TEST_ASSERT_GREATER_OR_EQUAL_UINT16(MIN_POWER_PELLETS_PER_MAZE, prv_count_power_pellets());
-    }
-}
-
-void test_pacmans_start_holds_no_pellet_in_any_maze(void)
+void test_pacmans_start_holds_no_pellet(void)
 {
     /* §10.2: pellets occupy every open path cell except the pen and Pacman's start. */
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
-    {
-        playfield_load_level(&g_playfield, level);
+    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
+                      playfield_get_pellet(&g_playfield, playfield_get_pacman_start(&g_playfield)));
+}
 
+void test_the_pen_holds_no_pellets(void)
+{
+    for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+    {
         TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                          playfield_get_pellet(&g_playfield, playfield_get_pacman_start(&g_playfield)));
+                          playfield_get_pellet(&g_playfield, playfield_get_pen_cell(&g_playfield, index)));
     }
 }
 
-void test_the_pen_holds_no_pellets_in_any_maze(void)
+void test_the_maze_has_four_power_pellets(void)
 {
-    for (uint8_t level = PLAYFIELD_FIRST_LEVEL; level <= PLAYFIELD_LEVEL_COUNT; ++level)
-    {
-        playfield_load_level(&g_playfield, level);
+    TEST_ASSERT_EQUAL_UINT16(POWER_PELLET_COUNT, prv_count_power_pellets());
+}
 
-        for (uint8_t index = 0U; index < PLAYFIELD_PEN_CELL_COUNT; ++index)
+void test_the_pellet_total_is_the_one_cruise_elroy_is_calibrated_against(void)
+{
+    /* §10.9's Elroy thresholds are the arcade's absolute counts against its own 244, so
+     * this being 244 exactly is what makes them mean what they meant there. If the maze is
+     * ever redrawn, this is the test that says the thresholds need rethinking. */
+    TEST_ASSERT_EQUAL_UINT16(TOTAL_PELLET_COUNT, playfield_get_total_pellet_count(&g_playfield));
+    TEST_ASSERT_EQUAL_UINT16(TOTAL_PELLET_COUNT, playfield_get_remaining_pellet_count(&g_playfield));
+}
+
+void test_the_outer_frame_is_wall_except_at_the_tunnel(void)
+{
+    const cell_t top_left = {0, 0};
+    const cell_t west_mouth = {0, TUNNEL_ROW};
+    const cell_t east_mouth = {PLAYFIELD_WIDTH - 1, TUNNEL_ROW};
+
+    TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, top_left));
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, west_mouth));
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, east_mouth));
+}
+
+/* --- the tunnel, as a place rather than a row ---------------------------- */
+
+void test_both_tunnel_mouths_are_marked_as_tunnel(void)
+{
+    const cell_t west = {TUNNEL_WEST_X, TUNNEL_ROW};
+    const cell_t east = {TUNNEL_EAST_X, TUNNEL_ROW};
+
+    TEST_ASSERT_TRUE(playfield_is_tunnel(&g_playfield, west));
+    TEST_ASSERT_TRUE(playfield_is_tunnel(&g_playfield, east));
+}
+
+void test_the_corridor_that_merely_leads_to_the_tunnel_is_not_tunnel(void)
+{
+    /* The distinction the marking exists for: a ghost is only slowed inside the tunnel
+     * itself (§10.9), not everywhere on its row. Deriving it from the row would catch the
+     * junction the tunnel opens onto and hand Pacman an escape he has not earned. */
+    const cell_t junction = {6, TUNNEL_ROW};
+
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, junction));
+    TEST_ASSERT_FALSE(playfield_is_tunnel(&g_playfield, junction));
+}
+
+void test_nothing_outside_the_tunnel_row_is_tunnel(void)
+{
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
         {
-            TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE,
-                              playfield_get_pellet(&g_playfield, playfield_get_pen_cell(&g_playfield, index)));
+            const cell_t cell = {x, y};
+            char message[64];
+
+            if (y == TUNNEL_ROW)
+            {
+                continue;
+            }
+
+            (void)snprintf(message, sizeof(message), "cell %d,%d is marked as tunnel", x, y);
+            TEST_ASSERT_FALSE_MESSAGE(playfield_is_tunnel(&g_playfield, cell), message);
         }
     }
 }
 
-/* --- the reference maze --------------------------------------------------- */
-
-void test_the_reference_maze_has_four_power_pellets(void)
+void test_a_tunnel_cell_is_walkable_and_holds_nothing_to_eat(void)
 {
-    TEST_ASSERT_EQUAL_UINT16(LEVEL_1_POWER_PELLET_COUNT, prv_count_power_pellets());
-}
+    const cell_t west = {TUNNEL_WEST_X, TUNNEL_ROW};
 
-void test_the_outer_frame_is_wall_except_at_the_tunnels(void)
-{
-    const cell_t top_left = {0, 0};
-    const cell_t middle_left = {0, PLAYFIELD_HEIGHT / 2};
-
-    TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, top_left));
-    /* The horizontal tunnel mouth of §10.2. */
-    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, middle_left));
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, west));
+    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE, playfield_get_pellet(&g_playfield, west));
 }
 
 /* --- eating -------------------------------------------------------------- */
 
 void test_eating_a_pellet_removes_it_and_decrements_the_count(void)
 {
-    const cell_t cell = {1, 2};
+    const cell_t cell = prv_find_a_pellet();
     const uint16_t before = playfield_get_remaining_pellet_count(&g_playfield);
 
-    TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NORMAL, playfield_get_pellet(&g_playfield, cell));
     TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NORMAL, playfield_eat_pellet(&g_playfield, cell));
 
     TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NONE, playfield_get_pellet(&g_playfield, cell));
@@ -291,7 +325,9 @@ void test_eating_a_pellet_removes_it_and_decrements_the_count(void)
 
 void test_eating_a_power_pellet_reports_which_kind_it_was(void)
 {
-    const cell_t corner = {1, 1};
+    /* §10.2 puts the four power pellets one row in from the top and bottom corners, not in
+     * the corners themselves — the corner cells are ordinary pellets. */
+    const cell_t corner = {1, 3};
 
     TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_POWER, playfield_eat_pellet(&g_playfield, corner));
 }
@@ -307,7 +343,7 @@ void test_eating_an_empty_cell_changes_nothing(void)
 
 void test_eating_the_same_pellet_twice_only_counts_once(void)
 {
-    const cell_t cell = {1, 2};
+    const cell_t cell = prv_find_a_pellet();
     const uint16_t before = playfield_get_remaining_pellet_count(&g_playfield);
 
     (void)playfield_eat_pellet(&g_playfield, cell);
@@ -333,22 +369,24 @@ void test_the_maze_is_cleared_once_every_pellet_is_gone(void)
     TEST_ASSERT_TRUE(playfield_is_cleared(&g_playfield));
 }
 
-void test_loading_a_level_restores_its_pellets(void)
+void test_loading_restores_the_pellets(void)
 {
-    const cell_t cell = {1, 2};
+    const cell_t cell = prv_find_a_pellet();
 
     (void)playfield_eat_pellet(&g_playfield, cell);
-    playfield_load_level(&g_playfield, LEVEL_1);
+    playfield_load(&g_playfield);
 
     TEST_ASSERT_EQUAL(PLAYFIELD_PELLET_NORMAL, playfield_get_pellet(&g_playfield, cell));
     TEST_ASSERT_FALSE(playfield_is_cleared(&g_playfield));
+    TEST_ASSERT_EQUAL_UINT16(playfield_get_total_pellet_count(&g_playfield),
+                             playfield_get_remaining_pellet_count(&g_playfield));
 }
 
 /* --- geometry and the tunnel rule ---------------------------------------- */
 
 void test_stepping_off_the_left_edge_wraps_to_the_right(void)
 {
-    const cell_t mouth = {0, PLAYFIELD_HEIGHT / 2};
+    const cell_t mouth = {0, TUNNEL_ROW};
     const cell_t stepped = playfield_step(mouth, DIRECTION_WEST);
 
     TEST_ASSERT_EQUAL_INT16(PLAYFIELD_WIDTH - 1, stepped.x);
@@ -365,10 +403,9 @@ void test_stepping_off_the_top_edge_wraps_to_the_bottom(void)
     TEST_ASSERT_EQUAL_INT16(top.x, stepped.x);
 }
 
-void test_pacman_can_escape_his_start_pocket_through_the_tunnel(void)
+void test_pacman_can_leave_his_start_cell(void)
 {
-    /* §10.2 is explicit that the start pocket must not be a dead-end trap. In the
-     * reference maze the only way out is the vertical tunnel. */
+    /* §10.2 is explicit that the start must not be a dead-end trap. */
     const cell_t start = playfield_get_pacman_start(&g_playfield);
     bool has_exit = false;
     static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
@@ -427,20 +464,18 @@ void test_the_scatter_corners_are_four_distinct_walkable_cells(void)
 
 /* --- preconditions ------------------------------------------------------- */
 
-void test_loading_a_level_out_of_range_asserts(void)
+void test_a_null_playfield_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(playfield_load_level(&g_playfield, PLAYFIELD_LEVEL_COUNT + 1U),
-                        "in_level <= PLAYFIELD_LEVEL_COUNT");
+    const cell_t cell = {1, 1};
+
+    ASSERT_PROBE_EXPECT(playfield_load(NULL), "inout_playfield != NULL");
+    ASSERT_PROBE_EXPECT((void)playfield_is_walkable(NULL, cell), "in_playfield != NULL");
+    ASSERT_PROBE_EXPECT((void)playfield_is_tunnel(NULL, cell), "in_playfield != NULL");
+    ASSERT_PROBE_EXPECT((void)playfield_get_total_pellet_count(NULL), "in_playfield != NULL");
 }
 
-void test_loading_level_zero_asserts(void)
+void test_asking_for_a_pen_cell_out_of_range_asserts(void)
 {
-    ASSERT_PROBE_EXPECT(playfield_load_level(&g_playfield, 0U), "in_level >= PLAYFIELD_FIRST_LEVEL");
-}
-
-void test_the_last_level_loads(void)
-{
-    playfield_load_level(&g_playfield, LEVEL_5);
-
-    TEST_ASSERT_FALSE(playfield_is_cleared(&g_playfield));
+    ASSERT_PROBE_EXPECT((void)playfield_get_pen_cell(&g_playfield, PLAYFIELD_PEN_CELL_COUNT),
+                        "in_index < PLAYFIELD_PEN_CELL_COUNT");
 }

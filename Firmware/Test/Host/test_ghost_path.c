@@ -25,22 +25,22 @@
 #include "playfield.h"
 #include "unity.h"
 
-#define LEVEL_1        (1U)
+/* A junction on the maze's open row 5 with a gap to the north, so all four directions are
+ * worth considering. */
+#define JUNCTION_X     (6)
+#define JUNCTION_Y     (5)
 
-/* A junction on the reference maze's open row 3 with a gap to the north, so all four
- * directions are worth considering. */
-#define JUNCTION_X     (3)
-#define JUNCTION_Y     (3)
-
-/* A cell on row 3 whose north neighbour is a wall. */
+/* A cell on row 5 whose north neighbour is a wall. */
 #define WALLED_NORTH_X (2)
 #define OPEN_CELL_X    (4)
 
-/* Level 5 was authored with genuine dead-end stubs; the reference maze has none, being a
- * fully cross-linked grid. (3,7) there has exactly one open neighbour, to the west. */
-#define LEVEL_5        (5U)
-#define DEAD_END_X     (3)
-#define DEAD_END_Y     (7)
+/* The dead-end case has to be built rather than found: the arcade maze contains no stub
+ * at all — every open cell in it has at least two open neighbours, which is itself worth
+ * knowing and is asserted below. The rule still has to hold, because it is a property of
+ * the algorithm and not of this maze, and the next maze may well have one. */
+#define STUB_X         (1)
+#define STUB_Y         (1)
+#define STUB_SEALED_Y  (2)
 
 static playfield_t g_playfield;
 
@@ -54,7 +54,7 @@ static cell_t prv_cell(int16_t in_x, int16_t in_y)
 void setUp(void)
 {
     assert_probe_begin();
-    playfield_load_level(&g_playfield, LEVEL_1);
+    playfield_load(&g_playfield);
 }
 
 void tearDown(void)
@@ -172,22 +172,59 @@ void test_the_forbidden_direction_is_avoided_when_there_is_a_choice(void)
     TEST_ASSERT_NOT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_WEST));
 }
 
+void test_the_maze_itself_has_no_dead_end(void)
+{
+    /* Not a property this module needs, but the premise of the test below: the stub it
+     * exercises has to be built, and this is what says so. It is also a real fact about
+     * the arcade layout — there is nowhere in it to be cornered by geometry alone. */
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            static const direction_e k_directions[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST,
+                                                       DIRECTION_WEST};
+            const cell_t cell = prv_cell(x, y);
+            uint8_t open_neighbours = 0U;
+
+            if (!playfield_is_walkable(&g_playfield, cell))
+            {
+                continue;
+            }
+
+            for (uint8_t index = 0U; index < (sizeof(k_directions) / sizeof(k_directions[0])); ++index)
+            {
+                if (playfield_is_walkable(&g_playfield, playfield_step(cell, k_directions[index])))
+                {
+                    ++open_neighbours;
+                }
+            }
+
+            TEST_ASSERT_GREATER_THAN_UINT8(1U, open_neighbours);
+        }
+    }
+}
+
 void test_a_dead_end_forces_the_reverse(void)
 {
     /* A stub with one exit: coming in, the only step left is back out. The rule has to
-     * bend or the ghost is parked there for the rest of the level. */
-    const cell_t stub = prv_cell(DEAD_END_X, DEAD_END_Y);
-    const cell_t target = prv_cell(1, 1);
-    const direction_e arrived_from = DIRECTION_WEST;
+     * bend or the ghost is parked there for the rest of the level.
+     *
+     * The stub is made by sealing one neighbour of a corner cell, because the maze has
+     * none to borrow (see above). Walling a cell directly is a liberty, but the
+     * alternative — keeping a second maze around purely to hold one stub — would tie this
+     * module's test to a layout it does not otherwise care about. */
+    const cell_t stub = prv_cell(STUB_X, STUB_Y);
+    const cell_t target = prv_cell(PLAYFIELD_WIDTH - 2, PLAYFIELD_HEIGHT - 2);
+    const direction_e arrived_from = DIRECTION_EAST;
     direction_e chosen;
 
-    playfield_load_level(&g_playfield, LEVEL_5);
+    g_playfield.walls[STUB_SEALED_Y][STUB_X] = true;
 
     /* Guard the premise: exactly one open neighbour, and it is the way back. */
-    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_WEST)));
+    TEST_ASSERT_TRUE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_EAST)));
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_NORTH)));
     TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_SOUTH)));
-    TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_EAST)));
+    TEST_ASSERT_FALSE(playfield_is_walkable(&g_playfield, playfield_step(stub, DIRECTION_WEST)));
 
     chosen = ghost_path_find_step_towards(&g_playfield, stub, target, arrived_from);
 

@@ -48,11 +48,20 @@ silently working around a wart.
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — in progress, playable on the host.** `./build-host/pacman_host_app` runs the
   game in an SDL window through the same path the target will use: `game` publishes a
-  56-byte state, `game_view` turns cells into pixels and interpolates between simulation
+  246-byte state, `game_view` turns cells into pixels and interpolates between simulation
   steps, `render` owns the one frame buffer and erases by save-under. No Data-Pool — every
   module talks through messages only, and no message carries a pointer (DEC-016). PR #10
-  is closed; `host_main.c` was the last thing salvaged from it. Still missing: the HUD
-  (score, lives, level) and the target wiring.
+  is closed; `host_main.c` was the last thing salvaged from it.
+  The playfield is now the **arcade's own 28 × 31 maze at 8 px per cell**, one maze for
+  every level, and the difficulty is the arcade's own progression in `App/difficulty` —
+  per-level speeds, the tunnel crawl, the shrinking frightened window and **Cruise Elroy**
+  (DEC-017). The run ends at level 21, where that table stops changing. The figures and the
+  wall tiles are the **1980 ROMs**, decoded offline into `sprite_set`, so the maze is thin
+  blue outlines and 244 pellets rather than filled blocks (DEC-018/019). Interpolation
+  measures the step already taken rather than guessing the next one — which is what made
+  corners stutter. The maze is written down twice on purpose, rules in `playfield` and
+  appearance in `game_view`, with a unit test holding the two together.
+  Still missing: the HUD (score, lives, level) and the target wiring.
 
 ## Build · flash · test (all from `Firmware/`)
 
