@@ -258,7 +258,11 @@ void test_a_ghost_does_not_turn_around_of_its_own_accord(void)
     TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
 }
 
-void test_a_mode_change_earns_exactly_one_reversal(void)
+/* The two transitions the arcade forces a reversal on, both declined (DEC-037). They are
+ * separate tests because they are separate claims: an energizer is the one a player triggers,
+ * and the scatter/chase flip is the one that arrives on a timer. */
+
+void test_an_energizer_does_not_turn_a_ghost_around(void)
 {
     const cell_t start = prv_cell(CORRIDOR_X, CORRIDOR_Y);
     direction_e facing;
@@ -269,27 +273,27 @@ void test_a_mode_change_earns_exactly_one_reversal(void)
 
     facing = ghost_get_direction(&g_ghost);
 
-    /* Frightened is a mode change, and Pacman is now right where it came from, so fleeing
-     * means turning around — which the exemption must permit exactly once. */
+    /* Frightened, with Pacman standing on the ghost's own cell: fleeing would be served best
+     * by turning round, and it still must not. It flees from the next junction instead. */
     ghost_set_mode(&g_ghost, GHOST_MODE_FRIGHTENED);
     (void)ghost_advance(&g_ghost, &g_playfield, ghost_get_cell(&g_ghost), DIRECTION_EAST, prv_blinky_cell());
 
-    TEST_ASSERT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
+    TEST_ASSERT_NOT_EQUAL(playfield_get_opposite_direction(facing), ghost_get_direction(&g_ghost));
 }
 
-void test_setting_the_same_mode_again_earns_nothing(void)
+void test_a_scatter_chase_flip_does_not_turn_a_ghost_around(void)
 {
-    /* The orchestrator drives the mode every tick, so a no-op change must not hand out a
-     * reversal — otherwise the ghosts jitter on the spot. */
     const cell_t start = prv_cell(CORRIDOR_X, CORRIDOR_Y);
     direction_e facing;
 
     ghost_reset(&g_ghost, GHOST_BLINKY, start, false);
-    ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
+    ghost_set_mode(&g_ghost, GHOST_MODE_SCATTER);
     (void)ghost_advance(&g_ghost, &g_playfield, prv_pacman_cell(), DIRECTION_EAST, prv_blinky_cell());
 
     facing = ghost_get_direction(&g_ghost);
 
+    /* Chase, with Pacman put back on the cell it just left — the new target is squarely
+     * behind it and the answer is still "not backwards". */
     ghost_set_mode(&g_ghost, GHOST_MODE_CHASE);
     (void)ghost_advance(&g_ghost, &g_playfield, start, DIRECTION_EAST, prv_blinky_cell());
 
