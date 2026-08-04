@@ -72,6 +72,13 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
 #define HOUSE_LAST_ROW         (16)
 #define HOUSE_GATE_LEFT_COLUMN (13)
 
+/*! \brief Whether a cell is inside the ghost house, its wall included. */
+static bool prv_is_in_the_house(int16_t in_x, int16_t in_y)
+{
+    return (in_x >= HOUSE_FIRST_COLUMN) && (in_x <= HOUSE_LAST_COLUMN) && (in_y >= HOUSE_FIRST_ROW)
+           && (in_y <= HOUSE_LAST_ROW);
+}
+
 static bool prv_is_house_lining(int16_t in_x, int16_t in_y)
 {
     const bool is_inside = (in_x > HOUSE_FIRST_COLUMN) && (in_x < HOUSE_LAST_COLUMN) && (in_y > HOUSE_FIRST_ROW)
@@ -306,9 +313,22 @@ static void prv_get_actor_pixel(const msg_actor_t* const in_actor, int16_t* cons
      * than a square in it. */
     const int16_t inset = (int16_t)((GAME_VIEW_ACTOR_SIZE - GAME_VIEW_TILE_SIZE) / 2);
 
+    /* Half a cell to the right while an actor is inside the ghost house.
+     *
+     * The three waiting ghosts are 16 pixels each and stand two cells apart, so they touch; but
+     * their centres fall on cell *centres* while the gate's centre — and the house's — fall on a
+     * cell *boundary*, four pixels away. No whole cell is at both, so on the grid alone Pinky
+     * cannot sit under the gate. This is the four pixels, and it is **drawing only**: the cell an
+     * actor stands on is untouched, and so is everything the rules read.
+     *
+     * It costs a four-pixel sideways step as a ghost leaves the house, where the offset ends. The
+     * owner was shown that and chose it over the alternatives (DEC-035). */
+    const int16_t house_offset =
+        prv_is_in_the_house(in_actor->column, in_actor->row) ? (int16_t)(GAME_VIEW_TILE_SIZE / 2) : 0;
+
     game_view_get_cell_pixel(in_actor->column, in_actor->row, out_x, out_y);
 
-    *out_x = (int16_t)(*out_x - inset);
+    *out_x = (int16_t)((*out_x - inset) + house_offset);
     *out_y = (int16_t)(*out_y - inset);
 
     switch ((direction_e)in_actor->direction)
