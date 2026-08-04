@@ -33,7 +33,7 @@ silently working around a wart.
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
   (7.4 %), RAM 3.5 kB (1.3 %), `.noinit` present for the retained-RAM reset flow.
 - **The doc set is re-baselined onto what is built** (DEC-027, 2026-08-04). **There is no
-  RTOS and none is planned:** CON-104 is withdrawn, FR-105 is now *cooperative execution*
+  RTOS and none is planned:** CON-104 is deleted, FR-105 is now *cooperative execution*
   (one loop plus the 1 kHz tick, [03 §3.4](Docu/PrePlanning/03-Architecture.md#34-execution-model)),
   FR-108 keeps the broker delivering to its subscribers but without a task of its own.
   FR-103 asks for what the firmware guarantees — no shared mutable state, everything

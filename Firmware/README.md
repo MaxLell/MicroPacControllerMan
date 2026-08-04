@@ -158,7 +158,7 @@ source of truth in
 | `Bsp/retain_ram/` | The `.noinit` byte buffer that survives a software reset. |
 | `Drivers/st7789/` | The ST7789V controller: init, ID self-check, rectangles, pixel blits with byte-order handling. |
 | `Drivers/display/` | The display **port** the game sees: shows a `framebuffer_t`, whole or by rectangle (`display_present_region`, the lever behind the frame rate). `display.c` drives the ST7789V; `display_host.c` keeps the frame in memory for the host build. |
-| `Services/delay/` | The blocking wait. One place to change when the RTOS arrives. |
+| `Services/delay/` | The blocking wait — the one place the firmware may burn time, so an overrun has a single suspect. |
 | `Services/sw_timer/` | Non-blocking timers: every timeout and periodic job in the firmware. |
 | `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |

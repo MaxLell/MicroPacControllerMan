@@ -1,10 +1,10 @@
 /*
  * delay.h
  *
- * Blocking wait. The single place the firmware is allowed to burn time, so that
- * it is also the single place to change once the RTOS arrives — the body then
- * becomes a task delay instead of a busy wait. Anything that must stay
- * responsive while it waits belongs in sw_timer instead.
+ * Blocking wait. The single place the firmware is allowed to burn time, which is
+ * what keeps the cooperative loop honest: there is one function to look at when
+ * a frame overruns. Anything that must stay responsive while it waits belongs in
+ * sw_timer instead.
  */
 
 #ifndef DELAY_H
