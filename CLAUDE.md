@@ -83,7 +83,8 @@ read it before "fixing" something that was a conscious deferral. It is a record,
   the same loop; `ott <name>` reboots into the test and `reset` returns to the game
   (DEC-022). Playing it is a test in its own right: `ott pacman` (VT-INT-022) starts a run
   with no menu in front of it and reports what a frame costs. Measured on the target:
-  **RAM 67.2 %, flash 16.1 %**. Wiring it in broke
+  **RAM 67.3 %, flash 17.3 %** (176,428 of 256 kB; 89,496 of the 504 kB the linker
+  leaves the firmware). Wiring it in broke
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).

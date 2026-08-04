@@ -4,8 +4,9 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
 **STM32CubeProgrammer** over ST-LINK V3E.
 
-> **Finished (2026-08-04).** The game is complete and plays on the board — RAM 67.2 %,
-> flash 16.1 %, both builds warning-free, 357 host unit tests green. No further work is
+> **Finished (2026-08-04).** The game is complete and plays on the board — RAM **67.3 %**
+> (176,428 of 256 kB), flash **17.3 %** (89,496 of the 504 kB left after the high-score
+> page), both builds warning-free, 357 host unit tests green. No further work is
 > planned; the known edges are recorded in the closed
 > [Refactoring Backlog](../Docu/Refactoring-Backlog.md) and the close-out in
 > [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out).

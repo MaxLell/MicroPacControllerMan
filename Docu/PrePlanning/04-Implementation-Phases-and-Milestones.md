@@ -28,7 +28,9 @@ This restates the phased roadmap from the original idea capture as a structured 
 Development ended on **2026-08-04** by the owner's decision ([DEC-028](11-Decisions-and-As-Built.md)).
 The game is complete and plays on the board: the shell's loading screen, menu, run and score
 screen; the arcade's 28 × 31 maze, its per-level speed progression to level 21, its ghosts and
-its 1980 sprite ROMs; three high scores in a linker-reserved flash page. RAM 67.2 %, flash 16.1 %.
+its 1980 sprite ROMs; three high scores in a linker-reserved flash page. RAM **67.3 %** (176,428 of
+256 kB), flash **17.3 %** (89,496 of the 504 kB the linker leaves the firmware after reserving the
+high-score page).
 
 **Milestones 0–3: met.** Every exit criterion listed above is satisfied.
 
