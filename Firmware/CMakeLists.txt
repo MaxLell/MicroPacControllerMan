@@ -94,6 +94,7 @@ if(PACMAN_HOST_BUILD)
         App/render/render.c
         App/ghost/ghost.c
         App/high_score/high_score.c
+        App/maze_gen/maze_gen.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
         App/playfield/playfield.c
@@ -125,6 +126,7 @@ if(PACMAN_HOST_BUILD)
         App/ghost
         App/ghost_path
         App/high_score
+        App/maze_gen
         App/pacman
         App/playfield
         App/score
@@ -194,6 +196,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/ghost/ghost.c
     App/ghost_path/ghost_path.c
     App/high_score/high_score.c
+    App/maze_gen/maze_gen.c
     App/pacman/pacman.c
     App/playfield/playfield.c
     App/render/render.c
@@ -250,6 +253,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/ghost
     App/ghost_path
     App/high_score
+    App/maze_gen
     App/pacman
     App/playfield
     App/render

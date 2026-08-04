@@ -132,6 +132,10 @@ typedef enum
     SPRITE_SET_MAZE_RIGHT,
     SPRITE_SET_MAZE_TOP_TEE_RIGHT,
     SPRITE_SET_MAZE_TOP_TEE_LEFT,
+    /* Not in the 1980 ROM: the arcade never attached anything to its bottom wall. The
+     * top tees turned upside down, for the generated mazes that do (FR-026). */
+    SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT,
+    SPRITE_SET_MAZE_BOTTOM_TEE_LEFT,
     SPRITE_SET_MAZE_LEFT_TEE_BOTTOM,
     SPRITE_SET_MAZE_LEFT_TEE_TOP,
     SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM,

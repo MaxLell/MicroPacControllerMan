@@ -514,6 +514,35 @@ static const char* const g_maze_top_tee_left[] = {
     "11122222",
 };
 
+/* The bottom frame branching north — the two pieces the 1980 ROM does not contain, because
+ * nothing is ever attached to the arcade maze's bottom wall. A generated maze does attach
+ * things there (FR-026), so the tiles have to exist.
+ *
+ * They are the top tees turned upside down, row for row, and nothing else: an arcade tile
+ * mirrored is still the arcade's line weight, its 2-pixel bar and its diagonal step, which
+ * is why this is a fair way to fill the gap rather than new art in an old style. */
+static const char* const g_maze_bottom_tee_right[] = {
+    "22222111",
+    "22222111",
+    "22222111",
+    "22221111",
+    "22211111",
+    "11111111",
+    "11111111",
+    "22222222",
+};
+
+static const char* const g_maze_bottom_tee_left[] = {
+    "11122222",
+    "11122222",
+    "11122222",
+    "11112222",
+    "11111222",
+    "11111111",
+    "11111111",
+    "22222222",
+};
+
 /* '6' — left frame, branching east at the bottom */
 static const char* const g_maze_left_tee_bottom[] = {
     "21122222",
@@ -1345,6 +1374,8 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_MAZE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right},
     [SPRITE_SET_MAZE_TOP_TEE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_top_tee_right},
     [SPRITE_SET_MAZE_TOP_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_top_tee_left},
+    [SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_right},
+    [SPRITE_SET_MAZE_BOTTOM_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_left},
     [SPRITE_SET_MAZE_LEFT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_bottom},
     [SPRITE_SET_MAZE_LEFT_TEE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_top},
     [SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right_tee_bottom},

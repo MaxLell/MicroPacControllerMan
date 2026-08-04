@@ -20,6 +20,7 @@
 #include "custom_assert.h"
 #include "framebuffer.h"
 #include "game_view.h"
+#include "maze_gen.h"
 #include "msg.h"
 #include "playfield.h"
 #include "sprite_set.h"
@@ -150,10 +151,23 @@ static uint8_t prv_count_of_kind(const msg_display_list_t* in_list, display_item
     return count;
 }
 
+/* The maze the view is asked to draw. The arcade's own throughout this file: the appearance
+ * is *derived* from the walls now (FR-026), and the arcade layout is the one case where the
+ * answer is written down independently — in the map at the bottom of this file, transcribed
+ * from the 1980 game — so it is what the derivation is judged against. */
+static void prv_set_arcade_maze(void)
+{
+    playfield_map_t map;
+
+    playfield_get_arcade_map(&map);
+    game_view_set_maze(&g_view, &map);
+}
+
 void setUp(void)
 {
     assert_probe_begin();
     game_view_init(&g_view);
+    prv_set_arcade_maze();
     prv_make_state();
 }
 
@@ -369,13 +383,15 @@ void test_the_hud_never_lands_on_the_maze(void)
 }
 
 /* ==========================================================================
- * the maze is described twice, and the two must agree
+ * the picture and the rules must agree
  * ========================================================================= */
 
 void test_the_drawn_maze_and_the_played_maze_agree(void)
 {
-    /* `playfield` says where a wall *is* and this module says what a wall *looks like*, and
-     * neither can be derived from the other — a wall bitmap does not name a corner piece,
+    /* `playfield` says where a wall *is* and this module says what a wall *looks like*. The
+     * appearance is derived from the walls now (FR-026), so the two cannot disagree about
+     * *where* — but they can still disagree about what counts as passable, which is what this
+     * checks. It used to guard a hand-written second copy of the maze;
      * and a corner piece does not say whether a ghost may stand there. So the maze is
      * written out twice, from the same source, and this is what stops the two drifting.
      *
@@ -393,7 +409,7 @@ void test_the_drawn_maze_and_the_played_maze_agree(void)
         {
             const cell_t cell = {(int16_t)column, (int16_t)row};
             const bool is_walkable = playfield_is_walkable(&maze, cell);
-            const bool is_drawn_as_wall = game_view_is_wall_drawn_at(column, row);
+            const bool is_drawn_as_wall = game_view_is_wall_drawn_at(&g_view, column, row);
             char message[72];
 
             (void)snprintf(message, sizeof(message), "cell %u,%u: drawn as wall %u, walkable %u", column, row,
@@ -413,7 +429,7 @@ void test_the_ghost_house_gate_is_drawn_but_not_a_wall(void)
     playfield_load(&maze);
 
     TEST_ASSERT_TRUE(playfield_is_walkable(&maze, gate));
-    TEST_ASSERT_FALSE(game_view_is_wall_drawn_at(13U, 12U));
+    TEST_ASSERT_FALSE(game_view_is_wall_drawn_at(&g_view, 13U, 12U));
 }
 
 /* ==========================================================================
@@ -526,6 +542,7 @@ void test_each_direction_interpolates_the_right_way(void)
         const msg_display_item_t* ghost;
 
         game_view_init(&g_view);
+        prv_set_arcade_maze();
         g_state.ghosts[0].column = OPEN_COLUMN;
         g_state.ghosts[0].row = OPEN_ROW;
         g_state.ghosts[0].direction = (uint8_t)cases[index].direction;
@@ -593,6 +610,7 @@ void test_a_corner_is_drawn_without_a_jump(void)
 
     /* The model has stepped north: it is on the cell above, none of that step run off. */
     game_view_init(&g_view);
+    prv_set_arcade_maze();
     g_state.pacman.row = (uint8_t)(OPEN_ROW - 1U);
     g_state.pacman.direction = (uint8_t)DIRECTION_NORTH;
     g_state.pacman.progress = 0U;
@@ -832,13 +850,191 @@ void test_nothing_is_drawn_before_a_state_arrives(void)
 }
 
 /* ==========================================================================
+ * the appearance is derived from the walls
+ * ========================================================================= */
+
+/* How the arcade draws its own maze, one character per cell, transcribed from the 1980 game;
+ * `sprite_set_get_maze_tile` says which drawing each letter is.
+ *
+ * This used to live in `game_view.c` and *be* the appearance. It is a **test fixture** now:
+ * the module derives the appearance from where the walls are, and this is the independent
+ * answer that derivation is checked against. A rule that reproduces 764 hand-drawn cells is a
+ * rule; one checked only against itself is a restatement. */
+/* clang-format off */
+static const char* const g_arcade_appearance[PLAYFIELD_HEIGHT] = {
+    "0UUUUUUUUUUUU45UUUUUUUUUUUU1",
+    "L............rl............R",
+    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
+    "LPr  l.r   l.rl.r   l.r  lPR",
+    "L.guuh.guuuh.gh.guuuh.guuh.R",
+    "L..........................R",
+    "L.ebbf.ef.ebbbbbbf.ef.ebbf.R",
+    "L.guuh.rl.guuyxuuh.rl.guuh.R",
+    "L......rl....rl....rl......R",
+    "2BBBBf.rzbbf rl ebbwl.eBBBB3",
+    "     L.rxuuh gh guuyl.R     ",
+    "     L.rl          rl.R     ",
+    "     L.rl mjs--tjn rl.R     ",
+    "UUUUUh.gh i      q gh.gUUUUU",
+    "      .   i      q   .      ",
+    "BBBBBf.ef i      q ef.eBBBBB",
+    "     L.rl okkkkkkp rl.R     ",
+    "     L.rl          rl.R     ",
+    "     L.rl ebbbbbbf rl.R     ",
+    "0UUUUh.gh guuyxuuh gh.gUUUU1",
+    "L............rl............R",
+    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
+    "L.guyl.guuuh.gh.guuuh.rxuh.R",
+    "LP..rl.......  .......rl..PR",
+    "6bf.rl.ef.ebbbbbbf.ef.rl.eb8",
+    "7uh.gh.rl.guuyxuuh.rl.gh.gu9",
+    "L......rl....rl....rl......R",
+    "L.ebbbbwzbbf.rl.ebbwzbbbbf.R",
+    "L.guuuuuuuuh.gh.guuuuuuuuh.R",
+    "L..........................R",
+    "2BBBBBBBBBBBBBBBBBBBBBBBBBB3",
+};
+/* clang-format on */
+
+/* The two side masses beside the tunnel, rows 9..19 and the six columns at each edge.
+ *
+ * The one place the derivation cannot match, and the reason is worth writing down: there the
+ * arcade wall is six cells thick and is drawn with the *boundary* family, as a detour of the
+ * outer frame rather than as a block with an outline. No generated maze has such a mass —
+ * `maze_gen` builds a one-cell frame with blocks inside it — so the rule is right for every
+ * maze that will actually be played, and wrong for 64 cells of the fixture. Excluded
+ * deliberately, and counted, so the exclusion cannot quietly grow. */
+#define MASS_FIRST_ROW      (9U)
+#define MASS_LAST_ROW       (19U)
+#define MASS_LEFT_COLUMNS   (6U)
+#define MASS_EXPECTED_CELLS (64U)
+
+static bool prv_is_in_a_side_mass(uint8_t in_column, uint8_t in_row)
+{
+    if ((in_row < MASS_FIRST_ROW) || (in_row > MASS_LAST_ROW))
+    {
+        return false;
+    }
+
+    return (in_column < MASS_LEFT_COLUMNS) || (in_column >= (PLAYFIELD_WIDTH - MASS_LEFT_COLUMNS));
+}
+
+void test_the_derived_appearance_is_the_arcade_s_own(void)
+{
+    uint16_t excluded = 0U;
+
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            sprite_set_id_e expected;
+            const bool is_wall_art = sprite_set_get_maze_tile(g_arcade_appearance[row][column], &expected);
+            const uint8_t derived = g_view.maze_tiles[row][column];
+            char message[96];
+
+            if (prv_is_in_a_side_mass(column, row))
+            {
+                const bool agrees = is_wall_art ? (derived == (uint8_t)expected) : (derived == GAME_VIEW_NO_WALL_TILE);
+
+                if (!agrees)
+                {
+                    ++excluded;
+                }
+
+                continue;
+            }
+
+            (void)snprintf(message, sizeof(message), "cell %u,%u: arcade draws %c", column, row,
+                           g_arcade_appearance[row][column]);
+
+            if (is_wall_art)
+            {
+                TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)expected, derived, message);
+            }
+            else
+            {
+                TEST_ASSERT_EQUAL_UINT8_MESSAGE(GAME_VIEW_NO_WALL_TILE, derived, message);
+            }
+        }
+    }
+
+    /* If a change makes the derivation agree with the masses too, or disagree more widely,
+     * this is the line that notices. */
+    TEST_ASSERT_EQUAL_UINT16(MASS_EXPECTED_CELLS, excluded);
+}
+
+void test_a_generated_maze_is_drawn_with_real_tiles(void)
+{
+    /* The derivation has to hold up on the mazes that are actually played, not only on the
+     * fixture. Nothing here knows what the maze looks like, so what is checked is what must be
+     * true of any of them: every wall cell that borders a corridor gets a drawing, and no
+     * corridor cell does. A missing drawing is a hole in the maze wall on the panel. */
+    playfield_map_t map;
+    playfield_t rules;
+
+    maze_gen_generate(&map, 12345U);
+    playfield_load_from_map(&rules, &map);
+    game_view_set_maze(&g_view, &map);
+
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            const cell_t cell = {(int16_t)column, (int16_t)row};
+            const bool is_wall = map.rows[row][column] == PLAYFIELD_MAP_WALL;
+            const uint8_t derived = g_view.maze_tiles[row][column];
+            bool touches_corridor = false;
+            char message[80];
+
+            (void)snprintf(message, sizeof(message), "cell %u,%u", column, row);
+
+            if (!is_wall)
+            {
+                /* Corridor, or the inside of the ghost house, which the house tiles frame but
+                 * do not fill. */
+                TEST_ASSERT_TRUE_MESSAGE(playfield_is_walkable(&rules, cell), message);
+
+                continue;
+            }
+
+            for (int16_t offset_y = -1; offset_y <= 1; ++offset_y)
+            {
+                for (int16_t offset_x = -1; offset_x <= 1; ++offset_x)
+                {
+                    const int16_t x = (int16_t)(column + offset_x);
+                    const int16_t y = (int16_t)(row + offset_y);
+
+                    if ((x < 0) || (x >= PLAYFIELD_WIDTH) || (y < 0) || (y >= PLAYFIELD_HEIGHT))
+                    {
+                        continue;
+                    }
+
+                    if (map.rows[y][x] != PLAYFIELD_MAP_WALL)
+                    {
+                        touches_corridor = true;
+                    }
+                }
+            }
+
+            if (touches_corridor)
+            {
+                TEST_ASSERT_NOT_EQUAL_UINT8_MESSAGE(GAME_VIEW_NO_WALL_TILE, derived, message);
+            }
+        }
+    }
+}
+
+/* ==========================================================================
  * preconditions
  * ========================================================================= */
 
 void test_null_arguments_assert(void)
 {
     msg_display_list_t list;
+    playfield_map_t map;
     int16_t coordinate;
+
+    playfield_get_arcade_map(&map);
 
     ASSERT_PROBE_EXPECT(game_view_init(NULL), "inout_view != NULL");
     ASSERT_PROBE_EXPECT(game_view_set_state(NULL, &g_state), "inout_view != NULL");
@@ -848,4 +1044,7 @@ void test_null_arguments_assert(void)
     ASSERT_PROBE_EXPECT((void)game_view_is_field_pending(NULL), "in_view != NULL");
     ASSERT_PROBE_EXPECT(game_view_get_cell_pixel(0U, 0U, NULL, &coordinate), "out_x != NULL");
     ASSERT_PROBE_EXPECT(game_view_get_cell_pixel(0U, 0U, &coordinate, NULL), "out_y != NULL");
+    ASSERT_PROBE_EXPECT(game_view_set_maze(NULL, &map), "inout_view != NULL");
+    ASSERT_PROBE_EXPECT(game_view_set_maze(&g_view, NULL), "in_map != NULL");
+    ASSERT_PROBE_EXPECT((void)game_view_is_wall_drawn_at(NULL, 0U, 0U), "in_view != NULL");
 }

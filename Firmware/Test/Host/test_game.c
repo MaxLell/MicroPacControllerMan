@@ -32,6 +32,7 @@
 #include "game.h"
 #include "ghost.h"
 #include "ghost_path.h"
+#include "maze_gen.h"
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
@@ -108,6 +109,21 @@ static void prv_eat_every_pellet_except(cell_t in_kept_cell)
             (void)playfield_eat_pellet(&g_game.playfield, cell);
         }
     }
+}
+
+/* Start a run on the arcade's own maze.
+ *
+ * Every test below that steps Pacman down a corridor, counts what is left to eat or checks
+ * where a ghost goes needs a maze it can name in advance — and a generated one (FR-026) is by
+ * definition not that. `game_start_on_map` is the seam that exists for this. The generator is
+ * tested in `test_maze_gen.c`; these are the game's rules, on the one layout whose corridors
+ * are documented outside this codebase. */
+static void prv_start_run(void)
+{
+    playfield_map_t map;
+
+    playfield_get_arcade_map(&map);
+    game_start_on_map(&g_game, &map);
 }
 
 /* Move Pacman one cell off his start, onto whatever is on the cell beside him. */
@@ -338,7 +354,7 @@ void test_an_idle_game_ignores_time(void)
 
 void test_starting_a_run_gives_a_full_set_of_lives_at_level_one(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     TEST_ASSERT_EQUAL(GAME_STATE_RUNNING, game_get_state(&g_game));
     TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_get_lives(&g_game));
@@ -350,7 +366,7 @@ void test_starting_a_run_puts_pacman_on_the_level_start_cell(void)
 {
     msg_game_state_t state;
 
-    game_start(&g_game);
+    prv_start_run();
     state = prv_state();
 
     TEST_ASSERT_EQUAL_UINT8(PACMAN_START_X, state.pacman.column);
@@ -359,10 +375,10 @@ void test_starting_a_run_puts_pacman_on_the_level_start_cell(void)
 
 void test_a_second_run_starts_from_scratch(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     prv_step_onto_the_pellet();
 
-    game_start(&g_game);
+    prv_start_run();
 
     /* The score, the lives and the maze all come back — a run must not inherit the last
      * one's pellets or points. */
@@ -375,7 +391,7 @@ void test_a_second_run_starts_from_scratch(void)
 
 void test_pacman_stands_still_until_a_direction_is_asked_for(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     prv_tick_for(10U * prv_pacman_period_ms(), prv_pacman_period_ms());
 
@@ -385,7 +401,7 @@ void test_pacman_stands_still_until_a_direction_is_asked_for(void)
 
 void test_pacman_does_not_move_before_his_period_has_elapsed(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     game_set_direction(&g_game, STEP_DIRECTION);
     game_tick(&g_game, (prv_pacman_period_ms() - 1U));
@@ -395,7 +411,7 @@ void test_pacman_does_not_move_before_his_period_has_elapsed(void)
 
 void test_pacman_moves_one_cell_per_period(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     prv_step_onto_the_pellet();
 
@@ -410,7 +426,7 @@ void test_leftover_time_is_carried_into_the_next_move(void)
     uint32_t first_step_ms;
     uint32_t second_step_ms;
 
-    game_start(&g_game);
+    prv_start_run();
     difficulty_get(LEVEL_1, &difficulty);
 
     /* The two steps are not the same length: the first eats the pellet beside him and the
@@ -433,7 +449,7 @@ void test_a_direction_is_ignored_unless_a_run_is_in_progress(void)
     /* Still idle: the input must not be remembered and then acted on at the next start. */
     game_set_direction(&g_game, STEP_DIRECTION);
 
-    game_start(&g_game);
+    prv_start_run();
     game_tick(&g_game, prv_pacman_period_ms());
 
     TEST_ASSERT_EQUAL_INT16(PACMAN_START_Y, prv_state().pacman.row);
@@ -443,7 +459,7 @@ void test_a_direction_is_ignored_unless_a_run_is_in_progress(void)
 
 void test_eating_a_pellet_scores_and_clears_the_cell(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     prv_step_onto_the_pellet();
 
@@ -453,7 +469,7 @@ void test_eating_a_pellet_scores_and_clears_the_cell(void)
 
 void test_a_cell_only_pays_once(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     prv_step_onto_the_pellet();
     game_set_direction(&g_game, BACK_DIRECTION);
@@ -468,7 +484,7 @@ void test_a_cell_only_pays_once(void)
 
 void test_a_power_pellet_scores_fifty_and_frightens_the_ghosts(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
 
     prv_step_onto_the_pellet();
@@ -488,7 +504,7 @@ void test_the_frightened_window_runs_out(void)
      * expired" without depending on how long Pacman's step happened to take. */
     const uint32_t margin_ms = 100U;
 
-    game_start(&g_game);
+    prv_start_run();
     g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
 
     prv_step_onto_the_pellet();
@@ -510,7 +526,7 @@ void test_the_frightened_window_runs_out(void)
 
 void test_walking_into_a_ghost_costs_a_life_and_resets_the_positions(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
 
     prv_step_onto_the_pellet();
@@ -522,7 +538,7 @@ void test_walking_into_a_ghost_costs_a_life_and_resets_the_positions(void)
 
 void test_the_eaten_pellets_survive_a_lost_life(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     prv_step_onto_the_pellet();
     ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(PACMAN_START_X, PACMAN_START_Y), false);
 
@@ -536,7 +552,7 @@ void test_the_eaten_pellets_survive_a_lost_life(void)
 
 void test_the_last_life_ends_the_run(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     g_game.lives = 1U;
     ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
 
@@ -548,7 +564,7 @@ void test_the_last_life_ends_the_run(void)
 
 void test_a_finished_run_ignores_further_time(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     g_game.lives = 1U;
     ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
     prv_step_onto_the_pellet();
@@ -565,7 +581,7 @@ void test_a_finished_run_ignores_further_time(void)
 
 void test_eating_a_frightened_ghost_scores_and_sends_it_back_to_the_pen(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
     prv_step_onto_the_pellet();
 
@@ -582,7 +598,7 @@ void test_eating_a_frightened_ghost_scores_and_sends_it_back_to_the_pen(void)
 
 void test_passing_through_a_ghost_still_counts_as_meeting_it(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     /* The ghost is where Pacman is and Pacman is heading for where the ghost will be —
      * they swap cells in one step and would otherwise slip past each other. */
@@ -600,7 +616,7 @@ void test_passing_through_a_ghost_still_counts_as_meeting_it(void)
 
 void test_clearing_a_level_loads_the_next_one_and_keeps_the_score(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     prv_eat_every_pellet_except(prv_make_cell(STEPPED_X, STEPPED_Y));
 
     prv_step_onto_the_pellet();
@@ -613,7 +629,7 @@ void test_clearing_a_level_loads_the_next_one_and_keeps_the_score(void)
 
 void test_a_new_level_refills_the_maze_and_replaces_the_entities(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     prv_eat_every_pellet_except(prv_make_cell(STEPPED_X, STEPPED_Y));
 
     prv_step_onto_the_pellet();
@@ -625,7 +641,7 @@ void test_a_new_level_refills_the_maze_and_replaces_the_entities(void)
 
 void test_clearing_the_last_level_wins_the_run(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     /* Jump to the last level rather than play the twenty before it. */
     prv_jump_to_level(DIFFICULTY_FINAL_LEVEL);
@@ -639,7 +655,7 @@ void test_clearing_the_last_level_wins_the_run(void)
 
 void test_the_last_level_has_no_frightened_window(void)
 {
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(DIFFICULTY_FINAL_LEVEL);
     g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
 
@@ -667,7 +683,7 @@ void test_the_ghosts_never_get_slower_as_the_levels_rise(void)
     {
         uint32_t period_ms;
 
-        game_start(&g_game);
+        prv_start_run();
         prv_jump_to_level(level);
 
         period_ms = prv_measure_ghost_period_ms(GHOST_BLINKY);
@@ -694,7 +710,7 @@ void test_an_ordinary_ghost_never_outruns_pacman_before_the_last_level(void)
     {
         char message[64];
 
-        game_start(&g_game);
+        prv_start_run();
         prv_jump_to_level(level);
 
         (void)snprintf(message, sizeof(message), "level %u: a plain ghost outruns Pacman", level);
@@ -709,7 +725,7 @@ void test_the_last_level_finally_takes_pacmans_speed_away(void)
      * he drops back to 90 % while the ghosts stay at 95 %, so for the first and only time
      * every one of them is quicker than he is. It is the last thing the curve does, and it
      * is why 21 is a finish line worth having. */
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(DIFFICULTY_FINAL_LEVEL);
 
     TEST_ASSERT_LESS_THAN_UINT32(prv_pacman_period_ms(), prv_measure_ghost_period_ms(GHOST_PINKY));
@@ -720,11 +736,11 @@ void test_the_margin_over_the_ghosts_all_but_disappears_by_level_five(void)
     uint32_t level_1_margin_ms;
     uint32_t level_5_margin_ms;
 
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(LEVEL_1);
     level_1_margin_ms = prv_measure_ghost_period_ms(GHOST_PINKY) - prv_pacman_period_ms();
 
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(LEVEL_5);
     level_5_margin_ms = prv_measure_ghost_period_ms(GHOST_PINKY) - prv_pacman_period_ms();
 
@@ -737,7 +753,7 @@ void test_only_cruise_elroy_ever_outruns_pacman(void)
 
     difficulty_get(LEVEL_1, &difficulty);
 
-    game_start(&g_game);
+    prv_start_run();
     prv_leave_this_many_pellets(difficulty.elroy2_pellets_left);
 
     /* Blinky at his second Elroy stage is the one thing in the maze quicker than Pacman —
@@ -749,7 +765,7 @@ void test_pacman_is_slower_on_the_step_after_a_mouthful(void)
 {
     difficulty_t difficulty;
 
-    game_start(&g_game);
+    prv_start_run();
     difficulty_get(LEVEL_1, &difficulty);
 
     /* Nothing eaten yet. */
@@ -775,11 +791,11 @@ void test_the_frightened_window_shrinks_and_is_gone_by_the_last_level(void)
     uint32_t level_1_ms;
     uint32_t level_5_ms;
 
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(LEVEL_1);
     level_1_ms = prv_measure_frightened_ms();
 
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(LEVEL_5);
     level_5_ms = prv_measure_frightened_ms();
 
@@ -789,7 +805,7 @@ void test_the_frightened_window_shrinks_and_is_gone_by_the_last_level(void)
     /* It does not shrink monotonically — the arcade hands a long window back at 6, 10 and
      * 14, as a breather — so the claim that holds end to end is that by the last level
      * there is none at all. A power pellet is then 50 points and nothing more. */
-    game_start(&g_game);
+    prv_start_run();
     prv_jump_to_level(DIFFICULTY_FINAL_LEVEL);
     prv_eat_a_power_pellet();
 
@@ -867,7 +883,7 @@ void test_only_blinky_and_pinky_are_out_when_a_run_begins(void)
     /* §10.4: Blinky starts outside altogether, Pinky's dot limit is zero so he leaves as the
      * level begins, and Inky and Clyde have to be eaten out. All four leaving at once was
      * what made level 1 feel like level 10. */
-    game_start(&g_game);
+    prv_start_run();
 
     TEST_ASSERT_FALSE(ghost_is_in_house(&g_game.ghosts[GHOST_BLINKY]));
     TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_PINKY]));
@@ -880,7 +896,7 @@ void test_inky_comes_out_at_his_dot_limit_and_clyde_later(void)
     difficulty_t difficulty;
 
     difficulty_get(LEVEL_1, &difficulty);
-    game_start(&g_game);
+    prv_start_run();
     prv_shut_blinky_in();
 
     /* One short of Inky's limit: still shut in. Counting is what releases him, not time. */
@@ -904,7 +920,7 @@ void test_standing_still_cannot_keep_the_ghosts_locked_up(void)
     difficulty_t difficulty;
 
     difficulty_get(LEVEL_1, &difficulty);
-    game_start(&g_game);
+    prv_start_run();
 
     TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_INKY]));
 
@@ -918,7 +934,7 @@ void test_a_lost_life_switches_to_the_global_counter(void)
 {
     /* §10.4: after a death the personal counters are set aside for a global one, so the
      * restart is paced the same however late in the level it happened. */
-    game_start(&g_game);
+    prv_start_run();
     ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, prv_make_cell(STEPPED_X, STEPPED_Y), false);
 
     prv_step_onto_the_pellet();
@@ -944,14 +960,14 @@ void test_cruise_elroy_speeds_blinky_up_as_the_maze_empties(void)
 
     difficulty_get(LEVEL_1, &difficulty);
 
-    game_start(&g_game);
+    prv_start_run();
     full_maze_ms = prv_measure_ghost_period_ms(GHOST_BLINKY);
 
-    game_start(&g_game);
+    prv_start_run();
     prv_leave_this_many_pellets(difficulty.elroy1_pellets_left);
     stage_1_ms = prv_measure_ghost_period_ms(GHOST_BLINKY);
 
-    game_start(&g_game);
+    prv_start_run();
     prv_leave_this_many_pellets(difficulty.elroy2_pellets_left);
     stage_2_ms = prv_measure_ghost_period_ms(GHOST_BLINKY);
 
@@ -969,10 +985,10 @@ void test_only_blinky_gets_cruise_elroy(void)
 
     difficulty_get(LEVEL_1, &difficulty);
 
-    game_start(&g_game);
+    prv_start_run();
     pinky_full_ms = prv_measure_ghost_period_ms(GHOST_PINKY);
 
-    game_start(&g_game);
+    prv_start_run();
     prv_leave_this_many_pellets(difficulty.elroy2_pellets_left);
     pinky_empty_ms = prv_measure_ghost_period_ms(GHOST_PINKY);
 
@@ -987,7 +1003,7 @@ void test_cruise_elroy_keeps_blinky_hunting_through_scatter(void)
     difficulty_get(LEVEL_1, &difficulty);
 
     /* The plan opens with a scatter phase, so on a full maze everyone goes home. */
-    game_start(&g_game);
+    prv_start_run();
     game_tick(&g_game, 10U);
 
     TEST_ASSERT_EQUAL(GHOST_MODE_SCATTER, g_game.ghosts[GHOST_BLINKY].mode);
@@ -995,7 +1011,7 @@ void test_cruise_elroy_keeps_blinky_hunting_through_scatter(void)
 
     /* Once Elroy is awake he does not: the breather the others take is exactly when he
      * keeps coming, which is the whole character of the end of a level. */
-    game_start(&g_game);
+    prv_start_run();
     prv_leave_this_many_pellets(difficulty.elroy1_pellets_left);
     game_tick(&g_game, 10U);
 
@@ -1011,10 +1027,10 @@ void test_a_ghost_crawls_through_the_tunnel(void)
     uint32_t open_maze_ms;
     uint32_t tunnel_ms;
 
-    game_start(&g_game);
+    prv_start_run();
     open_maze_ms = prv_measure_ghost_period_ms(GHOST_PINKY);
 
-    game_start(&g_game);
+    prv_start_run();
     TEST_ASSERT_TRUE(playfield_is_tunnel(&g_game.playfield, tunnel_cell));
 
     ghost_reset(&g_game.ghosts[GHOST_PINKY], GHOST_PINKY, tunnel_cell, false);
@@ -1035,7 +1051,7 @@ void test_the_frightened_ghosts_flash_before_the_window_closes(void)
     difficulty_get(LEVEL_1, &difficulty);
     warning_ms = (uint32_t)difficulty.frightened_flash_count * 2U * GAME_FRIGHTENED_FLASH_HALF_PERIOD_MS;
 
-    game_start(&g_game);
+    prv_start_run();
     prv_eat_a_power_pellet();
 
     /* Early in the window there is no warning yet — a flash that ran the whole time would
@@ -1068,7 +1084,7 @@ void test_the_state_reports_the_run(void)
 {
     msg_game_state_t state;
 
-    game_start(&g_game);
+    prv_start_run();
     prv_step_onto_the_pellet();
     state = prv_state();
 
@@ -1082,7 +1098,7 @@ void test_the_state_is_a_copy_the_caller_may_scribble_on(void)
     msg_game_state_t first;
     msg_game_state_t second;
 
-    game_start(&g_game);
+    prv_start_run();
     game_get_state_message(&g_game, &first);
 
     memset(&first, 0xFF, sizeof(first));
@@ -1097,7 +1113,7 @@ void test_the_state_is_a_copy_the_caller_may_scribble_on(void)
 
 void test_a_blocked_step_leaves_the_actor_standing_on_its_cell(void)
 {
-    game_start(&g_game);
+    prv_start_run();
 
     /* Row 1 of the maze is the top corridor, open from column 1 to the wall at column 0, so
      * walking west from column 2 reaches column 1 and then stops — still *facing* west,
@@ -1125,7 +1141,7 @@ void test_a_step_is_a_full_sweep_from_nothing_to_arrived(void)
     cell_progress_t half_way;
     cell_progress_t just_before_the_next;
 
-    game_start(&g_game);
+    prv_start_run();
     game_set_direction(&g_game, STEP_DIRECTION);
 
     /* The step lands him on the next cell, and none of it has been run off yet: the view
@@ -1153,7 +1169,7 @@ void test_a_step_is_a_full_sweep_from_nothing_to_arrived(void)
 void test_a_null_game_asserts(void)
 {
     ASSERT_PROBE_EXPECT(game_init(NULL), "inout_game != NULL");
-    ASSERT_PROBE_EXPECT(game_start(NULL), "inout_game != NULL");
+    ASSERT_PROBE_EXPECT(game_start(NULL, 1U), "inout_game != NULL");
     ASSERT_PROBE_EXPECT(game_tick(NULL, 1U), "inout_game != NULL");
     ASSERT_PROBE_EXPECT(game_set_direction(NULL, DIRECTION_NORTH), "inout_game != NULL");
     ASSERT_PROBE_EXPECT(game_get_state_message(NULL, &g_probe_state), "in_game != NULL");

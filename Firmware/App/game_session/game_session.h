@@ -29,6 +29,7 @@
 
 #include "game.h"
 #include "msg.h"
+#include "playfield.h"
 
 /* ==========================================================================
  * game_session - public types
@@ -58,7 +59,16 @@
 void game_session_init(void);
 
 /*! \brief Begin a run: three lives, level one, score zero (FR-003). */
-void game_session_start(void);
+void game_session_start(uint32_t in_maze_seed);
+
+/*! \brief Begin a run on one given maze, which every level of it then plays.
+ *
+ * For a caller that needs a maze it can predict — a test, or anything that wants the arcade's
+ * own layout (`playfield_get_arcade_map`).
+ *
+ * \param[in]       in_map: the maze to play, must not be `NULL`
+ */
+void game_session_start_on_map(const playfield_map_t* in_map);
 
 /*! \brief Ask for a direction.
  *

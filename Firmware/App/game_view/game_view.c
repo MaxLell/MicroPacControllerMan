@@ -28,54 +28,240 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
     SPRITE_SET_PALETTE_CLYDE,
 };
 
-/* How the maze is *drawn*, one character per cell — the arcade's own map, transcribed
- * unchanged, with `sprite_set` holding what each letter draws.
- *
- * This is the maze a second time, and that is deliberate: `playfield.c` holds what the
- * rules need (wall, pellet, pen, tunnel) and this holds what the panel needs (which of
- * thirty-odd line and corner pieces goes in this cell). Neither can be derived from the
- * other — a wall bitmap does not say which corner piece to draw, and a corner piece does
- * not say whether a ghost may stand there. They come from the same source and a unit test
- * checks they still agree, which is what makes the duplication safe rather than a trap.
- *
- * Everything that is not a wall letter is corridor: `.` and `P` carry pellets and a space
- * carries nothing. What is actually left to eat comes from the state message, not from
- * here — this map never changes. */
+/* ---- how the maze is drawn ------------------------------------------------ */
+
+/* The ghost house, rows 12..16 and columns 10..17. Its picture is **stamped, not derived**:
+ * it is the same structure at the same place in the arcade's maze and in every generated one
+ * (`maze_gen`), and it is the only part of the maze with tiles of its own — the pink gate and
+ * the four rounded corners exist for nothing else. */
+#define HOUSE_FIRST_COLUMN (10)
+#define HOUSE_LAST_COLUMN  (17)
+#define HOUSE_FIRST_ROW    (12)
+#define HOUSE_LAST_ROW     (16)
+#define HOUSE_COLUMN_COUNT (HOUSE_LAST_COLUMN - HOUSE_FIRST_COLUMN + 1)
+#define HOUSE_ROW_COUNT    (HOUSE_LAST_ROW - HOUSE_FIRST_ROW + 1)
+
+#define NO_TILE            GAME_VIEW_NO_WALL_TILE
+
 /* clang-format off */
-static const char* const g_maze_appearance[PLAYFIELD_HEIGHT] = {
-    "0UUUUUUUUUUUU45UUUUUUUUUUUU1",
-    "L............rl............R",
-    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
-    "LPr  l.r   l.rl.r   l.r  lPR",
-    "L.guuh.guuuh.gh.guuuh.guuh.R",
-    "L..........................R",
-    "L.ebbf.ef.ebbbbbbf.ef.ebbf.R",
-    "L.guuh.rl.guuyxuuh.rl.guuh.R",
-    "L......rl....rl....rl......R",
-    "2BBBBf.rzbbf rl ebbwl.eBBBB3",
-    "     L.rxuuh gh guuyl.R     ",
-    "     L.rl          rl.R     ",
-    "     L.rl mjs--tjn rl.R     ",
-    "UUUUUh.gh i      q gh.gUUUUU",
-    "      .   i      q   .      ",
-    "BBBBBf.ef i      q ef.eBBBBB",
-    "     L.rl okkkkkkp rl.R     ",
-    "     L.rl          rl.R     ",
-    "     L.rl ebbbbbbf rl.R     ",
-    "0UUUUh.gh guuyxuuh gh.gUUUU1",
-    "L............rl............R",
-    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
-    "L.guyl.guuuh.gh.guuuh.rxuh.R",
-    "LP..rl.......  .......rl..PR",
-    "6bf.rl.ef.ebbbbbbf.ef.rl.eb8",
-    "7uh.gh.rl.guuyxuuh.rl.gh.gu9",
-    "L......rl....rl....rl......R",
-    "L.ebbbbwzbbf.rl.ebbwzbbbbf.R",
-    "L.guuuuuuuuh.gh.guuuuuuuuh.R",
-    "L..........................R",
-    "2BBBBBBBBBBBBBBBBBBBBBBBBBB3",
+static const uint8_t g_house_tiles[HOUSE_ROW_COUNT][HOUSE_COLUMN_COUNT] = {
+    {SPRITE_SET_MAZE_HOUSE_TOP_LEFT, SPRITE_SET_MAZE_BOTTOM, SPRITE_SET_MAZE_HOUSE_GATE_LEFT,
+     SPRITE_SET_MAZE_HOUSE_GATE, SPRITE_SET_MAZE_HOUSE_GATE, SPRITE_SET_MAZE_HOUSE_GATE_RIGHT,
+     SPRITE_SET_MAZE_BOTTOM, SPRITE_SET_MAZE_HOUSE_TOP_RIGHT},
+    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
+    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
+    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
+    {SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP,
+     SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT},
 };
 /* clang-format on */
+
+/* Outside the panel counts as wall: it stops the derivation having a special case for the
+ * edge, and it is true — there is nothing out there to walk into. */
+static bool prv_is_wall(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    if ((in_x < 0) || (in_x >= PLAYFIELD_WIDTH) || (in_y < 0) || (in_y >= PLAYFIELD_HEIGHT))
+    {
+        return true;
+    }
+
+    return in_map->rows[in_y][in_x] == PLAYFIELD_MAP_WALL;
+}
+
+static bool prv_is_open(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    return !prv_is_wall(in_map, in_x, in_y);
+}
+
+/* The ring: the wall cells along the panel's edge, which carry the maze's boundary line.
+ *
+ * The line hugs the edge, so a ring cell only ever does one of three things — run straight,
+ * turn where a tunnel breaks the ring, or grow a branch inward where a wall block's own line
+ * has to meet it. The branch is what the tee tiles are for, and which tee depends on whether
+ * the block starts or ends at this cell, because a block's line is drawn inset: a two-cell
+ * thick wall is two parallel lines, and each has to land on its own tee. */
+static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    const bool is_left = in_x == 0;
+    const bool is_top = in_y == 0;
+
+    if ((in_x == 0) && (in_y == 0))
+    {
+        return SPRITE_SET_MAZE_CORNER_TOP_LEFT;
+    }
+
+    if ((in_x == (PLAYFIELD_WIDTH - 1)) && (in_y == 0))
+    {
+        return SPRITE_SET_MAZE_CORNER_TOP_RIGHT;
+    }
+
+    if ((in_x == 0) && (in_y == (PLAYFIELD_HEIGHT - 1)))
+    {
+        return SPRITE_SET_MAZE_CORNER_BOTTOM_LEFT;
+    }
+
+    if ((in_x == (PLAYFIELD_WIDTH - 1)) && (in_y == (PLAYFIELD_HEIGHT - 1)))
+    {
+        return SPRITE_SET_MAZE_CORNER_BOTTOM_RIGHT;
+    }
+
+    if ((in_x == 0) || (in_x == (PLAYFIELD_WIDTH - 1)))
+    {
+        const int16_t inward = is_left ? 1 : -1;
+
+        /* A tunnel mouth breaks the ring, so the line has to stop and turn inward. */
+        if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)))
+        {
+            return is_left ? SPRITE_SET_MAZE_CORNER_TOP_LEFT : SPRITE_SET_MAZE_CORNER_TOP_RIGHT;
+        }
+
+        if (prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
+        {
+            return is_left ? SPRITE_SET_MAZE_CORNER_BOTTOM_LEFT : SPRITE_SET_MAZE_CORNER_BOTTOM_RIGHT;
+        }
+
+        if (prv_is_wall(in_map, (int16_t)(in_x + inward), in_y))
+        {
+            if (prv_is_open(in_map, (int16_t)(in_x + inward), (int16_t)(in_y - 1)))
+            {
+                return is_left ? SPRITE_SET_MAZE_LEFT_TEE_BOTTOM : SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM;
+            }
+
+            if (prv_is_open(in_map, (int16_t)(in_x + inward), (int16_t)(in_y + 1)))
+            {
+                return is_left ? SPRITE_SET_MAZE_LEFT_TEE_TOP : SPRITE_SET_MAZE_RIGHT_TEE_TOP;
+            }
+        }
+
+        return is_left ? SPRITE_SET_MAZE_LEFT : SPRITE_SET_MAZE_RIGHT;
+    }
+
+    {
+        const int16_t inward = is_top ? 1 : -1;
+
+        if (prv_is_wall(in_map, in_x, (int16_t)(in_y + inward)))
+        {
+            if (prv_is_open(in_map, (int16_t)(in_x - 1), (int16_t)(in_y + inward)))
+            {
+                return is_top ? SPRITE_SET_MAZE_TOP_TEE_RIGHT : SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT;
+            }
+
+            if (prv_is_open(in_map, (int16_t)(in_x + 1), (int16_t)(in_y + inward)))
+            {
+                return is_top ? SPRITE_SET_MAZE_TOP_TEE_LEFT : SPRITE_SET_MAZE_BOTTOM_TEE_LEFT;
+            }
+        }
+
+        return is_top ? SPRITE_SET_MAZE_TOP : SPRITE_SET_MAZE_BOTTOM;
+    }
+}
+
+/* A wall block: the cell carries part of that block's own outline, which the arcade draws
+ * inset from the block's edge — which is why a thick wall reads as a thin blue rectangle and
+ * why the inside of a block is drawn as nothing at all.
+ *
+ * Four convex corners, four straight edges and four concave corners cover every rectilinear
+ * shape, and the ROM has all twelve. The concave ones are found by the diagonals: a cell with
+ * no open neighbour but an open corner is where the outline bends around an inside angle. */
+static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    const bool north = prv_is_open(in_map, in_x, (int16_t)(in_y - 1));
+    const bool south = prv_is_open(in_map, in_x, (int16_t)(in_y + 1));
+    const bool west = prv_is_open(in_map, (int16_t)(in_x - 1), in_y);
+    const bool east = prv_is_open(in_map, (int16_t)(in_x + 1), in_y);
+
+    if (north && west)
+    {
+        return SPRITE_SET_MAZE_BLOCK_TOP_LEFT;
+    }
+
+    if (north && east)
+    {
+        return SPRITE_SET_MAZE_BLOCK_TOP_RIGHT;
+    }
+
+    if (south && west)
+    {
+        return SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT;
+    }
+
+    if (south && east)
+    {
+        return SPRITE_SET_MAZE_BLOCK_BOTTOM_RIGHT;
+    }
+
+    if (north)
+    {
+        return SPRITE_SET_MAZE_BLOCK_TOP;
+    }
+
+    if (south)
+    {
+        return SPRITE_SET_MAZE_BLOCK_BOTTOM;
+    }
+
+    if (west)
+    {
+        return SPRITE_SET_MAZE_BLOCK_LEFT;
+    }
+
+    if (east)
+    {
+        return SPRITE_SET_MAZE_BLOCK_RIGHT;
+    }
+
+    if (prv_is_open(in_map, (int16_t)(in_x - 1), (int16_t)(in_y + 1)))
+    {
+        return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT;
+    }
+
+    if (prv_is_open(in_map, (int16_t)(in_x + 1), (int16_t)(in_y + 1)))
+    {
+        return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_LEFT;
+    }
+
+    if (prv_is_open(in_map, (int16_t)(in_x - 1), (int16_t)(in_y - 1)))
+    {
+        return SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP;
+    }
+
+    if (prv_is_open(in_map, (int16_t)(in_x + 1), (int16_t)(in_y - 1)))
+    {
+        return SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP;
+    }
+
+    /* Deep inside a block, where the arcade draws nothing. */
+    return NO_TILE;
+}
+
+static void prv_derive_maze_tiles(game_view_t* const inout_view, const playfield_map_t* const in_map)
+{
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            const bool is_house = (x >= HOUSE_FIRST_COLUMN) && (x <= HOUSE_LAST_COLUMN) && (y >= HOUSE_FIRST_ROW)
+                                  && (y <= HOUSE_LAST_ROW);
+
+            if (is_house)
+            {
+                inout_view->maze_tiles[y][x] = g_house_tiles[y - HOUSE_FIRST_ROW][x - HOUSE_FIRST_COLUMN];
+            }
+            else if (!prv_is_wall(in_map, x, y))
+            {
+                inout_view->maze_tiles[y][x] = NO_TILE;
+            }
+            else if ((x == 0) || (x == (PLAYFIELD_WIDTH - 1)) || (y == 0) || (y == (PLAYFIELD_HEIGHT - 1)))
+            {
+                inout_view->maze_tiles[y][x] = prv_get_ring_tile(in_map, x, y);
+            }
+            else
+            {
+                inout_view->maze_tiles[y][x] = prv_get_block_tile(in_map, x, y);
+            }
+        }
+    }
+}
 
 static void prv_add_item(msg_display_list_t* const inout_list, display_item_kind_e in_kind, sprite_set_id_e in_sprite,
                          sprite_set_palette_e in_palette, int16_t in_x, int16_t in_y)
@@ -135,29 +321,29 @@ static void prv_get_actor_pixel(const msg_actor_t* const in_actor, int16_t* cons
     }
 }
 
-bool game_view_is_wall_drawn_at(uint8_t in_column, uint8_t in_row)
+bool game_view_is_wall_drawn_at(const game_view_t* in_view, uint8_t in_column, uint8_t in_row)
 {
-    sprite_set_id_e id;
-
+    ASSERT(in_view != NULL);
     ASSERT(in_column < PLAYFIELD_WIDTH);
     ASSERT(in_row < PLAYFIELD_HEIGHT);
 
-    if (!sprite_set_get_maze_tile(g_maze_appearance[in_row][in_column], &id))
+    if (in_view->maze_tiles[in_row][in_column] == NO_TILE)
     {
         return false;
     }
 
-    return !sprite_set_is_maze_gate(id);
+    return !sprite_set_is_maze_gate((sprite_set_id_e)in_view->maze_tiles[in_row][in_column]);
 }
 
 /* What a field cell should look like, given the pellets that are left. Walls come from the
- * appearance map rather than from the state, because they never change and sending 868
- * unchanging bits every frame would be silly. */
+ * derived tiles rather than from the state, because they cannot change until the next maze
+ * and sending 868 unchanging bits every frame would be silly. */
 static void prv_describe_cell(const game_view_t* const in_view, uint8_t in_column, uint8_t in_row,
                               sprite_set_id_e* const out_sprite, sprite_set_palette_e* const out_palette)
 {
-    if (sprite_set_get_maze_tile(g_maze_appearance[in_row][in_column], out_sprite))
+    if (in_view->maze_tiles[in_row][in_column] != NO_TILE)
     {
+        *out_sprite = (sprite_set_id_e)in_view->maze_tiles[in_row][in_column];
         *out_palette = sprite_set_is_maze_gate(*out_sprite) ? SPRITE_SET_PALETTE_DOOR : SPRITE_SET_PALETTE_WALL;
 
         return;
@@ -461,6 +647,25 @@ void game_view_init(game_view_t* inout_view)
 
     memset(inout_view, 0, sizeof(*inout_view));
     prv_forget_hud(inout_view);
+
+    /* Not zero: zero is a valid sprite id, so a zeroed maze would draw Pacman's face in
+     * every cell of the field. */
+    memset(inout_view->maze_tiles, NO_TILE, sizeof(inout_view->maze_tiles));
+}
+
+void game_view_set_maze(game_view_t* inout_view, const playfield_map_t* in_map)
+{
+    ASSERT(inout_view != NULL);
+    ASSERT(in_map != NULL);
+
+    prv_derive_maze_tiles(inout_view, in_map);
+    inout_view->has_maze = true;
+
+    /* A new maze is every cell changed, so the field goes out again from the start. */
+    inout_view->has_drawn_field = false;
+    inout_view->pending_field_cell = 0U;
+    inout_view->is_full_field_pending = inout_view->has_state;
+    prv_forget_hud(inout_view);
 }
 
 void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_state)
@@ -494,7 +699,7 @@ bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out
 
     memset(out_list, 0, sizeof(*out_list));
 
-    if (!inout_view->has_state)
+    if (!inout_view->has_state || !inout_view->has_maze)
     {
         return false;
     }

@@ -11,21 +11,8 @@
  * playfield - private
  * ========================================================================= */
 
-/* Map legend, as in [10 §10.2]: '#' wall, '.' pellet, 'o' power pellet, 'P' Pacman start,
- * 'H' inside the ghost house, 'D' its gate, 'T' tunnel, ' ' open with nothing on it.
- *
- * '0'..'3' are the four ghosts' starting cells, numbered as `ghost_personality_e` numbers
- * them — Blinky, Pinky, Inky, Clyde. Blinky's is the one *outside*, just above the gate,
- * because that is where the arcade puts him; the other three stand inside. Digits rather
- * than initials because 'P' is already Pacman's and 'C'/'I' would read as maze pieces. */
-#define MAP_WALL             '#'
-#define MAP_PELLET           '.'
-#define MAP_POWER_PELLET     'o'
-#define MAP_PACMAN_START     'P'
-#define MAP_HOUSE            'H'
-#define MAP_GATE             'D'
-#define MAP_TUNNEL           'T'
-#define MAP_OPEN             ' '
+/* The map legend now lives in `playfield.h`: since FR-026 it is what `maze_gen` writes and
+ * this reads, so it is a contract rather than a private detail. */
 
 #define SCATTER_CORNER_COUNT (4U)
 
@@ -36,10 +23,12 @@
  * a 240 x 320 one holds the arcade layout at its native 8 px per cell with room to spare.
  * The reduction outlived its reason by one hardware change.
  *
- * **One maze, every level** (FR-025 as re-baselined). The arcade never changed its maze
- * either; difficulty comes from the ghosts getting faster, Cruise Elroy waking up and the
- * frightened window shrinking (§10.9), which is where it belongs — those live in
- * `difficulty` and the game rules, not here.
+ * **A game no longer plays this maze** — FR-026 gives every level a generated one
+ * (`maze_gen`). It stays as the *reference*: the one layout whose properties are known from
+ * outside this codebase, so it is what the generator's output is judged against and what
+ * `game_view`'s appearance rules are checked with. Difficulty was never the maze's business
+ * anyway — the ghosts getting faster, Cruise Elroy waking up and the frightened window
+ * shrinking (§10.9) live in `difficulty`.
  *
  * It is **the arcade's layout, not a likeness of it**, and it did not start that way: it
  * was hand-drawn to the right proportions first, and 94 of its 868 cells were wrong. What
@@ -109,15 +98,16 @@ static int16_t prv_wrap_coordinate(int16_t in_value, int16_t in_size)
     return wrapped;
 }
 
-/* ==========================================================================
- * playfield - public
- * ========================================================================= */
-
-void playfield_load(playfield_t* inout_playfield)
+/* Both loaders end up here. The map arrives as rows rather than as a `playfield_map_t`
+ * because the arcade maze above is an array of string literals and copying it into a struct
+ * to read it straight back out would be work for nothing. */
+static void prv_load_rows(playfield_t* const inout_playfield, const char* const* const in_rows)
 {
+    const char last_ghost_start = (char)(PLAYFIELD_MAP_GHOST_START_FIRST + PLAYFIELD_GHOST_COUNT - 1);
     uint8_t start_count = 0U;
 
     ASSERT(inout_playfield != NULL);
+    ASSERT(in_rows != NULL);
 
     inout_playfield->remaining_pellet_count = 0U;
     inout_playfield->pacman_start.x = 0;
@@ -125,41 +115,43 @@ void playfield_load(playfield_t* inout_playfield)
 
     for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
     {
-        const char* const row = g_maze[y];
+        const char* const row = in_rows[y];
+
+        ASSERT(row != NULL);
 
         for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
         {
             const char tile = row[x];
             const cell_t cell = {x, y};
 
-            inout_playfield->walls[y][x] = (tile == MAP_WALL);
-            inout_playfield->tunnels[y][x] = (tile == MAP_TUNNEL);
-            inout_playfield->gates[y][x] = (tile == MAP_GATE);
+            inout_playfield->walls[y][x] = (tile == PLAYFIELD_MAP_WALL);
+            inout_playfield->tunnels[y][x] = (tile == PLAYFIELD_MAP_TUNNEL);
+            inout_playfield->gates[y][x] = (tile == PLAYFIELD_MAP_GATE);
             inout_playfield->pellets[y][x] = PLAYFIELD_PELLET_NONE;
 
             /* The gate counts as house, so a ghost standing on it is still on its way in or
              * out rather than already loose in the maze. Blinky's cell does not: he starts
              * outside, and the digit that marks him sits above the gate. */
-            inout_playfield->house[y][x] =
-                (tile == MAP_HOUSE) || (tile == MAP_GATE) || ((tile >= '1') && (tile <= '3'));
+            inout_playfield->house[y][x] = (tile == PLAYFIELD_MAP_HOUSE) || (tile == PLAYFIELD_MAP_GATE)
+                                           || ((tile > PLAYFIELD_MAP_GHOST_START_FIRST) && (tile <= last_ghost_start));
 
-            if (tile == MAP_PELLET)
+            if (tile == PLAYFIELD_MAP_PELLET)
             {
                 inout_playfield->pellets[y][x] = PLAYFIELD_PELLET_NORMAL;
                 ++inout_playfield->remaining_pellet_count;
             }
-            else if (tile == MAP_POWER_PELLET)
+            else if (tile == PLAYFIELD_MAP_POWER_PELLET)
             {
                 inout_playfield->pellets[y][x] = PLAYFIELD_PELLET_POWER;
                 ++inout_playfield->remaining_pellet_count;
             }
-            else if (tile == MAP_PACMAN_START)
+            else if (tile == PLAYFIELD_MAP_PACMAN_START)
             {
                 inout_playfield->pacman_start = cell;
             }
-            else if ((tile >= '0') && (tile < (char)('0' + PLAYFIELD_GHOST_COUNT)))
+            else if ((tile >= PLAYFIELD_MAP_GHOST_START_FIRST) && (tile <= last_ghost_start))
             {
-                inout_playfield->ghost_starts[tile - '0'] = cell;
+                inout_playfield->ghost_starts[tile - PLAYFIELD_MAP_GHOST_START_FIRST] = cell;
                 ++start_count;
             }
             else
@@ -169,12 +161,53 @@ void playfield_load(playfield_t* inout_playfield)
         }
     }
 
-    /* A maze missing a start, or with two ghosts on one digit, is a typo in the table
-     * above rather than a runtime condition. */
+    /* A maze missing a start, or with two ghosts on one digit, is a defect in whatever wrote
+     * the map rather than a runtime condition. */
     ASSERT(start_count == PLAYFIELD_GHOST_COUNT);
     ASSERT(inout_playfield->remaining_pellet_count > 0U);
 
     inout_playfield->total_pellet_count = inout_playfield->remaining_pellet_count;
+}
+
+/* ==========================================================================
+ * playfield - public
+ * ========================================================================= */
+
+void playfield_load(playfield_t* inout_playfield)
+{
+    ASSERT(inout_playfield != NULL);
+
+    prv_load_rows(inout_playfield, g_maze);
+}
+
+void playfield_get_arcade_map(playfield_map_t* out_map)
+{
+    ASSERT(out_map != NULL);
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            out_map->rows[y][x] = g_maze[y][x];
+        }
+
+        out_map->rows[y][PLAYFIELD_WIDTH] = '\0';
+    }
+}
+
+void playfield_load_from_map(playfield_t* inout_playfield, const playfield_map_t* in_map)
+{
+    const char* rows[PLAYFIELD_HEIGHT];
+
+    ASSERT(inout_playfield != NULL);
+    ASSERT(in_map != NULL);
+
+    for (int16_t y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        rows[y] = in_map->rows[y];
+    }
+
+    prv_load_rows(inout_playfield, rows);
 }
 
 cell_t playfield_wrap_cell(cell_t in_cell)

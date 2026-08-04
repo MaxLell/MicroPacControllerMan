@@ -13,6 +13,7 @@
 #include "render.h"
 #include "sprite_set.h"
 #include "sw_timer.h"
+#include "systick_bsp.h"
 
 /* ==========================================================================
  * shell - private
@@ -353,7 +354,14 @@ void shell_press_start(void)
         /* `game_session_init` re-initialises Render, which is what clears the menu off the
          * panel and gives the field handover a clean buffer to draw into. */
         game_session_init();
-        game_session_start();
+
+        /* The run's mazes are seeded with **the moment start was pressed** (FR-026). The tick
+         * is read here as a source of entropy and not as a time — which is why this is not the
+         * `millis()` the coding standard rules out: nothing is being measured, and no two
+         * values of it are ever compared. A player cannot press a key on a chosen
+         * millisecond, so two runs get different mazes, and a run whose seed is known can be
+         * replayed exactly. */
+        game_session_start(systick_bsp_get_tick());
 
         prv_enter(SHELL_SCREEN_GAME, 0U);
     }
