@@ -207,6 +207,32 @@ void test_starting_a_run_puts_the_game_at_the_beginning(void)
     TEST_ASSERT_EQUAL_UINT32(0U, game_session_get_score());
 }
 
+/* The production path: a seed rather than a map, so the maze is generated. What is checked is
+ * that the whole chain still works when nobody knows what the maze looks like — the game
+ * generates one, the view derives its appearance, and the field is handed over in one frame.
+ * The maze reaching the view is the part that could silently not happen: it cannot ride inside
+ * the state message, so the session has to notice the level changing and hand it over itself.
+ */
+void test_a_seeded_run_hands_over_a_generated_maze(void)
+{
+    uint32_t handover_region_count;
+    uint32_t steady_region_count;
+
+    game_session_start(20260804U);
+
+    TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_session_get_state());
+
+    handover_region_count = prv_run_one_frame();
+
+    (void)prv_run_one_frame();
+    steady_region_count = prv_run_one_frame();
+
+    /* A whole field went out, and then frames settled to actor-sized ones — which together say
+     * the view had a maze to draw. Without one it would have drawn nothing at all. */
+    TEST_ASSERT_GREATER_THAN_UINT32(TEST_STEADY_MAX_REGION_COUNT, handover_region_count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(TEST_STEADY_MAX_REGION_COUNT, steady_region_count);
+}
+
 /* A direction is a request, not a move: it is granted at the first cell where the turn is
  * possible (§10.1). Whether it is granted is `test_pacman`'s business — what matters here
  * is that the session passes it on rather than swallowing it, so points appear.
