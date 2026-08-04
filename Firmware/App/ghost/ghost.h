@@ -52,7 +52,6 @@ typedef struct
     agent_t agent;
     ghost_personality_e personality;
     ghost_mode_e mode;
-    bool may_reverse; /*!< Earned by a mode change (§10.1)   */
 
     /*!< Whether it is still in the ghost house. Only a ghost in here may cross the gate,
      *   which is what makes the house one-way: once out, the only way back is to be eaten
@@ -89,11 +88,11 @@ void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_
  */
 void ghost_send_to_pen(ghost_t* inout_ghost, cell_t in_pen_cell);
 
-/*! \brief Change mode, which earns the ghost one reversal.
+/*! \brief Change mode, which changes where the ghost is heading and nothing else.
  *
- * §10.1 lets a ghost turn around exactly when its mode changes — scatter↔chase, or
- * entering and leaving frightened. Setting the mode it is already in changes nothing, so
- * a caller may drive this every tick without granting free reversals.
+ * A mode change buys **no** reversal: a ghost never turns round (§10.1), so a new mode takes
+ * effect from the next junction it reaches. This is a deliberate departure from the arcade,
+ * which forces a reversal here — see DEC-037. Idempotent, so a caller may drive it every tick.
  *
  * \param[in,out]   inout_ghost: instance
  * \param[in]       in_mode: the mode to enter
@@ -120,7 +119,7 @@ cell_t ghost_get_target(const ghost_t* in_ghost, const playfield_t* in_playfield
 /*! \brief Move the ghost one cell.
  *
  * Works out the target for the current mode, asks #ghost_path for the step, and takes it.
- * Consumes the reversal earned by a mode change, if any.
+ * The way back is never offered as a choice (§10.1); only a dead-end stub forces it.
  *
  * \param[in,out]   inout_ghost: instance
  * \param[in]       in_playfield: the maze

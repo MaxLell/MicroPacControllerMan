@@ -104,11 +104,14 @@ silently working around a wart.
   proves the round trip on real silicon — which is how the ICACHE was caught answering
   reads with what the page used to hold.
 - **The ghosts are the Dossier's** (DEC-023): straight-line distance, the arcade's look-aheads
-  and shy radius, reversals only on the transitions that earn them, a ghost house nobody may
+  and shy radius, a ghost house nobody may
   re-enter and Pacman may never enter, arcade spawn positions and dot-counter release, and
   the scatter targets in the unreachable dead space with the corners assigned the right way
-  round. Seeking is a route search rather than the arcade's one-cell greedy choice — the one
-  deliberate departure, asked for by the owner.
+  round. **Two deliberate departures, both asked for by the owner:** seeking is a route search
+  rather than the arcade's one-cell greedy choice, and **a ghost never turns around** — the
+  arcade's forced reversal on a mode change is gone (DEC-037), so a mode change moves a ghost's
+  target and takes effect from the next junction. Only a dead-end stub still forces the way
+  back, and no generated maze has one. Measured either side: 86 reversals over 25 runs became 0.
 
 - **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level plays
   a maze **generated** for it (FR-029) instead of the arcade's one layout. `App/maze_gen` is a

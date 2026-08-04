@@ -14,7 +14,7 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
   - The earlier wording here said there is no sub-cell position at all, justified by "tile rendering on the monochrome display". That display is gone, and with it the reason.
 - **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS, interpolating between steps as above.
 - **Pacman movement.** Pacman moves one cell every movement period, which is **per level and not constant within one** (§10.9): he is quicker while the ghosts are frightened and slower on the step after eating a pellet. He keeps a current direction and a *queued* direction; `MSG_INPUT_DIRECTION` sets the queued one. When he is due to move: if the queued direction is not blocked by a wall it becomes current; then he moves one cell if that cell is open, otherwise he stays put (stopped against a wall until the direction changes).
-- **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period. **Each ghost has its own**, because the period depends on more than the level (§10.9): a ghost in the tunnel crawls, a frightened one is slow, and Blinky speeds up as the maze empties. A ghost never reverses onto the cell it just left, except when its mode changes (scatter↔chase, or entering/leaving frightened).
+- **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period. **Each ghost has its own**, because the period depends on more than the level (§10.9): a ghost in the tunnel crawls, a frightened one is slow, and Blinky speeds up as the maze empties. **A ghost never reverses onto the cell it just left.** There is no exception for a mode change — the arcade grants one there and this game does not ([DEC-037](11-Decisions-and-As-Built.md)) — so a ghost goes ahead, left or right, and a new mode takes effect from the next junction it reaches. The one case left is a dead-end stub, where the way back is the only way out and the rule yields as a last resort rather than as a choice.
 - **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth, on the same row (FR-012).
 
 ## 10.2 The Maze (Playfield)
@@ -108,7 +108,7 @@ Those tiles sit in the **dead space above and below the maze and cannot be reach
 
 Clyde's shy rule reuses the same tile: when Pacman is within eight cells, that is what he heads for.
 
-**Scatter/Chase schedule:** per level, in §10.9. A mode change lets a ghost reverse once.
+**Scatter/Chase schedule:** per level, in §10.9. A mode change moves a ghost's target; it never turns the ghost around (§10.1).
 
 ## 10.5 Power Pellets & Frightened Mode (FR-017..FR-020)
 
@@ -202,7 +202,7 @@ The plan alternates, always starting with scatter; when it runs out the ghosts c
 | 2–4 | Scatter 7 s, Chase 20 s, Scatter 7 s, Chase 20 s, Scatter 5 s, Chase 1033 s, Scatter 1/60 s, then Chase |
 | 5–21 | Scatter 5 s, Chase 20 s, Scatter 5 s, Chase 20 s, Scatter 5 s, Chase 1037 s, Scatter 1/60 s, then Chase |
 
-The seventeen-minute chase and the single-frame scatter after it are quirks of the original and are transcribed as they are. Nobody will ever see that blip — a level is long over by then — but a tidied-up plan would be a different game, and the kind of difference that is impossible to notice later. A mode change lets a ghost reverse once; the frightened window freezes the plan rather than running it down in the background.
+The seventeen-minute chase and the single-frame scatter after it are quirks of the original and are transcribed as they are. Nobody will ever see that blip — a level is long over by then — but a tidied-up plan would be a different game, and the kind of difference that is impossible to notice later. A mode change never turns a ghost around ([DEC-037](11-Decisions-and-As-Built.md)); the frightened window freezes the plan rather than running it down in the background.
 
 Clearing a level keeps the score and lives and applies the next row; clearing level 21 wins the game.
 

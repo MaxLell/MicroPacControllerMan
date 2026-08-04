@@ -313,8 +313,8 @@ static uint32_t prv_get_phase_duration(const game_t* const in_game)
     return in_game->difficulty.phase_durations_ms[in_game->phase_index];
 }
 
-/* Push the mode every entity should be in. Safe to call every tick: setting a mode a ghost
- * is already in is a no-op and costs it no reversal (§10.1). */
+/* Push the mode every entity should be in. Safe to call every tick: a mode change moves the
+ * ghost's destination and never its facing (§10.1), so nothing here can turn one around. */
 static void prv_apply_mode(game_t* const inout_game)
 {
     const bool is_frightened = inout_game->frightened_remaining_ms > 0U;

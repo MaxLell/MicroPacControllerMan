@@ -79,7 +79,6 @@ void ghost_reset(ghost_t* inout_ghost, ghost_personality_e in_personality, cell_
 
     inout_ghost->personality = in_personality;
     inout_ghost->mode = GHOST_MODE_SCATTER;
-    inout_ghost->may_reverse = false;
     inout_ghost->is_in_house = in_is_in_house;
     inout_ghost->is_waiting_in_house = in_is_in_house;
 }
@@ -129,29 +128,16 @@ void ghost_send_to_pen(ghost_t* inout_ghost, cell_t in_pen_cell)
      * others are in and will set it on the next mode update; scatter is the safe default
      * because it cannot make the ghost eat Pacman on the cell it reappeared in. */
     inout_ghost->mode = GHOST_MODE_SCATTER;
-    inout_ghost->may_reverse = false;
 }
 
+/* A mode change is a change of *destination*, and nothing else.
+ *
+ * The arcade grants a forced reversal here and this deliberately does not — see
+ * [DEC-037](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md). A ghost turns only at a
+ * junction it walks into, so where it goes changes from the next junction onwards. */
 void ghost_set_mode(ghost_t* inout_ghost, ghost_mode_e in_mode)
 {
     ASSERT(inout_ghost != NULL);
-
-    if (inout_ghost->mode == in_mode)
-    {
-        /* No change, so no free reversal — this is what lets a caller drive the mode every
-         * tick without the ghosts jittering back and forth. */
-        return;
-    }
-
-    /* Which transitions earn the reversal is not "all of them". §10.1 lists four —
-     * chase→scatter, chase→frightened, scatter→chase, scatter→frightened — and then says
-     * explicitly that **leaving** frightened earns none. Granting it on every change gave
-     * every energizer two visible about-turns instead of one, the second at a moment the
-     * player has no reason to expect and cannot read as a mode change. */
-    if (inout_ghost->mode != GHOST_MODE_FRIGHTENED)
-    {
-        inout_ghost->may_reverse = true;
-    }
 
     inout_ghost->mode = in_mode;
 }
@@ -201,15 +187,10 @@ bool ghost_advance(ghost_t* inout_ghost, const playfield_t* in_playfield, cell_t
         return false;
     }
 
-    /* Normally the way back is barred (§10.1); a mode change buys exactly one exemption,
-     * spent here whether or not the ghost actually turns around. */
+    /* The way back is barred, with no exemption at all (§10.1): a ghost goes ahead, left or
+     * right. The single case left is a dead-end stub, and the route search treats that as a
+     * last resort rather than a choice. */
     forbidden = playfield_get_opposite_direction(agent_get_direction(&inout_ghost->agent));
-
-    if (inout_ghost->may_reverse)
-    {
-        inout_ghost->may_reverse = false;
-        forbidden = DIRECTION_NONE;
-    }
 
     if (inout_ghost->mode == GHOST_MODE_FRIGHTENED)
     {

@@ -338,7 +338,7 @@ cell_t playfield_get_scatter_target(uint8_t in_index)
      *
      * All four sit in the **dead space** above and below the maze and are therefore
      * unreachable. §10.4 is explicit that this is the point: a ghost heads for the corner
-     * nearest its target and, unable to turn round, circles there until the mode changes.
+     * nearest its target and, unable to turn round, circles there until its target moves.
      * "The only reason a ghost has a favourite corner at all is due to the location of a
      * fixed target tile it will never reach."
      *
