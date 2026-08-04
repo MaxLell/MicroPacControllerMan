@@ -163,7 +163,34 @@ corner puts the line at the far side of its cell, a whole cell back from the cor
 arcade pulls its tunnel walls back by exactly one cell too, drawing rows 13 and 15 with `MAZE_TOP`
 and `MAZE_BOTTOM`. Both end up with a mouth that is wider than the corridor it serves.
 
-### 2.3 Two tiles the 1980 ROM does not contain
+### 2.3 The frame is six pixels thick, and that one is not the arcade's
+
+Measured, because "looks thin" needs a number: the arcade's frame tile is a **2-pixel** line
+inset 1 pixel from the panel edge, while a two-cell-thick wall inside the maze is two 3-pixel
+block lines that meet — a **6-pixel** solid bar. The frame really is a third of the weight, and
+the owner asked for them to match.
+
+That is a departure from the ROM, and the ROM's reason is geometric: the frame is **one** cell
+(8 px) thick where an inner wall is **two** (16 px). At 2 px a corner has room for the arcade's
+diagonal step; at 6 px it has none, so the four screen corners become solid right angles. The
+owner was shown that and chose 6 px anyway ([DEC-031](../PrePlanning/11-Decisions-and-As-Built.md)),
+over a hollow double line (two 2-px lines, same span, curved corners) and over 3 px flush to the
+edge (no new art, still thinner).
+
+Sixteen tiles are affected — four edges, four corners, eight tees — and they are **generated from
+the geometry** rather than drawn, so they are exactly symmetric and the tees line up with the
+3-pixel branch an inner wall's line arrives on. The **ghost house keeps the arcade's 2-pixel
+wall** and now has four tiles of its own for it; it used to share the frame's, and a house walled
+like the panel border would have swallowed itself.
+
+None of this touched the derivation: it picks the same tile *ids* it always did, which is why
+§2.1's 764-of-764 comparison still holds — only those tiles' pixels are ours now. It did cost the
+tunnel mouths a third attempt, though. §2.2's block cap is 3 pixels, and against a 6-pixel band
+that leaves a visible step, so the band now simply **stops square** at the cell boundary where the
+corridor begins. A 2-pixel line ending squarely looked like a stray line, which is what started
+§2.2; a 6-pixel band ending squarely looks like a wall ending.
+
+### 2.4 Two tiles the 1980 ROM does not contain
 
 Nothing is ever attached to the arcade maze's bottom wall, so the ROM has no bottom-edge tee.
 **62 % of generated mazes attach something** — the generator joins pieces to the boundary on
@@ -176,7 +203,7 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 97,488 B (18.9 %) |
+| Flash | 89,496 B (17.3 %) | 97,616 B (18.9 %) |
 | RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |

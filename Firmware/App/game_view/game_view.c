@@ -45,14 +45,18 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
 
 /* clang-format off */
 static const uint8_t g_house_tiles[HOUSE_ROW_COUNT][HOUSE_COLUMN_COUNT] = {
-    {SPRITE_SET_MAZE_HOUSE_TOP_LEFT, SPRITE_SET_MAZE_BOTTOM, SPRITE_SET_MAZE_HOUSE_GATE_LEFT,
+    {SPRITE_SET_MAZE_HOUSE_TOP_LEFT, SPRITE_SET_MAZE_HOUSE_BOTTOM, SPRITE_SET_MAZE_HOUSE_GATE_LEFT,
      SPRITE_SET_MAZE_HOUSE_GATE, SPRITE_SET_MAZE_HOUSE_GATE, SPRITE_SET_MAZE_HOUSE_GATE_RIGHT,
-     SPRITE_SET_MAZE_BOTTOM, SPRITE_SET_MAZE_HOUSE_TOP_RIGHT},
-    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
-    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
-    {SPRITE_SET_MAZE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, SPRITE_SET_MAZE_LEFT},
-    {SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP,
-     SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_TOP, SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT},
+     SPRITE_SET_MAZE_HOUSE_BOTTOM, SPRITE_SET_MAZE_HOUSE_TOP_RIGHT},
+    {SPRITE_SET_MAZE_HOUSE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE,
+     SPRITE_SET_MAZE_HOUSE_LEFT},
+    {SPRITE_SET_MAZE_HOUSE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE,
+     SPRITE_SET_MAZE_HOUSE_LEFT},
+    {SPRITE_SET_MAZE_HOUSE_RIGHT, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE, NO_TILE,
+     SPRITE_SET_MAZE_HOUSE_LEFT},
+    {SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT, SPRITE_SET_MAZE_HOUSE_TOP, SPRITE_SET_MAZE_HOUSE_TOP,
+     SPRITE_SET_MAZE_HOUSE_TOP, SPRITE_SET_MAZE_HOUSE_TOP, SPRITE_SET_MAZE_HOUSE_TOP,
+     SPRITE_SET_MAZE_HOUSE_TOP, SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT},
 };
 /* clang-format on */
 
@@ -111,17 +115,18 @@ static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in
     {
         const int16_t inward = is_left ? 1 : -1;
 
-        /* A tunnel mouth breaks the ring, and this cell is where the boundary line has to
-         * *end*. Drawn as a block end rather than as a frame corner, because a frame corner
-         * turns the line inward — and with corridor on that side there is nothing for it to
-         * turn into, so it ends in mid-air pointing at the corridor. A block end caps the line
-         * towards the panel edge instead, which is where the wall actually stops.
+        /* A tunnel mouth breaks the ring, and this cell is where the frame has to *end*. It
+         * ends square: the plain edge tile, whose band simply stops at the cell boundary where
+         * the corridor begins.
          *
-         * The arcade has no tile for this because it has no such shape: its tunnels are cut
-         * through a six-cell-thick mass, never through a one-cell frame. */
+         * It took two goes. A frame *corner* was tried first and turned the line inward into
+         * corridor, where there was nothing to turn into — a stub pointing at nothing, which is
+         * what the owner saw on the panel. A block end was tried next and was right until the
+         * frame became six pixels thick (DEC-031), at which point a three-pixel block cap left a
+         * visible step. A band that stops squarely needs no cap at all. */
         if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)) || prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
         {
-            return prv_get_block_tile(in_map, in_x, in_y);
+            return is_left ? SPRITE_SET_MAZE_LEFT : SPRITE_SET_MAZE_RIGHT;
         }
 
         if (prv_is_wall(in_map, (int16_t)(in_x + inward), in_y))

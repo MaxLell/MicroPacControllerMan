@@ -123,7 +123,11 @@ silently working around a wart.
   (DEC-030), which reproduces the arcade's hand-drawn tile map for **764 of 764 cells** outside
   the two tunnel masses; the 64 inside them are excluded and asserted. Two tiles were added as
   vertical mirrors of the top tees — the 1980 ROM has no bottom-edge tee and 62 % of generated
-  mazes need one. RAM 68.0 %, flash 18.9 %; frame cost unchanged at 8 ms of 16.
+  mazes need one. **The outer frame is 6 px thick, not the arcade's 2** (DEC-031): the owner asked
+  for it to match the weight a two-cell inner wall already renders at, knowing that at 6 px in an
+  8 px cell the screen corners become solid right angles. The ghost house keeps the arcade's 2 px
+  wall and has four tiles of its own for it. RAM 68.0 %, flash 18.9 %; frame cost unchanged at
+  8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)

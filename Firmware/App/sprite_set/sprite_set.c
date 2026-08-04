@@ -394,51 +394,65 @@ static const char* const g_ghost_frightened_b[] = {
     "................",
 };
 
+/* The outer frame: a **6-pixel band** with a 1-pixel margin either side, which is the weight a
+ * two-cell wall inside the maze already renders at (two 3-pixel block lines meeting).
+ *
+ * **Not the arcade's**, which is 2 pixels — the one place in this file that is ours rather than
+ * the ROM's, asked for by the owner and recorded as [DEC-031]. The ROM's reason for 2 is
+ * geometric: the frame is one cell thick where an inner wall is two, so 2 pixels is what leaves
+ * room for a corner's diagonal step. At 6 there is none, which is why the corners below are solid
+ * right angles — a consequence that was put to the owner and accepted.
+ *
+ * All sixteen are **generated from the geometry**, not drawn: four edges, four corners, eight
+ * tees. Hand-drawing sixteen symmetric tiles is how a maze ends up with 94 wrong cells, which
+ * this project has already done once. The tees carry the 3-pixel branch that an inner wall's own
+ * line arrives on, so a wall meeting the frame lands exactly on it. */
+
 /* '0' — outer frame, top-left */
 static const char* const g_maze_corner_top_left[] = {
     "22222222",
-    "22221111",
-    "22111111",
-    "22111222",
-    "21112222",
-    "21122222",
-    "21122222",
-    "21122222",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111112",
 };
 
 /* '1' — outer frame, top-right */
 static const char* const g_maze_corner_top_right[] = {
     "22222222",
-    "11112222",
-    "11111122",
-    "22211122",
-    "22221112",
-    "22222112",
-    "22222112",
-    "22222112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "21111112",
 };
 
 /* '2' — outer frame, bottom-left */
 static const char* const g_maze_corner_bottom_left[] = {
-    "21122222",
-    "21122222",
-    "21122222",
-    "21112222",
-    "22111222",
-    "22111111",
-    "22221111",
+    "21111112",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
     "22222222",
 };
 
 /* '3' — outer frame, bottom-right */
 static const char* const g_maze_corner_bottom_right[] = {
-    "22222112",
-    "22222112",
-    "22222112",
-    "22221112",
-    "22211122",
-    "11111122",
-    "11112222",
+    "21111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
     "22222222",
 };
 
@@ -447,20 +461,20 @@ static const char* const g_maze_top[] = {
     "22222222",
     "11111111",
     "11111111",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "22222222",
 };
 
 /* 'B' — outer frame, running along the bottom */
 static const char* const g_maze_bottom[] = {
     "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "11111111",
     "11111111",
     "22222222",
@@ -468,26 +482,26 @@ static const char* const g_maze_bottom[] = {
 
 /* 'L' — outer frame, running down the left */
 static const char* const g_maze_left[] = {
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
 };
 
 /* 'R' — outer frame, running down the right */
 static const char* const g_maze_right[] = {
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
 };
 
 /* '4' — top frame, with the centre stub hanging off to the right */
@@ -495,10 +509,10 @@ static const char* const g_maze_top_tee_right[] = {
     "22222222",
     "11111111",
     "11111111",
-    "22211111",
-    "22221111",
-    "22222111",
-    "22222111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "22222111",
 };
 
@@ -507,10 +521,10 @@ static const char* const g_maze_top_tee_left[] = {
     "22222222",
     "11111111",
     "11111111",
-    "11111222",
-    "11112222",
-    "11122222",
-    "11122222",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "11122222",
 };
 
@@ -523,10 +537,10 @@ static const char* const g_maze_top_tee_left[] = {
  * is why this is a fair way to fill the gap rather than new art in an old style. */
 static const char* const g_maze_bottom_tee_right[] = {
     "22222111",
-    "22222111",
-    "22222111",
-    "22221111",
-    "22211111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "11111111",
     "11111111",
     "22222222",
@@ -534,10 +548,10 @@ static const char* const g_maze_bottom_tee_right[] = {
 
 static const char* const g_maze_bottom_tee_left[] = {
     "11122222",
-    "11122222",
-    "11122222",
-    "11112222",
-    "11111222",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "11111111",
     "11111111",
     "22222222",
@@ -545,11 +559,11 @@ static const char* const g_maze_bottom_tee_left[] = {
 
 /* '6' — left frame, branching east at the bottom */
 static const char* const g_maze_left_tee_bottom[] = {
-    "21122222",
-    "21122222",
-    "21122222",
-    "21112222",
-    "21111222",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
     "21111111",
     "21111111",
     "21111111",
@@ -560,20 +574,20 @@ static const char* const g_maze_left_tee_top[] = {
     "21111111",
     "21111111",
     "21111111",
-    "21111222",
-    "21112222",
-    "21122222",
-    "21122222",
-    "21122222",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
 };
 
 /* '8' — right frame, branching west at the bottom */
 static const char* const g_maze_right_tee_bottom[] = {
-    "22222112",
-    "22222112",
-    "22222112",
-    "22221112",
-    "22211112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
     "11111112",
     "11111112",
     "11111112",
@@ -584,11 +598,11 @@ static const char* const g_maze_right_tee_top[] = {
     "11111112",
     "11111112",
     "11111112",
-    "22211112",
-    "22221112",
-    "22222112",
-    "22222112",
-    "22222112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
+    "21111112",
 };
 
 /* 'e' — a wall block, its top-left corner */
@@ -733,6 +747,56 @@ static const char* const g_maze_block_right_into_top[] = {
     "11111111",
     "11111111",
     "11111111",
+};
+
+/* The ghost house's own walls, at the arcade's original 2-pixel weight.
+ *
+ * They used to be the outer frame's tiles, shared through the aliases 'i', 'q', 'k' and 'j'.
+ * The frame is 6 pixels thick now (DEC-031) and the house is not: the house is a small box in
+ * the middle of the maze and a wall as thick as the panel's border would swallow it. So the
+ * arcade weight lives on here, which is also where it belongs — this *is* the arcade's art. */
+static const char* const g_maze_house_left[] = {
+    "21122222",
+    "21122222",
+    "21122222",
+    "21122222",
+    "21122222",
+    "21122222",
+    "21122222",
+    "21122222",
+};
+
+static const char* const g_maze_house_right[] = {
+    "22222112",
+    "22222112",
+    "22222112",
+    "22222112",
+    "22222112",
+    "22222112",
+    "22222112",
+    "22222112",
+};
+
+static const char* const g_maze_house_top[] = {
+    "22222222",
+    "11111111",
+    "11111111",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+};
+
+static const char* const g_maze_house_bottom[] = {
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "11111111",
+    "11111111",
+    "22222222",
 };
 
 /* 'm' — the ghost house, its top-left corner */
@@ -1394,6 +1458,10 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
                                                  g_maze_block_bottom_into_right},
     [SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_left_into_top},
     [SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_right_into_top},
+    [SPRITE_SET_MAZE_HOUSE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_left},
+    [SPRITE_SET_MAZE_HOUSE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_right},
+    [SPRITE_SET_MAZE_HOUSE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top},
+    [SPRITE_SET_MAZE_HOUSE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_bottom},
     [SPRITE_SET_MAZE_HOUSE_TOP_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top_left},
     [SPRITE_SET_MAZE_HOUSE_TOP_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top_right},
     [SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_bottom_left},
@@ -1484,10 +1552,10 @@ static const struct
     {'s', SPRITE_SET_MAZE_HOUSE_GATE_LEFT},
     {'t', SPRITE_SET_MAZE_HOUSE_GATE_RIGHT},
     {'-', SPRITE_SET_MAZE_HOUSE_GATE},
-    {'i', SPRITE_SET_MAZE_RIGHT},
-    {'q', SPRITE_SET_MAZE_LEFT},
-    {'k', SPRITE_SET_MAZE_TOP},
-    {'j', SPRITE_SET_MAZE_BOTTOM},
+    {'i', SPRITE_SET_MAZE_HOUSE_RIGHT},
+    {'q', SPRITE_SET_MAZE_HOUSE_LEFT},
+    {'k', SPRITE_SET_MAZE_HOUSE_TOP},
+    {'j', SPRITE_SET_MAZE_HOUSE_BOTTOM},
 };
 
 /* ==========================================================================
