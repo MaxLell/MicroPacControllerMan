@@ -140,7 +140,10 @@ silently working around a wart.
   choice from 24 ROM tiles that only composed at one thickness. The pixels travel in the display
   list (`DISPLAY_ITEM_WALL`). The arcade tile comparison is gone with them; what replaces it are
   two unit tests that rebuild the picture and measure it — every pellet within 1 px of its
-  corridor's centre, every tunnel mouth exactly a corridor's gap wide.
+  corridor's centre, every tunnel mouth exactly a corridor's gap wide. Every wall stroke's centre
+  lands on a cell boundary — including the ghost house's, which needed a second drawing cell to get
+  there (a one-cell ring can have the 6 px stroke, the grid, or a roomy inside: any two, and the
+  owner chose the grid).
   RAM 68.0 %, flash 18.6 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 

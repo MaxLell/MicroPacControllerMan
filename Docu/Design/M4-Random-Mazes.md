@@ -299,10 +299,21 @@ and the same wherever a box met the outer wall. One correction, and both closed.
 
 Two known departures, both deliberate:
 
-- The **ghost house is told its depth** instead of measured. Depth is found by running along an
-  axis until the wall ends; the house is a ring one cell thick, and running along a ring never
-  leaves it, so its corners would measure the length of their own arms. It is fair to be told —
-  the house is furniture, at coordinates the game already depends on (§10.4).
+- The **ghost house's wall is given a second cell** — the first ring of its own inside — because
+  one cell cannot carry this stroke. Measured on one maze: 964 of its strokes had their centre on a
+  cell boundary and 32 did not, and the 32 were the house, half a cell off the grid the rest of the
+  maze sits on. The corridor round it was 14 pixels where every other corridor is 18, for the same
+  reason. With the second cell it is an ordinary two-cell wall and needs no exception at all.
+
+  It costs the house's inside: 24 pixels of black become 10, and the waiting ghosts overlap the
+  wall by 6 pixels instead of 3. **A one-cell ring can have a 6-pixel stroke, or the grid, or a
+  roomy inside — any two.** The owner was shown the three ways round it, with the numbers, and chose
+  the grid.
+
+  The gate is part of that wall rather than a hole in it: **wall that happens to be pink**. Left
+  out, it broke the house's top in two, and a broken stroke ends in caps — two blue blocks either
+  side of the opening, which is what the first attempt looked like. Passable to a ghost either way;
+  that is the map's business, not the picture's.
 - A wall **exactly three cells thick** shows the 2-pixel hole the arithmetic gives it, rather than
   being drawn solid. DEC-032's solid tile went with the rest.
 
@@ -336,7 +347,7 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 95,988 B (18.6 %) |
+| Flash | 89,496 B (17.3 %) | 96,264 B (18.7 %) |
 | RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |

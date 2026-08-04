@@ -48,11 +48,58 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
  * family of its own, and every seam between two families was a visible fault. Four rounds of
  * them were reported from the panel. Below, the width and the inset are *arithmetic*, so they
  * are the same everywhere by construction rather than by case analysis. */
-#define WALL_STROKE_WIDTH (6)
-#define WALL_STROKE_INSET (5)
+#define WALL_STROKE_WIDTH      (6)
+#define WALL_STROKE_INSET      (5)
 
 /* The ghost house gate: not a wall, but drawn like one and in its own colour. */
-#define HOUSE_GATE_ROW    (12)
+#define HOUSE_GATE_ROW         (12)
+
+/* The ghost house, fixed in every maze (`maze_gen`): its wall is the ring rows 12..16 by columns
+ * 10..17, and its inside is what that ring encloses.
+ *
+ * The ring is **one cell thick**, and a 6-pixel stroke set 5 pixels in does not fit in 8 pixels.
+ * Centred in the cell instead, it lands half a cell off the grid every other wall sits on — of one
+ * maze's strokes, 964 were on the grid and 32 beside it, which is visible — and it leaves the
+ * corridor round the house 14 pixels wide where every other corridor is 18.
+ *
+ * So for **drawing**, the house's wall is two cells thick: the ring, plus the first ring of its
+ * inside. It is then an ordinary wall and needs no exception of its own. The ghosts wait in there
+ * and are drawn over it, which they already were. The two cells under the gate are left out, or
+ * the way through would be drawn shut. */
+#define HOUSE_FIRST_COLUMN     (10)
+#define HOUSE_LAST_COLUMN      (17)
+#define HOUSE_FIRST_ROW        (12)
+#define HOUSE_LAST_ROW         (16)
+#define HOUSE_GATE_LEFT_COLUMN (13)
+
+static bool prv_is_house_lining(int16_t in_x, int16_t in_y)
+{
+    const bool is_inside = (in_x > HOUSE_FIRST_COLUMN) && (in_x < HOUSE_LAST_COLUMN) && (in_y > HOUSE_FIRST_ROW)
+                           && (in_y < HOUSE_LAST_ROW);
+    const bool is_against_the_ring = (in_x == (HOUSE_FIRST_COLUMN + 1)) || (in_x == (HOUSE_LAST_COLUMN - 1))
+                                     || (in_y == (HOUSE_FIRST_ROW + 1)) || (in_y == (HOUSE_LAST_ROW - 1));
+    return is_inside && is_against_the_ring;
+}
+
+/* The gate, and the cell under it: **wall that happens to be pink**.
+ *
+ * Left out of the wall it would break the house's top in two, and a broken stroke ends in caps —
+ * two blue blocks either side of the opening, which is what the first attempt at this looked like.
+ * It is the same shape as the wall around it and differs only in colour, which is also all the
+ * arcade does with it. Passable to a ghost either way: that is the map's business, not the
+ * picture's. */
+static bool prv_is_gate(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    const bool is_gate_column = (in_x == HOUSE_GATE_LEFT_COLUMN) || (in_x == (HOUSE_GATE_LEFT_COLUMN + 1));
+
+    if (!is_gate_column || (in_y < HOUSE_FIRST_ROW) || (in_y > (HOUSE_FIRST_ROW + 1)))
+    {
+        return false;
+    }
+
+    /* The gate's own row is marked in the map; the row under it is the lining below that. */
+    return (in_y == (HOUSE_FIRST_ROW + 1)) || (in_map->rows[in_y][in_x] == PLAYFIELD_MAP_GATE);
+}
 
 /* Whether there is wall at a cell, counting the border drawn outside the maze.
  *
@@ -75,26 +122,7 @@ static bool prv_is_wall(const playfield_map_t* const in_map, int16_t in_x, int16
     x = (x < 0) ? 0 : ((x >= PLAYFIELD_WIDTH) ? (PLAYFIELD_WIDTH - 1) : x);
     y = (y < 0) ? 0 : ((y >= PLAYFIELD_HEIGHT) ? (PLAYFIELD_HEIGHT - 1) : y);
 
-    return in_map->rows[y][x] == PLAYFIELD_MAP_WALL;
-}
-
-/* The ghost house's box: rows 12..16, columns 10..17 — fixed in every maze (`maze_gen`).
- *
- * It is the one structure whose depth the geometry below cannot measure. Depth is found by
- * running along an axis until the wall ends, and the house is a **ring one cell thick**: running
- * along it never leaves it, so its corners measure the length of their own arms instead of the
- * eight pixels they actually have. Told rather than measured, therefore — and it is a fair thing
- * to be told, because the house is not maze, it is furniture, at coordinates the game already
- * depends on (§10.4). */
-#define HOUSE_FIRST_COLUMN (10)
-#define HOUSE_LAST_COLUMN  (17)
-#define HOUSE_FIRST_ROW    (12)
-#define HOUSE_LAST_ROW     (16)
-
-static bool prv_is_ghost_house(int16_t in_x, int16_t in_y)
-{
-    return (in_x >= HOUSE_FIRST_COLUMN) && (in_x <= HOUSE_LAST_COLUMN) && (in_y >= HOUSE_FIRST_ROW)
-           && (in_y <= HOUSE_LAST_ROW);
+    return (in_map->rows[y][x] == PLAYFIELD_MAP_WALL) || prv_is_house_lining(x, y) || prv_is_gate(in_map, x, y);
 }
 
 /* How many cells of wall run on from this one in a direction, not counting it. */
@@ -223,10 +251,8 @@ static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_
     /* How deep the wall is here on each axis, and therefore how far in the stroke may sit. The
      * smaller of the two governs: a wall that is thin one way cannot hold a stroke set further in
      * than it is deep. */
-    const int16_t inset = prv_is_ghost_house(in_x, in_y)
-                              ? prv_get_stroke_inset(GAME_VIEW_TILE_SIZE)
-                              : prv_get_smaller(prv_get_stroke_inset((int16_t)(left + right + GAME_VIEW_TILE_SIZE)),
-                                                prv_get_stroke_inset((int16_t)(above + below + GAME_VIEW_TILE_SIZE)));
+    const int16_t inset = prv_get_smaller(prv_get_stroke_inset((int16_t)(left + right + GAME_VIEW_TILE_SIZE)),
+                                          prv_get_stroke_inset((int16_t)(above + below + GAME_VIEW_TILE_SIZE)));
 
     for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
     {
@@ -241,20 +267,6 @@ static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_
         }
 
         out_rows[row] = bits;
-    }
-}
-
-/* The gate: a bar across the opening, in the pink that says a ghost may pass. Drawn to the same
- * width as the wall it sits in, so the house reads as one shape. */
-static void prv_get_gate_bitmap(uint8_t* const out_rows)
-{
-    const int16_t inset = prv_get_stroke_inset(GAME_VIEW_TILE_SIZE);
-
-    for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
-    {
-        const bool is_bar = (row >= inset) && (row < (inset + WALL_STROKE_WIDTH));
-
-        out_rows[row] = is_bar ? 0xFFU : 0x00U;
     }
 }
 
@@ -341,24 +353,16 @@ static void prv_describe_cell(const game_view_t* const in_view, int16_t in_colum
      * wall beside a wall and **open beside a tunnel mouth**. Treating every border cell as wall
      * was what drew a wall straight across the mouth, and a portal Pacman cannot walk through is
      * not a portal. */
-    const char cell = is_in_maze                                       ? in_view->maze.rows[in_row][in_column]
-                      : prv_is_wall(&in_view->maze, in_column, in_row) ? PLAYFIELD_MAP_WALL
-                                                                       : PLAYFIELD_MAP_OPEN;
+    const char cell = prv_is_wall(&in_view->maze, in_column, in_row) ? PLAYFIELD_MAP_WALL
+                      : is_in_maze                                   ? in_view->maze.rows[in_row][in_column]
+                                                                     : PLAYFIELD_MAP_OPEN;
 
     if (cell == PLAYFIELD_MAP_WALL)
     {
         out_item->kind = (uint8_t)DISPLAY_ITEM_WALL;
-        out_item->palette = (uint8_t)SPRITE_SET_PALETTE_WALL;
+        out_item->palette = prv_is_gate(&in_view->maze, in_column, in_row) ? (uint8_t)SPRITE_SET_PALETTE_DOOR
+                                                                           : (uint8_t)SPRITE_SET_PALETTE_WALL;
         prv_get_wall_bitmap(&in_view->maze, in_column, in_row, out_item->drawing.wall_rows);
-
-        return;
-    }
-
-    if (cell == PLAYFIELD_MAP_GATE)
-    {
-        out_item->kind = (uint8_t)DISPLAY_ITEM_WALL;
-        out_item->palette = (uint8_t)SPRITE_SET_PALETTE_DOOR;
-        prv_get_gate_bitmap(out_item->drawing.wall_rows);
 
         return;
     }
