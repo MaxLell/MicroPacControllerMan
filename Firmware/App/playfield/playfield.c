@@ -65,7 +65,7 @@ static const char* const g_maze[PLAYFIELD_HEIGHT] = {
     "######.##     0    ##.######",
     "######.## ###DD### ##.######",
     "######.## #HHHHHH# ##.######",
-    "TTTTTT.   #2H1HH3#   .TTTTTT",
+    "TTTTTT.   #2H1H3H#   .TTTTTT",
     "######.## #HHHHHH# ##.######",
     "######.## ######## ##.######",
     "######.##          ##.######",

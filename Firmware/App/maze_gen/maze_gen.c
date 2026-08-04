@@ -90,11 +90,20 @@ _Static_assert(FULL_COLUMNS == PLAYFIELD_WIDTH, "the mirrored grid is the maze's
 #define PACMAN_START_COLUMN           (13)
 #define PACMAN_START_ROW              (23)
 
-/* The three ghosts that wait inside, at the arcade's own cells on the middle row of the
- * house: Pinky in the centre, Inky to the left, Clyde to the right. */
+/* The three ghosts that wait inside, on the middle row of the house: Pinky in the centre, Inky to
+ * the left, Clyde to the right.
+ *
+ * **Two cells apart, which is exactly one ghost wide.** A ghost is drawn 16 pixels across — two
+ * cells — so cells two apart put the three of them shoulder to shoulder with no gap, which is how
+ * the arcade stands them: at 11.5, 13.5 and 15.5 in its own half-cell coordinates. Clyde used to be
+ * at 16, a cell too far right, which left a visible 8-pixel gap between him and Pinky.
+ *
+ * The three of them are 48 pixels wide and the house is 64, so the group sits 4 pixels left of the
+ * middle: a ghost's centre falls on a cell's centre, the house's falls on a cell boundary, and no
+ * integer cell is at both. Four pixels either way is the closest there is. */
 #define PINKY_START_COLUMN            (13)
 #define INKY_START_COLUMN             (11)
-#define CLYDE_START_COLUMN            (16)
+#define CLYDE_START_COLUMN            (15)
 #define HOUSE_GHOST_ROW               (14)
 
 /* A retry budget rather than `while (true)`: the original loops until it likes what it
