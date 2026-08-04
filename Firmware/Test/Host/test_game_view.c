@@ -152,7 +152,7 @@ static uint8_t prv_count_of_kind(const msg_display_list_t* in_list, display_item
 }
 
 /* The maze the view is asked to draw. The arcade's own throughout this file: the appearance
- * is *derived* from the walls now (FR-026), and the arcade layout is the one case where the
+ * is *derived* from the walls now (FR-029), and the arcade layout is the one case where the
  * answer is written down independently — in the map at the bottom of this file, transcribed
  * from the 1980 game — so it is what the derivation is judged against. */
 static void prv_set_arcade_maze(void)
@@ -389,7 +389,7 @@ void test_the_hud_never_lands_on_the_maze(void)
 void test_the_drawn_maze_and_the_played_maze_agree(void)
 {
     /* `playfield` says where a wall *is* and this module says what a wall *looks like*. The
-     * appearance is derived from the walls now (FR-026), so the two cannot disagree about
+     * appearance is derived from the walls now (FR-029), so the two cannot disagree about
      * *where* — but they can still disagree about what counts as passable, which is what this
      * checks. It used to guard a hand-written second copy of the maze;
      * and a corner piece does not say whether a ghost may stand there. So the maze is

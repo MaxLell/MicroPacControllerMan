@@ -516,7 +516,7 @@ static const char* const g_maze_top_tee_left[] = {
 
 /* The bottom frame branching north — the two pieces the 1980 ROM does not contain, because
  * nothing is ever attached to the arcade maze's bottom wall. A generated maze does attach
- * things there (FR-026), so the tiles have to exist.
+ * things there (FR-029), so the tiles have to exist.
  *
  * They are the top tees turned upside down, row for row, and nothing else: an arcade tile
  * mirrored is still the arcade's line weight, its 2-pixel bar and its diagonal step, which

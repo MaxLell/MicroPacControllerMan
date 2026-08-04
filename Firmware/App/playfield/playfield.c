@@ -11,7 +11,7 @@
  * playfield - private
  * ========================================================================= */
 
-/* The map legend now lives in `playfield.h`: since FR-026 it is what `maze_gen` writes and
+/* The map legend now lives in `playfield.h`: since FR-029 it is what `maze_gen` writes and
  * this reads, so it is a contract rather than a private detail. */
 
 #define SCATTER_CORNER_COUNT (4U)
@@ -23,7 +23,7 @@
  * a 240 x 320 one holds the arcade layout at its native 8 px per cell with room to spare.
  * The reduction outlived its reason by one hardware change.
  *
- * **A game no longer plays this maze** — FR-026 gives every level a generated one
+ * **A game no longer plays this maze** — FR-029 gives every level a generated one
  * (`maze_gen`). It stays as the *reference*: the one layout whose properties are known from
  * outside this codebase, so it is what the generator's output is judged against and what
  * `game_view`'s appearance rules are checked with. Difficulty was never the maze's business

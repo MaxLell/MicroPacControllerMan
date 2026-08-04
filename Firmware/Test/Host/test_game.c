@@ -114,7 +114,7 @@ static void prv_eat_every_pellet_except(cell_t in_kept_cell)
 /* Start a run on the arcade's own maze.
  *
  * Every test below that steps Pacman down a corridor, counts what is left to eat or checks
- * where a ghost goes needs a maze it can name in advance — and a generated one (FR-026) is by
+ * where a ghost goes needs a maze it can name in advance — and a generated one (FR-029) is by
  * definition not that. `game_start_on_map` is the seam that exists for this. The generator is
  * tested in `test_maze_gen.c`; these are the game's rules, on the one layout whose corridors
  * are documented outside this codebase. */
@@ -666,7 +666,7 @@ void test_the_last_level_has_no_frightened_window(void)
     TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
 }
 
-/* --- the difficulty curve (§10.9, FR-026) -------------------------------- */
+/* --- the difficulty curve (§10.9, FR-029) -------------------------------- */
 
 void test_the_ghosts_never_get_slower_as_the_levels_rise(void)
 {

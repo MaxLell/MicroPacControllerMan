@@ -2,10 +2,11 @@
 
 [← Back to Index](Index.md)
 
-> **Development is finished (2026-08-04, [DEC-028](11-Decisions-and-As-Built.md)).** No further
-> milestone is planned and no phase will be split. Milestones 0–3 are met; **Milestone 4 is
-> met in substance but not in full** — see [§4.2](#42-close-out) for exactly what was left
-> unbuilt and which requirement ends unmet.
+> **Development was closed on 2026-08-04 ([DEC-028](11-Decisions-and-As-Built.md)) and reopened
+> the same day ([DEC-029](11-Decisions-and-As-Built.md))** when the owner asked for randomly
+> generated mazes. Milestones 0–3 are met; **Milestone 4 is met in substance but not in full**
+> ([§4.2](#42-close-out) says what was left unbuilt and which requirement is unmet); **Milestone
+> 5 delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)).
 
 This restates the phased roadmap from the original idea capture as a structured milestone table with entry/exit criteria. Test IDs link to [06 Verification & Validation](06-Verification-and-Validation.md).
 
@@ -16,6 +17,8 @@ This restates the phased roadmap from the original idea capture as a structured 
 | 2 | Board Bring-Up | Milestone 1 exit met. | The MCU, the X-NUCLEO-GFX01M2's display and its joystick each verified by a reproducible OTT ([VT-INT-018](06-Verification-and-Validation.md), VT-INT-006, VT-INT-019), **and the two verified against each other** (VT-INT-020) — separately-passing halves do not prove their coordinate systems agree. The shield pin map confirmed on hardware and documented in [M2 Board Bring-Up §1](../Design/M2-Board-Bring-Up.md), which is where hardware detail belongs; [02 Requirements](02-Requirements.md) carries only the constraint that the shield is used (CON-002..004). The timing budgets settled by measurement rather than assumption: NFR-002's rate chosen against VT-INT-021, and what NFR-003 actually costs known. The external Python harness ([doc 6 §6.3](06-Verification-and-Validation.md#63-test-harness-python)) drives every **Automatic** integration test. |
 | 3 | Pacman Development (Host) | [03 Architecture](03-Architecture.md) and [10 Pacman Game Design](10-Pacman-Game-Design.md) approved. Can proceed in parallel with Milestone 2, since it targets the host build only. | Model/Control (including maze, pellet, ghost and frightened-mode rules) covered by unit tests ([VT-UNIT-001..005](06-Verification-and-Validation.md)); host build launches and is playable via SDL ([VT-INT-008](06-Verification-and-Validation.md)); game-logic E2E, single-life game-over, and level-clear scenarios pass ([VT-INT-010](06-Verification-and-Validation.md), VT-INT-014, VT-INT-017). |
 | 4 | System Integration (Target) | Milestones 2 and 3 exit met. | All remaining integration tests pass on the physical target ([VT-INT-011..013](06-Verification-and-Validation.md), VT-INT-015, VT-INT-016, VT-INT-022). What is left for this milestone is the measurement M3 did not make automatic: input latency (NFR-003) and the frame rate under a real run (NFR-002). **Partially met at close-out — see [§4.2](#42-close-out).** |
+
+| 5 | Random Mazes | Milestone 4 in substance; asked for after the project had been closed. | Every level plays a maze generated for it (FR-029), with the properties that requirement lists checked over many seeds; the maze's appearance derived from its walls rather than written down beside them; the whole thing playable on the target. **Met** — see [§4.3](#43-milestone-5--random-mazes). |
 
 ## 4.1 Notes
 
@@ -58,5 +61,29 @@ have brought the path to ~10 ms. The overshoot is 13 %, it is a chosen deferral 
 discovered defect, and nobody playing the game reported input lag — but the requirement as
 written is not satisfied, and closing the project does not satisfy it.
 
-Everything else knowingly left undone is in the [Refactoring Backlog](../Refactoring-Backlog.md),
-now closed with each item marked as what it is.
+Everything else knowingly left undone is in the [Refactoring Backlog](../Refactoring-Backlog.md).
+
+## 4.3 Milestone 5 — Random Mazes
+
+Asked for on **2026-08-04**, after the close-out above and on the same day: a generated maze
+instead of the arcade's one layout ([DEC-029](11-Decisions-and-As-Built.md)). Delivered, with
+the *how* in [M4 Random Mazes](../Design/M4-Random-Mazes.md).
+
+**Met.** `App/maze_gen` is a faithful port of the tetris-stacking generator from
+[shaunlebron/pacman-mazegen](https://github.com/shaunlebron/pacman-mazegen), verified against the
+original by running both under the same seeded PRNG and comparing output **byte for byte over 300
+seeds**. `game_view` derives the maze's appearance from its walls
+([DEC-030](11-Decisions-and-As-Built.md)) — checked against the arcade's own hand-drawn tile map,
+**764 of 764 cells outside the tunnel masses**. 370 host unit tests pass, 11 of them new and
+asserting FR-029's properties over 100 seeds each. Verified on hardware: loading → menu → game,
+the ghosts hunt in a generated maze, the console still answers, and the frame cost is unchanged
+at 8 ms of 16.
+
+**What this milestone did not change**, and says so rather than letting the close-out above go
+stale: NFR-003 (input latency) is still unmet, VT-INT-013's latency measurement and VT-INT-016
+are still unbuilt. It did measure one thing the close-out had asserted too comfortably —
+**the achieved frame rate is 59 fps, not the 60 NFR-002 asks for**, and it was 59 before this
+milestone too. The cause is the 16 ms frame period re-armed inside its own callback, so a period
+is nearer 16.9 ms; the 175 fps in the M2 documents is the *unpaced* ceiling and a different
+measurement. Not fixed here, because changing the frame period would have changed what the
+before/after frame-cost comparison was comparing.

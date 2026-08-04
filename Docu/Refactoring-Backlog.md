@@ -1,12 +1,13 @@
-# Refactoring Backlog — closed
+# Refactoring Backlog
 
-> **Development on this project is finished (2026-08-04, [DEC-028](PrePlanning/11-Decisions-and-As-Built.md)).
-> Every item below is closed as "will not be done."** Nothing here is waiting to be
-> picked up, and nothing here is a bug in the shipped firmware: each one is a wart the
-> project knew about, wrote down, and chose to live with. The list is kept because a
-> record of what was knowingly left undone is worth more than a clean page — anyone
-> reading this firmware later deserves to find the known edges named, not to rediscover
-> them.
+> **Closed on 2026-08-04 with the project ([DEC-028](PrePlanning/11-Decisions-and-As-Built.md)),
+> and open again the same day ([DEC-029](PrePlanning/11-Decisions-and-As-Built.md))** when the
+> owner asked for generated mazes. Nothing below was picked up in the meantime, and the
+> statuses still say what they said at the close-out — but this is a work list again rather
+> than a tombstone, so add to it rather than working around a wart silently.
+>
+> Nothing here is a bug in the shipped firmware: each one is a wart the project knew about,
+> wrote down, and chose to live with.
 >
 > The two that matter most, because they are the ones a user could notice:
 > **[RF-014](#rf-014)** — the 32 ms debounce window puts the input path at ~34 ms against
@@ -14,23 +15,23 @@
 > console drops characters from text pasted at full line rate, which no tool in the repo
 > does but a terminal will.
 
-This was a living work list while the project ran: things noticed in passing, deferred
-by decision, or blocked on something else. The [Pre-Planning set](PrePlanning/Index.md)
-stays the source of truth for *what the system must do*; this file only ever tracked
-*what we owed the codebase*.
+A living work list: things noticed in passing, deferred by decision, or blocked on something
+else. The [Pre-Planning set](PrePlanning/Index.md) stays the source of truth for *what the
+system must do*; this file only tracks *what we owe the codebase*.
 
-Every item says why it matters and what "done" would have looked like, so the cost of
-each deferral is legible. Items use `RF-xxx` IDs; IDs are never reused.
+Every item says why it matters and what "done" looks like, so the cost of each deferral is
+legible. Items use `RF-xxx` IDs; a fixed entry is **deleted** rather than struck through — git
+history keeps the record — and IDs are never reused.
 
 Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
-## Items at close-out — all closed, none to be done
+## Items
 
 Some entries below still describe the LS013B7DH03 and its 30 FPS budget — the M1/M2
 monochrome panel that the pivot to the X-NUCLEO-GFX01M2 replaced ([DEC-012](PrePlanning/11-Decisions-and-As-Built.md)).
-They are left as written rather than rewritten for a closed list.
+They are left as written; the items they belong to are closed anyway.
 
-| ID | Item | Severity as judged then | Status |
+| ID | Item | Severity | Status |
 |---|---|---|---|
 | [RF-003](#rf-003) | Application is not yet separable from the hardware — input + NVM seams left | **High** | Overtaken by M3: the game takes a direction over a message and the high score sits behind `high_score`/`flash_bsp`, both with host ports. Closed. |
 | [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | **Never done.** No `.noinit` guard exists. Harmless now only because nobody will re-generate; the trap is live for anyone who does. |

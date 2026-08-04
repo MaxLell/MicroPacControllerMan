@@ -37,6 +37,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-025 | Level Count & Mazes | VT-UNIT-006, VT-INT-017 |
 | FR-026 | Difficulty Scaling | VT-UNIT-006, VT-INT-017 |
 | FR-027 | Game Completion | VT-INT-017 |
+| FR-029 | Randomly Generated Maze | VT-UNIT-007, VT-UNIT-008 (its appearance), VT-INT-022 (played on the board) |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-002 | Rendering Rate | VT-INT-021 (the figure was chosen against it), VT-INT-016 (the game keeps it) |
 | NFR-003 | Input Latency | VT-INT-020 (the drawing half), VT-INT-013 (the whole path) |
@@ -77,7 +78,7 @@ A few items are structural/process requirements rather than automatically observ
 - Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
 - Known gap: CON-101, NFR-102 and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
 
-## 7.4 Status at close-out (2026-08-04)
+## 7.4 Status (2026-08-04, and after the reopening)
 
 The matrix above says which test *would* verify each requirement. Development ended before
 two of them were built, so it is not the same as a pass list — the close-out in
@@ -90,8 +91,16 @@ two of them were built, so it is not the same as a pass list — the close-out i
   above names a measurement that does not exist. Directional control itself is covered
   (`ott joystick`, VT-INT-010, playing `ott pacman`); only the number is missing.
 - **VT-INT-016 was never built**, so NFR-002's "the game keeps it" column is carried by
-  VT-INT-021's measured 175 fps ceiling and by `ott pacman`'s operator-present frame cost rather
-  than by a scripted assertion. The margin over 60 fps is large; it is simply not asserted.
+  `ott pacman`'s operator-present frame cost rather than by a scripted assertion — and when that
+  figure was finally read carefully, during Milestone 5, it turned out to say **59 fps, not 60**.
+  See below.
 
-Everything else in the catalogue passes: 357 host unit tests, the automatic OTT suite
+Everything else in the catalogue passes: **370** host unit tests, the automatic OTT suite
 (VT-INT-001/002/011/015) and the manual OTTs, both builds warning-free.
+
+Added by Milestone 5 ([DEC-029](11-Decisions-and-As-Built.md)): **FR-029** with VT-UNIT-007 and
+VT-UNIT-008, both passing. That milestone also measured NFR-002 properly and found it **not met
+either — 59 fps against the 60 asked for**, unchanged by the milestone and caused by the 16 ms
+frame period rather than by anything the maze does. The 175 fps quoted above is the unpaced
+ceiling, which is a different measurement; treating it as the achieved rate is what let the
+shortfall go unnoticed. See [04 §4.3](04-Implementation-Phases-and-Milestones.md#43-milestone-5--random-mazes).

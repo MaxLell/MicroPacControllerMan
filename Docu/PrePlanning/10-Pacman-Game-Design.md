@@ -19,9 +19,13 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
 
 ## 10.2 The Maze (Playfield)
 
-There is **one maze and every level plays it** (FR-025): the arcade's own, a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD.
+**Every level plays its own generated maze** (FR-029), on a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD. How one is generated is [M4 Random Mazes](../Design/M4-Random-Mazes.md); what one is guaranteed to be true of is FR-029.
 
-This has been re-baselined twice, and both steps are worth recording. It began as an 11 × 9 reduction with five of them, one per level: the reduction was right when the panel was 128 px wide, and the five layouts were a way of making levels differ before §10.9 had a better one. It was then re-drawn at 28 × 31 by hand, to the right proportions — and 94 of its 868 cells still did not match the arcade. What settled it was wanting the arcade's wall tiles to draw with, because a tile map only fits the maze it was drawn for. The layout below is therefore transcribed, not authored.
+The arcade's own layout is below and is **still in the code**, as the reference: it is the one maze whose properties are known from outside this codebase — 244 pellets, the corridors the Dossier's ghost behaviour is described against, the hand-drawn tile map the appearance rules are checked against. It is what the generated mazes are judged by, and what a unit test plays when it needs a corridor it can name.
+
+What every maze shares, generated or not, is the furniture: the ghost house and its gate, the four ghost starting cells and Pacman's, all at the coordinates below. That is what lets §10.4's release order, §10.5's revival and the scatter targets mean the same thing in a maze nobody has seen.
+
+This has been re-baselined three times, and each step is worth recording. It began as an 11 × 9 reduction with five of them, one per level: the reduction was right when the panel was 128 px wide, and the five layouts were a way of making levels differ before §10.9 had a better one. It was then re-drawn at 28 × 31 by hand, to the right proportions — and 94 of its 868 cells still did not match the arcade. What settled it was wanting the arcade's wall tiles to draw with, because a tile map only fits the maze it was drawn for. The layout below is therefore transcribed, not authored. And then it stopped being what a level plays at all, because the owner asked for mazes that are generated ([DEC-029](11-Decisions-and-As-Built.md)).
 
 Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` ghost start (pen) · `T` tunnel · space = open, nothing on it.
 

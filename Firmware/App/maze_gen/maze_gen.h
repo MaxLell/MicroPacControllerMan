@@ -2,7 +2,7 @@
  * maze_gen.h
  *
  * Builds a random maze that looks like one of Pacman's, in the map legend `playfield`
- * loads (FR-026). One seed gives one maze, always the same one, so a level is
+ * loads (FR-029). One seed gives one maze, always the same one, so a level is
  * reproducible and a unit test can pin a specific layout down.
  *
  * It is a port of the **tetris-stacking generator** from

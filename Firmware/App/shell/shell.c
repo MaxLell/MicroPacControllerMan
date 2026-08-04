@@ -355,7 +355,7 @@ void shell_press_start(void)
          * panel and gives the field handover a clean buffer to draw into. */
         game_session_init();
 
-        /* The run's mazes are seeded with **the moment start was pressed** (FR-026). The tick
+        /* The run's mazes are seeded with **the moment start was pressed** (FR-029). The tick
          * is read here as a source of entropy and not as a time — which is why this is not the
          * `millis()` the coding standard rules out: nothing is being measured, and no two
          * values of it are ever compared. A player cannot press a key on a chosen

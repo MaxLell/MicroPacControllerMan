@@ -43,7 +43,7 @@ typedef struct
 /* The map legend, one character per cell ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)).
  *
  * It is out here rather than private to `playfield.c` because it is a *contract* now: since
- * FR-026 the maze is generated, and `maze_gen` writes exactly these characters for
+ * FR-029 the maze is generated, and `maze_gen` writes exactly these characters for
  * #playfield_load_from_map to read back. Two modules agreeing on a legend by eye is how a
  * wall turns into a pellet.
  *
@@ -103,7 +103,7 @@ typedef struct
 
 /*! \brief Load the arcade's own maze, with every pellet restored.
  *
- * **This is no longer what a game plays** — since FR-026 every level gets a generated maze
+ * **This is no longer what a game plays** — since FR-029 every level gets a generated maze
  * (`maze_gen`, #playfield_load_from_map). The arcade layout stays because it is the one maze
  * whose every property is known from outside this codebase: 244 pellets, the corridors the
  * Dossier's ghost behaviour was described against, the tile map `game_view` derives its

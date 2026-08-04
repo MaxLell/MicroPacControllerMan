@@ -135,7 +135,7 @@ void game_view_init(game_view_t* inout_view);
  * Called once per maze, before the first state of that maze. The appearance is **derived**
  * from where the walls are: which of the arcade's thirty-odd line, corner and junction
  * pieces goes in a cell follows from which of its neighbours are open, so a generated maze
- * (FR-026) draws itself with no second map to keep in step.
+ * (FR-029) draws itself with no second map to keep in step.
  *
  * That is a change of principle. The maze used to be written down twice — the rules in
  * `playfield`, the appearance here — with a unit test holding the two together, because a

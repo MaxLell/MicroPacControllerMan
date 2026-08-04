@@ -147,7 +147,7 @@ void game_init(game_t* inout_game);
 
 /*! \brief Begin a new run at level 1 with a full set of lives (FR-003/006).
  *
- * Every level of the run gets its **own generated maze** (FR-026), derived from `in_maze_seed`
+ * Every level of the run gets its **own generated maze** (FR-029), derived from `in_maze_seed`
  * and the level number. The seed is therefore the whole of what makes one run's mazes differ
  * from another's, and a run replayed with the same seed plays the same mazes — which is what
  * makes a report about a maze worth anything.
