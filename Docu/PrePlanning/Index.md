@@ -58,8 +58,7 @@ deliberate history — the pivot to the STM32U545RE-Q and the X-NUCLEO-GFX01M2 i
 
 Read these two first if you are arriving cold:
 [04 §4.2](04-Implementation-Phases-and-Milestones.md#42-close-out), which says which milestones
-were met, which two catalogued tests were never built, and which requirements are unmet
-(NFR-003 input latency, and NFR-002 at 59 fps against 60); and
+were met; and
 [04 §4.3](04-Implementation-Phases-and-Milestones.md#43-milestone-5--random-mazes) for the
 generated mazes. The [Refactoring Backlog](../Refactoring-Backlog.md) names every wart the
 project chose to live with.

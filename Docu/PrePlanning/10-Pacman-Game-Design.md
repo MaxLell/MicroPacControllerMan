@@ -12,7 +12,7 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
   - An entity that did not move reports **arrived** rather than a running fraction. One stopped against a wall keeps its facing and its timer keeps running, and a fraction would have it slide in from behind, on the spot, once per period.
   - The rules do not see any of this. Interpolation is presentation: an entity *is* in its current cell for every purpose the game logic cares about, and the fraction is written by the movement timer and read only by the view.
   - The earlier wording here said there is no sub-cell position at all, justified by "tile rendering on the monochrome display". That display is gone, and with it the reason.
-- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS (NFR-002), interpolating between steps as above.
+- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS, interpolating between steps as above.
 - **Pacman movement.** Pacman moves one cell every movement period, which is **per level and not constant within one** (§10.9): he is quicker while the ghosts are frightened and slower on the step after eating a pellet. He keeps a current direction and a *queued* direction; `MSG_INPUT_DIRECTION` sets the queued one. When he is due to move: if the queued direction is not blocked by a wall it becomes current; then he moves one cell if that cell is open, otherwise he stays put (stopped against a wall until the direction changes).
 - **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period. **Each ghost has its own**, because the period depends on more than the level (§10.9): a ghost in the tunnel crawls, a frightened one is slow, and Blinky speeds up as the maze empties. A ghost never reverses onto the cell it just left, except when its mode changes (scatter↔chase, or entering/leaving frightened).
 - **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth, on the same row (FR-012).
@@ -149,7 +149,7 @@ Collected for convenience — these realise [A-006](05-Risks-Assumptions-and-Dep
 | Frightened ghost speed | half of the ghost's current speed |
 | Pellet / power-pellet points | 10 / 50 |
 | Ghost-eaten points | 200 / 400 / 800 / 1600 |
-| Render rate | ≥ 60 FPS (NFR-002) |
+| Render rate | ≥ 60 FPS *(a design figure; the requirement that asked for it is withdrawn — [DEC-036](11-Decisions-and-As-Built.md))* |
 
 ## 10.9 Levels & Difficulty (FR-025 / FR-026)
 
