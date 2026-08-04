@@ -76,3 +76,22 @@ A few items are structural/process requirements rather than automatically observ
 - Every `FR-*` / `NFR-*` requirement has at least one verifying test. No orphaned requirements found.
 - Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
 - Known gap: CON-101, NFR-102 and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
+
+## 7.4 Status at close-out (2026-08-04)
+
+The matrix above says which test *would* verify each requirement. Development ended before
+two of them were built, so it is not the same as a pass list — the close-out in
+[04 §4.2](04-Implementation-Phases-and-Milestones.md#42-close-out) is. In short:
+
+- **NFR-003 (Input Latency) is not met.** ~34 ms against a 30 ms budget, 32 ms of it the shared
+  debounce window ([RF-014](../Refactoring-Backlog.md#rf-014)). The figure is M2's, taken against
+  `joystick_dot` rather than the finished game loop, because —
+- **VT-INT-013's automatic latency measurement was never built**, so NFR-003's "whole path" column
+  above names a measurement that does not exist. Directional control itself is covered
+  (`ott joystick`, VT-INT-010, playing `ott pacman`); only the number is missing.
+- **VT-INT-016 was never built**, so NFR-002's "the game keeps it" column is carried by
+  VT-INT-021's measured 175 fps ceiling and by `ott pacman`'s operator-present frame cost rather
+  than by a scripted assertion. The margin over 60 fps is large; it is simply not asserted.
+
+Everything else in the catalogue passes: 357 host unit tests, the automatic OTT suite
+(VT-INT-001/002/011/015) and the manual OTTs, both builds warning-free.

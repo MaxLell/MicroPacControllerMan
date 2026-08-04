@@ -28,7 +28,7 @@ settings, transfer budgets, tool choices, and the questions that milestone must 
 
 ### See also (not part of the spec set)
 
-- [Refactoring Backlog](../Refactoring-Backlog.md) — known work deliberately not done yet: noticed in passing, deferred by decision, or blocked. A living work list, so it is kept outside the numbered set.
+- [Refactoring Backlog](../Refactoring-Backlog.md) — **closed.** The record of work deliberately not done: noticed in passing, deferred by decision, or blocked. It was a living work list while the project ran, which is why it sits outside the numbered set.
 
 ## ID Conventions
 
@@ -47,4 +47,14 @@ settings, transfer budgets, tool choices, and the questions that milestone must 
 
 ## Status
 
-[02 Requirements](02-Requirements.md) and [05 Risks, Assumptions & Dependencies](05-Risks-Assumptions-and-Dependencies.md) are current for the STM32U545RE-Q and the X-NUCLEO-GFX01M2. Documents 03, 04, 06, 07, 08, 10 and 11 still describe the earlier hardware in places and are being brought up to date.
+**Development is finished (2026-08-04, [DEC-028](11-Decisions-and-As-Built.md)).** This set is
+closed: it describes a firmware that is built, plays on the board, and will not change. Where a
+document names the earlier STM32G431RB or the monochrome LS013B7DH03 panel, it is deliberate
+history — the pivot to the STM32U545RE-Q and the X-NUCLEO-GFX01M2 is recorded in
+[11 Decisions & As-Built](11-Decisions-and-As-Built.md), which is where superseded choices belong.
+
+Read the close-out first if you are arriving cold:
+[04 §4.2](04-Implementation-Phases-and-Milestones.md#42-close-out) says which milestones were met,
+which two catalogued tests were never built, and which requirement (NFR-003, input latency) ends
+unmet. The [Refactoring Backlog](../Refactoring-Backlog.md) is closed alongside it and names every
+wart the project chose to live with.

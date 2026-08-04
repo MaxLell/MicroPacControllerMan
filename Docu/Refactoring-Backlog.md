@@ -1,30 +1,47 @@
-# Refactoring Backlog
+# Refactoring Backlog — closed
 
-Known work that is deliberately **not** done yet: things noticed in passing, deferred
-by decision, or blocked on something else. This is a living work list, not a spec —
-the [Pre-Planning set](PrePlanning/Index.md) stays the source of truth for *what the
-system must do*; this file only tracks *what we owe the codebase*.
+> **Development on this project is finished (2026-08-04, [DEC-028](PrePlanning/11-Decisions-and-As-Built.md)).
+> Every item below is closed as "will not be done."** Nothing here is waiting to be
+> picked up, and nothing here is a bug in the shipped firmware: each one is a wart the
+> project knew about, wrote down, and chose to live with. The list is kept because a
+> record of what was knowingly left undone is worth more than a clean page — anyone
+> reading this firmware later deserves to find the known edges named, not to rediscover
+> them.
+>
+> The two that matter most, because they are the ones a user could notice:
+> **[RF-014](#rf-014)** — the 32 ms debounce window puts the input path at ~34 ms against
+> NFR-003's 30 ms budget, so that requirement ends unmet — and **[RF-016](#rf-016)** — the
+> console drops characters from text pasted at full line rate, which no tool in the repo
+> does but a terminal will.
 
-Every item says why it matters and what "done" looks like, so it can be picked up
-cold. Items use `RF-xxx` IDs, and a fixed entry is **deleted** rather than struck
-through — git history keeps the record, and IDs are never reused.
+This was a living work list while the project ran: things noticed in passing, deferred
+by decision, or blocked on something else. The [Pre-Planning set](PrePlanning/Index.md)
+stays the source of truth for *what the system must do*; this file only ever tracked
+*what we owed the codebase*.
+
+Every item says why it matters and what "done" would have looked like, so the cost of
+each deferral is legible. Items use `RF-xxx` IDs; IDs are never reused.
 
 Seeded from the post-M2 structural review (PR #6, 2026-07-27).
 
-## Open items
+## Items at close-out — all closed, none to be done
 
-| ID | Item | Severity | Blocks |
+Some entries below still describe the LS013B7DH03 and its 30 FPS budget — the M1/M2
+monochrome panel that the pivot to the X-NUCLEO-GFX01M2 replaced ([DEC-012](PrePlanning/11-Decisions-and-As-Built.md)).
+They are left as written rather than rewritten for a closed list.
+
+| ID | Item | Severity as judged then | Status |
 |---|---|---|---|
-| [RF-003](#rf-003) | Application is not yet separable from the hardware — input + NVM seams left | **High** | M3 |
-| [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | — |
-| [RF-006](#rf-006) | Display chip-select delay is a spin count, not a duration | Medium | — |
-| [RF-007](#rf-007) | Display always pushes the full frame | Deferred — measure first | — |
-| [RF-008](#rf-008) | LPUART RX FIFO disabled; characters can still be dropped | Low | — |
-| [RF-009](#rf-009) | OTT console keeps partial input across a scenario | Low | — |
-| [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | — |
-| [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | — |
-| [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | — |
-| [RF-016](#rf-016) | The console samples the UART on the tick instead of on an interrupt | Low | — |
+| [RF-003](#rf-003) | Application is not yet separable from the hardware — input + NVM seams left | **High** | Overtaken by M3: the game takes a direction over a message and the high score sits behind `high_score`/`flash_bsp`, both with host ports. Closed. |
+| [RF-005](#rf-005) | Two hand-applied edits are lost on every CubeMX re-generation | Medium | **Never done.** No `.noinit` guard exists. Harmless now only because nobody will re-generate; the trap is live for anyone who does. |
+| [RF-006](#rf-006) | Display chip-select delay is a spin count, not a duration | Medium | Obsolete: `DISPLAY_CHIP_SELECT_SETTLE_LOOPS` went with the monochrome driver. Closed. |
+| [RF-007](#rf-007) | Display always pushes the full frame | Deferred — measure first | Overtaken by M2: `display_present_region` is the partial update, and it is what buys the frame rate. Closed. |
+| [RF-008](#rf-008) | LPUART RX FIFO disabled; characters can still be dropped | Low | **Never done** — see RF-016, which is the same limitation on the console that actually shipped. |
+| [RF-009](#rf-009) | OTT console keeps partial input across a scenario | Low | **Never done.** Bites interactive poking only; `run_ott.py` steers around it. |
+| [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | **Never done.** No project-wide return convention was ever decided, so a dead panel still looks like a black screen. |
+| [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | **Never done.** A failed assertion on the target halts silently; under an OTT that is a bare harness timeout. |
+| [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | **Never done — and this is the one that leaves a requirement unmet.** ~34 ms against NFR-003's 30 ms. |
+| [RF-016](#rf-016) | The console samples the UART on the tick instead of on an interrupt | Low | **Never done.** Characters must arrive >1 ms apart; typing and `run_ott.py` comply, a paste does not. |
 
 ---
 

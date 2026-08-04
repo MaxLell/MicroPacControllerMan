@@ -4,6 +4,15 @@ Standalone embedded **Pacman** on an **STM32U545RE-Q Nucleo-64**: joystick input
 240×320 colour LCD, single NVM high score. Secondary goal: probe how far an
 AI agent can carry a disciplined embedded project. See `Docu/Idea.md` for origin.
 
+> **Development is finished (2026-08-04, DEC-028).** The game is complete and plays on
+> the board; nothing further is planned — no milestone, no refactoring, no feature. The
+> Refactoring Backlog is closed and none of it will be picked up. Before changing
+> anything here, read the close-out in
+> [04 §4.2](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out):
+> it records that **NFR-003 (input latency, ~34 ms against 30 ms) ends unmet** and that
+> **VT-INT-013's latency measurement and VT-INT-016 were never built**. Treat this file
+> and the doc set as a finished record, not a plan.
+
 ## Source of truth — read before coding
 
 The **Pre-Planning doc set is authoritative**, not this file and not the code.
@@ -22,10 +31,9 @@ requirements deliberately carry none of that: keep hardware detail out of `02` a
 
 Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
-Known work deliberately left undone is tracked in
-**[`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md)** (`RF-xxx`) — check it
-before "fixing" something that was a conscious deferral, and add to it rather than
-silently working around a wart.
+Work deliberately left undone is recorded in
+**[`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md)** (`RF-xxx`), now **closed** —
+read it before "fixing" something that was a conscious deferral. It is a record, not a queue.
 
 ## Status
 
@@ -51,7 +59,7 @@ silently working around a wart.
   Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
   budget (RF-014), to be chosen against a real game loop.
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
-- **M3 Game — in progress, playable on the board and on the host.** `game` publishes a
+- **M3 Game — done, playable on the board and on the host.** `game` publishes a
   246-byte state, `game_view` turns cells into pixels and interpolates between simulation
   steps, `render` owns the one frame buffer and erases by save-under, and `game_session`
   is the frame all three callers run — the target's `app_main`, the SDL window

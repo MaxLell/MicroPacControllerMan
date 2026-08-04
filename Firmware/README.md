@@ -4,6 +4,12 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
 **STM32CubeProgrammer** over ST-LINK V3E.
 
+> **Finished (2026-08-04).** The game is complete and plays on the board — RAM 67.2 %,
+> flash 16.1 %, both builds warning-free, 357 host unit tests green. No further work is
+> planned; the known edges are recorded in the closed
+> [Refactoring Backlog](../Docu/Refactoring-Backlog.md) and the close-out in
+> [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out).
+
 ## Toolchain
 
 ```
@@ -55,10 +61,11 @@ cmake --build build-host -j
 ```
 
 `PACMAN_HOST_BUILD=ON` skips the cross-toolchain block entirely and builds
-`pacman_host`, a static library of the modules that are genuinely hardware-independent
-— today `Services/delay` and `Services/sw_timer`, plus the tick source through its host
-implementation. It is what the SDL application (CON-103 / FR-104) will link against, and
-it grows as more platform seams are cut (RF-003).
+`pacman_host`, a static library of the modules that are genuinely hardware-independent —
+by the end that is the whole of `App/` and `Services/`, with timing, display and flash
+each reached through their host port. `pacman_host_app` (CON-103 / FR-104) links against
+it, which is what makes the SDL window evidence about this firmware rather than about a
+lookalike.
 
 **Unit tests** run under Ceedling, which does its own compilation with mocked
 dependencies — not through CMake:
@@ -163,7 +170,7 @@ source of truth in
 | `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
 | `Services/sprite/` | Indexed pictures with transparency and a palette chosen at draw time. A sprite is stored as **text**, one character per pixel, so the art is editable in the source with no tooling. |
-| `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
+| `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-software-module-template-active-object)). One user in the end — `App/score` is built on it ([DEC-027](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |
