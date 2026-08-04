@@ -111,14 +111,16 @@ So the rule is:
 1. The ghost-house box (rows 12–16 × columns 10–17) is **stamped**: it is the same structure at
    the same place in every maze, and it owns the only tiles nothing else uses — the pink gate
    and four rounded corners.
-2. A wall cell on the panel's edge is a **ring** cell. Its line runs straight, turns where a
+2. A wall cell on the panel's edge is a **ring** cell. Its line runs straight, **ends** where a
    tunnel breaks the ring, or grows a branch inward where a block's line has to meet it. Which
    tee depends on whether the block starts or ends at that cell, because each of a two-cell
    wall's two parallel lines lands on its own tee.
-3. Any other wall cell carries part of its **block's** outline, chosen from which of its four
+3. A ring cell **beside a tunnel mouth** is where the boundary line stops, and it is drawn with
+   the *block* family — see §2.3.
+4. Any other wall cell carries part of its **block's** outline, chosen from which of its four
    neighbours are open — and, where none is, from which diagonal is, which is where the outline
    bends around an inside angle.
-4. Everything else is corridor, and what is on it comes from the game state.
+5. Everything else is corridor, and what is on it comes from the game state.
 
 ### 2.1 How that was checked
 
@@ -137,7 +139,31 @@ a block with an outline — a shape no generated maze has, since `maze_gen` buil
 with blocks inside it. The rule is right for every maze that will be played and wrong for those
 64 cells of the fixture, which is the honest way round.
 
-### 2.2 Two tiles the 1980 ROM does not contain
+### 2.2 The tunnel mouths, which is where the first attempt looked wrong
+
+The first version drew the cell above and below a tunnel mouth with a **frame corner** — the
+tile that turns the boundary line inward. It looked wrong on the panel, and the owner said so:
+
+> the "portals" — here the edges of the maze do not look tidy.
+
+He was right, and the reason is worth keeping. A frame corner turns the line *away* from the
+panel edge, and at a tunnel mouth there is corridor on that side, so the line turned inward and
+**ended in mid-air** — a three-pixel stub pointing into the corridor, attached to nothing. The
+arcade has no tile for the shape because it has no such shape: its tunnels are cut through a
+six-cell-thick mass, never through a one-cell frame, so the boundary line there runs along the
+mass's face and never has to stop.
+
+What it needed is a line that stops *towards* the panel edge, and that is exactly what a block's
+convex corner is. So a ring cell next to a tunnel mouth falls through to the block rule: the
+boundary line comes down the frame and ends in a small cap at the edge, with the mouth as a clean
+gap between two of them.
+
+It also lands on the arcade's own tunnel proportions by accident, which is a good sign. A block
+corner puts the line at the far side of its cell, a whole cell back from the corridor — and the
+arcade pulls its tunnel walls back by exactly one cell too, drawing rows 13 and 15 with `MAZE_TOP`
+and `MAZE_BOTTOM`. Both end up with a mouth that is wider than the corridor it serves.
+
+### 2.3 Two tiles the 1980 ROM does not contain
 
 Nothing is ever attached to the arcade maze's bottom wall, so the ROM has no bottom-edge tee.
 **62 % of generated mazes attach something** — the generator joins pieces to the boundary on

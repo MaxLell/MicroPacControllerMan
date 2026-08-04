@@ -73,6 +73,8 @@ static bool prv_is_open(const playfield_map_t* const in_map, int16_t in_x, int16
     return !prv_is_wall(in_map, in_x, in_y);
 }
 
+static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y);
+
 /* The ring: the wall cells along the panel's edge, which carry the maze's boundary line.
  *
  * The line hugs the edge, so a ring cell only ever does one of three things — run straight,
@@ -109,15 +111,17 @@ static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in
     {
         const int16_t inward = is_left ? 1 : -1;
 
-        /* A tunnel mouth breaks the ring, so the line has to stop and turn inward. */
-        if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)))
+        /* A tunnel mouth breaks the ring, and this cell is where the boundary line has to
+         * *end*. Drawn as a block end rather than as a frame corner, because a frame corner
+         * turns the line inward — and with corridor on that side there is nothing for it to
+         * turn into, so it ends in mid-air pointing at the corridor. A block end caps the line
+         * towards the panel edge instead, which is where the wall actually stops.
+         *
+         * The arcade has no tile for this because it has no such shape: its tunnels are cut
+         * through a six-cell-thick mass, never through a one-cell frame. */
+        if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)) || prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
         {
-            return is_left ? SPRITE_SET_MAZE_CORNER_TOP_LEFT : SPRITE_SET_MAZE_CORNER_TOP_RIGHT;
-        }
-
-        if (prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
-        {
-            return is_left ? SPRITE_SET_MAZE_CORNER_BOTTOM_LEFT : SPRITE_SET_MAZE_CORNER_BOTTOM_RIGHT;
+            return prv_get_block_tile(in_map, in_x, in_y);
         }
 
         if (prv_is_wall(in_map, (int16_t)(in_x + inward), in_y))
