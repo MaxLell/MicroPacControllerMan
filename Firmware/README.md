@@ -163,7 +163,7 @@ source of truth in
 | `Services/framebuffer/` | A 240 x 320 **RGB565** frame buffer — memory plus the arithmetic to address it, no hardware. 153,600 bytes, so it lives in static storage. |
 | `Services/gfx/` | Geometric primitives drawn into a frame buffer. Pure logic, fully host-tested. |
 | `Services/sprite/` | Indexed pictures with transparency and a palette chosen at draw time. A sprite is stored as **text**, one character per pixel, so the art is editable in the source with no tooling. |
-| `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-generic-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
+| `Services/active_object/` | The Active-Object template ([03 §3.5](../Docu/PrePlanning/03-Architecture.md#35-software-module-template-active-object)). Superseded by the M3 architecture rework; kept until that lands. |
 | `Services/circular_buffer/` | Generic fixed-capacity FIFO ring buffer, any element type, caller-supplied storage, no heap. |
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |

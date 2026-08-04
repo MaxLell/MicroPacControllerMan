@@ -34,7 +34,7 @@ Beyond delivering a playable game, the primary motivation for this project is to
 
 ## 1.4 Context Diagrams
 
-Two views: the physical hardware and the top-level software structure. Design choices such as the RTOS are intentionally left out here — see [03 Architecture](03-Architecture.md).
+Two views: the physical hardware and the top-level software structure. Design choices such as the execution model are intentionally left out here — see [03 Architecture](03-Architecture.md).
 
 ### 1.4.1 Hardware Block Diagram
 

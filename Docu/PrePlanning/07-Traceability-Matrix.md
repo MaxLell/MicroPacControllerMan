@@ -54,23 +54,23 @@ A few items are structural/process requirements rather than automatically observ
 |---|---|---|
 | FR-101 | MVP Separation | VT-UNIT-002, VT-UNIT-003 |
 | FR-102 | Stateless Control | VT-UNIT-003 |
-| FR-103 | Message-Based Communication | VT-UNIT-001 |
+| FR-103 | Value-Only Module Interfaces | VT-UNIT-001, VT-UNIT-002 (every payload is a value; no module holds a pointer into another's) |
 | FR-104 | Host Buildability | VT-INT-008 |
-| FR-105 | FreeRTOS Task Separation | VT-INT-009 |
-| FR-106 | On-Target Test (OTT) Framework | VT-INT-018, VT-INT-009, VT-INT-015 (each exercises an OTT command) |
-| FR-107 | OTT Result Reporting | VT-INT-018, VT-INT-009, VT-INT-015 |
-| FR-108 | Dedicated Message-Broker Task | VT-UNIT-001, VT-INT-009 |
+| FR-105 | Cooperative Execution | VT-INT-011 (each screen reached inside its budget), VT-INT-016, VT-INT-022 (a frame stays inside NFR-002 with the loop also serving the console) |
+| FR-106 | On-Target Test (OTT) Framework | VT-INT-018, VT-INT-015, VT-INT-022 (each exercises an OTT command) |
+| FR-107 | OTT Result Reporting | VT-INT-018, VT-INT-015, VT-INT-022 |
+| FR-108 | Message-Broker Fan-Out | VT-UNIT-001 |
 | FR-110 | Pacman Internal Message Bus | VT-UNIT-001, VT-INT-010 |
 | FR-111 | Fatal-Error Halt | Manual fault-injection / code review (no automated `VT-*` test — see gap note above) |
 | NFR-101 | Unit Testability | VT-UNIT-002 |
 | NFR-102 | Coding Standard Compliance | Code review against c-code-style (no automated `VT-*` test yet — see gap note above) |
 | NFR-103 | No Runtime Heap Allocation | VT-UNIT-001 |
-| NFR-104 | OTT Harness Compatibility | VT-INT-018, VT-INT-009, VT-INT-015 (harness successfully drives each Automatic test) |
+| NFR-104 | OTT Harness Compatibility | VT-INT-018, VT-INT-015, VT-INT-011 (harness successfully drives each Automatic test) |
 | NFR-105 | Message-Bus Backpressure | VT-UNIT-001 |
 | CON-101 | Language | Enforced by the C toolchain at build time (no dedicated `VT-*` test) |
 | CON-102 | Test Framework | VT-UNIT-002, VT-UNIT-003 |
 | CON-103 | Host View Library | VT-INT-008 |
-| CON-104 | RTOS | VT-INT-009 |
+| CON-104 | ~~RTOS~~ | *(withdrawn — [DEC-027](11-Decisions-and-As-Built.md); no successor test, there is nothing left to verify)* |
 
 ## 7.3 Coverage Check
 

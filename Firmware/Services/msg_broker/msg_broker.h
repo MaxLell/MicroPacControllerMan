@@ -12,18 +12,21 @@
  * - **Queue, not callback.** A callback runs inside the publisher's stack, which makes
  *   a slow subscriber the publisher's problem and invites re-entrancy. A queue means a
  *   publisher never waits for a consumer, which is what the Active Object pattern
- *   requires (§3.5, FR-109).
+ *   requires (§3.5).
  * - **Object, not singleton.** Every call takes the instance as its first argument and
- *   all state lives inside it, so instances cannot interfere. The project uses two
- *   (FR-110): a system broker between the firmware modules, and one used only inside
- *   the game (§3.6).
+ *   all state lives inside it, so instances cannot interfere. One instance exists today
+ *   (FR-110): the game's own bus, which carries its events to #score_t (§3.6). The
+ *   firmware above the game reaches the next module by an ordinary call handing over a
+ *   message type by value — see [03 §3.2](../../../Docu/PrePlanning/03-Architecture.md)
+ *   for when a queue earns its keep and when it does not.
  *
  * The broker is content-agnostic: it routes on the topic ID and never looks at a
  * payload.
  *
- * **Threading.** FR-108 calls for a dedicated worker task per broker. FreeRTOS arrives
- * in M4, so for now #msg_broker_process is that worker's body and the super-loop calls
- * it. The API does not change when the task appears.
+ * **Threading.** There is none, and none is planned (DEC-027). Fan-out happens when the
+ * owner asks for it: #msg_broker_process_all is called by the loop that owns the
+ * instance — for the game, at the end of a tick — so an event published mid-tick reaches
+ * its subscriber after that tick rather than inside it (FR-108).
  */
 
 #ifndef MSG_BROKER_H
@@ -116,7 +119,7 @@ void msg_broker_init(msg_broker_t* inout_broker, msg_t* inout_msg_buffer, uint16
 /*! \brief Arm the broker so it will move messages (FR-108).
  *
  * Subscriptions are set up before this; #msg_broker_process refuses to run until it has
- * been called. Once FreeRTOS is in, this is where the worker task starts.
+ * been called.
  */
 void msg_broker_start(msg_broker_t* inout_broker);
 

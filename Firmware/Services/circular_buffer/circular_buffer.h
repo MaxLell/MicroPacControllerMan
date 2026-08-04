@@ -12,8 +12,10 @@
  * wrap-around bugs live, so it is worth having one tested copy. #msg_queue_t is the
  * first user; a byte or event queue would use the same thing.
  *
- * Not thread-safe on its own. Under FreeRTOS (M4) this is where a critical section goes,
- * or where the RTOS's own queue takes over.
+ * Not thread-safe on its own, and the firmware needs no thread safety here: everything
+ * runs in one cooperative loop (§3.4, DEC-027). Where a producer *is* an interrupt — the
+ * console's receive path — the buffer is not this one, because `count` is shared between
+ * producer and consumer; see `console.c`.
  */
 
 #ifndef CIRCULAR_BUFFER_H
