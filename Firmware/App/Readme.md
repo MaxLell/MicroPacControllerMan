@@ -16,7 +16,9 @@ nothing else may depend on `App/`.
      rate rather than at main-loop speed.
   2. `ott_execute_pending()` — run an on-target test scheduled before the last reset.
   3. print the boot banner (the harness looks for it, VT-INT-002).
-  4. the nominal super-loop — today just the OTT console; later the FreeRTOS scheduler.
+  4. the nominal loop — the shell's frame and the OTT console, cooperatively
+     ([03 §3.4](../../Docu/PrePlanning/03-Architecture.md#34-execution-model)). There is
+     no scheduler and none is planned (DEC-027).
 
 **The game** — one folder per module, all of it pure logic with no hardware behind it,
 which is what lets the whole of it be unit-tested on the host.
@@ -35,14 +37,16 @@ which is what lets the whole of it be unit-tested on the host.
 | `host_main.c` | The SDL application (CON-103 / FR-104): a window, the keyboard standing in for the joystick, and the same game/view/render path the target runs. The only file allowed to talk to SDL. |
 | `sprite_set/` | The drawings and their palettes. *This game's* art, which is why it is here and not in `Services/sprite` — that module knows how to draw any sprite, this one is the one set we have. Not inside the render port either: SDL on the host must draw the same figures as the panel. |
 
-`game` is also the bridge between the two brokers (FR-110): game-internal events —
-pellet eaten, ghost eaten, frightened started — stay on the internal bus, and only
-results leave. What the view gets is `msg_game_state_t`, **by value**, built fresh on
-each call so the between-cell progress it carries is current
+`game` owns the one broker instance and is also the boundary around it (FR-110):
+game-internal events — pellet eaten, ghost eaten, frightened started — stay on the
+internal bus and are fanned out at the end of each tick, and only results leave. What
+the view gets is `msg_game_state_t`, **by value**, built fresh on each call so the
+between-cell progress it carries is current
 ([DEC-016](../../Docu/PrePlanning/11-Decisions-and-As-Built.md)).
 
-Still to come: `game_view` (cell-to-pixel, interpolation, the display list) and the
-Render module below it — neither exists yet.
+`shell/` and `game_session/` sit above that table: the shell owns the screen flow and
+`game_session` owns the one frame the target, the host application and the `pacman` OTT
+all run ([03 §3.2.2](../../Docu/PrePlanning/03-Architecture.md)).
 
 Note that the `app_main()` call in the generated `main.c` is one of the two things a
 CubeMX re-generation drops and that must be re-applied by hand (the other is the

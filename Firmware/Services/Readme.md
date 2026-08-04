@@ -9,7 +9,7 @@ into a driver.
 
 | Service | What |
 |---|---|
-| `delay/` | The blocking wait — `delay_ms()`. The single place the firmware is allowed to burn time, so it is also the single place to change once FreeRTOS arrives (the body becomes a task delay). |
+| `delay/` | The blocking wait — `delay_ms()`. The single place the firmware is allowed to burn time, and with one cooperative loop (§3.4) that makes it the single place that can stall a frame. |
 | `sw_timer/` | The non-blocking half: arm a timer, keep working, and `sw_timer_process()` fires whatever came due. Timers are one-shot; a callback that re-arms its own timer is periodic. |
 | `framebuffer/` | A 1-bpp frame buffer: memory plus the bit arithmetic to address it. An object, not a hidden global, so several can exist — the render path is specified to hand on a double-buffered snapshot ([03 §3.2](../../Docu/PrePlanning/03-Architecture.md), R-007). Colours are *logical*: a set bit means ink, and whatever polarity a panel wants is that driver's problem. |
 | `gfx/` | Geometric primitives drawn into a frame buffer: lines, rectangles, circles, triangles, filled and outlined. No text or logo. Shapes may hang over the edges; the frame buffer clips them. |
@@ -17,7 +17,7 @@ into a driver.
 | `circular_buffer/` | A generic fixed-capacity FIFO ring buffer of same-sized elements, caller-supplied storage (no heap, NFR-103). Element-type-agnostic — it moves `element_size` bytes and never looks at them. A component in its own right because the ring arithmetic is identical whatever is queued, and it is where off-by-one and wrap-around bugs live. |
 | `msg/` | The shared vocabulary: topic IDs, payload types, and the fixed-size envelope. Header-only — a vocabulary has no behaviour. Transcribed from [03 §3.3](../../Docu/PrePlanning/03-Architecture.md), which stays the authority. |
 | `msg_queue/` | A type-safe skin over `circular_buffer` so callers pass `msg_t` instead of `void*` and cannot get the element size wrong at a call site. |
-| `msg_broker/` | The publish/subscribe bus — the only path between modules (FR-103). Instance-based, so the two brokers of FR-110 cannot interfere; subscribers register an output queue rather than a callback, so a publisher never waits on a consumer (§3.5, FR-109). Content-agnostic: it routes on the topic and never reads a payload. |
+| `msg_broker/` | The publish/subscribe bus, used where something is *announced* to an unknown number of listeners — the game's events (FR-110). Elsewhere a module hands the next one a message type by value across an ordinary call, which is what FR-103 asks for; [03 §3.2](../../Docu/PrePlanning/03-Architecture.md) says when a queue earns its keep. Instance-based, so brokers cannot interfere; subscribers register an output queue rather than a callback, so a publisher never waits on a consumer (§3.5). Content-agnostic: it routes on the topic and never reads a payload. |
 
 `delay` and `sw_timer` between them replace open-coded tick arithmetic. **There is no
 `millis()` in this firmware** — if you find yourself writing `(tick - start) >= timeout`,
@@ -41,11 +41,11 @@ reference implementation it was adapted from
   does *not* assert "not already initialized" the way the singleton did — on an
   instance that would read uninitialized memory.
 
-**Threading:** FR-108 wants a worker task per broker, and §3.4 a task per module. Until
-FreeRTOS lands in M4, `msg_broker_process()` and `active_object_process_all()` are those
-task bodies and the loop calls them. This is not a stopgap on the host: §3.4 says the host
-build runs these "as plain functions/loops driven by the SDL event loop instead of tasks".
-Neither API changes when the tasks appear.
+**Threading:** there is none, on either platform (§3.4, DEC-027). `msg_broker_process()`
+and `active_object_process_all()` are called by whoever owns the instance, at a point that
+owner chooses — the game drains its broker at the end of a tick, so an event published
+mid-tick is delivered after it rather than inside it. That the moment of delivery is *named*
+rather than left to a scheduler is the property to keep if this ever grows a second loop.
 
 Candidates as the project grows:
 

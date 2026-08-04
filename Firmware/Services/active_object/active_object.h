@@ -1,11 +1,16 @@
 /*
  * active_object.h
  *
- * The Active Object template every module is built on (FR-109,
- * [03 §3.5](../../../Docu/PrePlanning/03-Architecture.md)). A module bundles its private
- * data, a single inbound message queue that is its only external input, and a handler
- * that reacts to messages. This is the boilerplate §3.5 calls for factoring out, so a
- * module contributes only its handler and its state.
+ * The Active Object template
+ * ([03 §3.5](../../../Docu/PrePlanning/03-Architecture.md)) for a module that reacts to
+ * *events* rather than answering questions. It bundles the module's private data, a
+ * single inbound message queue that is its only external input, and a handler that
+ * reacts to messages, so a module contributes only its handler and its state.
+ *
+ * #score_t is the one module built on it: points are added because a pellet was eaten,
+ * not because someone asked. A module that answers a question — is this cell walkable,
+ * what does level 7 play like — is deliberately a plain module, since a reply that
+ * arrives later is not an answer.
  *
  * The pattern's four rules, and where each one lives:
  *
@@ -21,11 +26,11 @@
  * - **No blocking in handlers.** The only place a module waits is on its empty queue.
  *   Anything else that would block is modelled as a later message.
  *
- * **Threading.** §3.4 puts each module in its own task, with FreeRTOS arriving in M4. It
- * also says the host build runs these "as plain functions/loops driven by the SDL event
- * loop instead of tasks" — so polling #active_object_process_all is the host model, not a
- * stand-in for one. On the target the task body becomes the same call in a loop; nothing
- * in a module changes.
+ * **Threading.** There is none (§3.4, DEC-027): the firmware is one cooperative loop on
+ * both platforms. #active_object_process_all is called by whoever owns the object — for
+ * #score_t, by the game at the end of the tick that published the events. The fourth
+ * rule above stops being a rule and becomes a fact: a handler that blocked would stop
+ * the whole firmware, not merely its own task.
  */
 
 #ifndef ACTIVE_OBJECT_H

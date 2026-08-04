@@ -32,9 +32,14 @@ silently working around a wart.
 - **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
   (7.4 %), RAM 3.5 kB (1.3 %), `.noinit` present for the retained-RAM reset flow.
-  Current branch: `feat/m1-u545-bring-up`.
-- **Requirements re-baselined** for the new hardware — [02 Requirements](Docu/PrePlanning/02-Requirements.md)
-  is current; the rest of the doc set still lags in places.
+- **The doc set is re-baselined onto what is built** (DEC-027, 2026-08-04). **There is no
+  RTOS and none is planned:** CON-104 is deleted, FR-105 is now *cooperative execution*
+  (one loop plus the 1 kHz tick, [03 §3.4](Docu/PrePlanning/03-Architecture.md#34-execution-model)),
+  FR-108 keeps the broker delivering to its subscribers but without a task of its own.
+  FR-103 asks for what the firmware guarantees — no shared mutable state, everything
+  crossing a boundary a fixed-size value copied by value — rather than for the
+  system-level bus that was never built. One broker instance exists: the game's own,
+  carrying its events to `score`.
 - **M2 Board Bring-Up — done, merged (PR #14).** ST7789V display + joystick on the GFX01M2. The pin
   map is **measured, not assumed**: the joystick keys were confirmed by the `joystick` OTT
   and the display by `display_id`, which got the controller to answer. Chip select turned out

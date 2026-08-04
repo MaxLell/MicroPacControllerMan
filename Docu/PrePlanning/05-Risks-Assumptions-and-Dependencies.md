@@ -29,7 +29,7 @@
 |---|---|---|
 | D-001 | [c-code-style](https://github.com/MaxLell/c-code-style) coding standard repository | External repo; any fixes to the standard itself require a separate PR against that repo, with the project owner's prior approval before touching it. |
 | D-002 | Ceedling / Unity toolchain | Must be installed on the host development machine for the unit tests. |
-| D-003 | arm-none-eabi-gcc and CMake for the target firmware; STM32CubeProgrammer for flashing; a FreeRTOS port for the STM32U5 series (from M4) | Target firmware build — see [03 Architecture §3.8](03-Architecture.md#38-build--toolchain) and [M2 Board Bring-Up §4](../Design/M2-Board-Bring-Up.md). |
+| D-003 | arm-none-eabi-gcc and CMake for the target firmware; STM32CubeProgrammer for flashing | Target firmware build — see [03 Architecture §3.8](03-Architecture.md#38-build--toolchain) and [M2 Board Bring-Up §4](../Design/M2-Board-Bring-Up.md). |
 | D-004 | Physical hardware: STM32U545RE-Q Nucleo-64, X-NUCLEO-GFX01M2 display shield, USB cable | On hand. |
 | D-008 | UM2750 (X-NUCLEO-GFX01M2) and UM3062 (STM32U3/U5 Nucleo-64 boards, MB1841) | Both in hand. Together they give the pin map by connector position; neither alone is sufficient. |
 | D-005 | SDL2 library | Required for the host build's View (CON-103). |
