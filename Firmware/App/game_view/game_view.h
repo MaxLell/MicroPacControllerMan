@@ -47,6 +47,24 @@
 #define GAME_VIEW_ORIGIN_X         ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
 #define GAME_VIEW_ORIGIN_Y         (24)
 
+/*! \brief One cell of wall drawn *outside* the maze, all the way round it.
+ *
+ * The maze's outer wall is one cell thick, and one cell cannot carry the same line as the
+ * rest of the maze: every wall inside is two cells thick and draws a 6-pixel stroke set 5
+ * pixels in from its edge, which needs 16 pixels to sit in. Squeezed into 8 the stroke has to
+ * move, and then the corridor beside it is narrower than every other corridor, its pellets sit
+ * off the middle, and the joins where a wall meets it do not line up
+ * ([DEC-033](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)).
+ *
+ * So the outer wall is given its second cell in the panel's own margin — 8 px either side of a
+ * 224 px maze in a 240 px panel, and the row above. It is then an ordinary two-cell wall and
+ * needs no rules, no tiles and no exceptions of its own. */
+#define GAME_VIEW_MAZE_BORDER      (1)
+
+/*! \brief The drawn field, which is the maze plus that border. */
+#define GAME_VIEW_FIELD_WIDTH      (PLAYFIELD_WIDTH + (2 * GAME_VIEW_MAZE_BORDER))
+#define GAME_VIEW_FIELD_HEIGHT     (PLAYFIELD_HEIGHT + (2 * GAME_VIEW_MAZE_BORDER))
+
 /*! \brief The HUD, in the rows the maze leaves free above and below it (FR-022).
  *
  * Three rows above and six below, and the arcade's own arrangement in them: a label on the
@@ -60,7 +78,8 @@
  */
 #define GAME_VIEW_HUD_LABEL_ROW_Y  (0)
 #define GAME_VIEW_HUD_VALUE_ROW_Y  (GAME_VIEW_TILE_SIZE)
-#define GAME_VIEW_HUD_LIVES_Y      (GAME_VIEW_ORIGIN_Y + (PLAYFIELD_HEIGHT * GAME_VIEW_TILE_SIZE))
+/* One cell lower than the maze ends, because the border is drawn there now. */
+#define GAME_VIEW_HUD_LIVES_Y      (GAME_VIEW_ORIGIN_Y + ((PLAYFIELD_HEIGHT + GAME_VIEW_MAZE_BORDER) * GAME_VIEW_TILE_SIZE))
 
 #define GAME_VIEW_HUD_SCORE_DIGITS (7U)
 #define GAME_VIEW_HUD_LEVEL_DIGITS (2U)
@@ -115,7 +134,8 @@ typedef struct
      *   are — a `sprite_set_id_e`, or \ref GAME_VIEW_NO_WALL_TILE for a cell that is not
      *   wall art. 868 bytes, held rather than recomputed because it is read for every cell
      *   of every field handover and it cannot change until the next maze. */
-    uint8_t maze_tiles[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH];
+    /* Indexed with \ref GAME_VIEW_MAZE_BORDER added, so maze cell (0,0) is `[1][1]`. */
+    uint8_t maze_tiles[GAME_VIEW_FIELD_HEIGHT][GAME_VIEW_FIELD_WIDTH];
     bool has_maze;
 } game_view_t;
 
@@ -186,6 +206,18 @@ bool game_view_is_field_pending(const game_view_t* in_view);
  * \param[out]      out_y: top edge in pixels, must not be `NULL`
  */
 void game_view_get_cell_pixel(uint8_t in_column, uint8_t in_row, int16_t* out_x, int16_t* out_y);
+
+/*! \brief Which drawing a maze cell carries, or \ref GAME_VIEW_NO_WALL_TILE for one that is not
+ *         wall art.
+ *
+ * A `sprite_set_id_e`. The border drawn outside the maze (\ref GAME_VIEW_MAZE_BORDER) is not
+ * addressable through this — it holds no gameplay and nothing outside this module needs it.
+ *
+ * \param[in]       in_view: the view, with a maze set, must not be `NULL`
+ * \param[in]       in_column: cell column, below \ref PLAYFIELD_WIDTH
+ * \param[in]       in_row: cell row, below \ref PLAYFIELD_HEIGHT
+ */
+uint8_t game_view_get_maze_tile(const game_view_t* in_view, uint8_t in_column, uint8_t in_row);
 
 /*! \brief Whether this cell is drawn as a piece of maze wall.
  *

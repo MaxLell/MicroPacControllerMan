@@ -504,135 +504,6 @@ static const char* const g_maze_right[] = {
     "21111112",
 };
 
-/* '4' — top frame, with the centre stub hanging off to the right */
-static const char* const g_maze_top_tee_right[] = {
-    "22222222",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "22222111",
-};
-
-/* '5' — top frame, with the centre stub hanging off to the left */
-static const char* const g_maze_top_tee_left[] = {
-    "22222222",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11122222",
-};
-
-/* The bottom frame branching north — the two pieces the 1980 ROM does not contain, because
- * nothing is ever attached to the arcade maze's bottom wall. A generated maze does attach
- * things there (FR-029), so the tiles have to exist.
- *
- * They are the top tees turned upside down, row for row, and nothing else: an arcade tile
- * mirrored is still the arcade's line weight, its 2-pixel bar and its diagonal step, which
- * is why this is a fair way to fill the gap rather than new art in an old style. */
-static const char* const g_maze_bottom_tee_right[] = {
-    "22222111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "22222222",
-};
-
-static const char* const g_maze_bottom_tee_left[] = {
-    "11122222",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "11111111",
-    "22222222",
-};
-
-/* The frame either side of a tunnel mouth: the band, stopped 5 pixels short of the opening.
- *
- * The mouth is then 5 + 8 + 5 = 18 pixels of clear black, which is exactly the gap a corridor
- * leaves between two wall lines — so a portal reads as an opening in the wall rather than as a
- * notch in it (DEC-032). Ending the band flush with the cell gave 8 pixels, and 8 looked like a
- * seam. */
-static const char* const g_maze_tunnel_above[] = {
-    "21111112",
-    "21111112",
-    "21111112",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-};
-
-static const char* const g_maze_tunnel_below[] = {
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "21111112",
-    "21111112",
-    "21111112",
-};
-
-/* '6' — left frame, branching east at the bottom */
-static const char* const g_maze_left_tee_bottom[] = {
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111111",
-    "21111111",
-    "21111111",
-};
-
-/* '7' — left frame, branching east at the top */
-static const char* const g_maze_left_tee_top[] = {
-    "21111111",
-    "21111111",
-    "21111111",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-};
-
-/* '8' — right frame, branching west at the bottom */
-static const char* const g_maze_right_tee_bottom[] = {
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "11111112",
-    "11111112",
-    "11111112",
-};
-
-/* '9' — right frame, branching west at the top */
-static const char* const g_maze_right_tee_top[] = {
-    "11111112",
-    "11111112",
-    "11111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-    "21111112",
-};
-
 /* The inside of a wall three cells thick. A 6-pixel stroke on both sides of 24 pixels, set in
  * by 5, leaves 2 pixels between them — a hole nobody can see and every renderer has to draw
  * around. Solid instead (DEC-032). */
@@ -791,111 +662,13 @@ static const char* const g_maze_block_right_into_top[] = {
     "11111111",
 };
 
-/* The ghost house's own walls, at the arcade's original 2-pixel weight.
- *
- * They used to be the outer frame's tiles, shared through the aliases 'i', 'q', 'k' and 'j'.
- * The frame is 6 pixels thick now (DEC-031) and the house is not: the house is a small box in
- * the middle of the maze and a wall as thick as the panel's border would swallow it. So the
- * arcade weight lives on here, which is also where it belongs — this *is* the arcade's art. */
-static const char* const g_maze_house_left[] = {
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-    "21122222",
-};
-
-static const char* const g_maze_house_right[] = {
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-    "22222112",
-};
-
-static const char* const g_maze_house_top[] = {
-    "22222222",
-    "11111111",
-    "11111111",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-};
-
-static const char* const g_maze_house_bottom[] = {
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "11111111",
-    "11111111",
-    "22222222",
-};
-
-/* 'm' — the ghost house, its top-left corner */
-static const char* const g_maze_house_top_left[] = {
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222111",
-    "22222111",
-    "22222112",
-};
-
-/* 'n' — the ghost house, its top-right corner */
-static const char* const g_maze_house_top_right[] = {
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "11122222",
-    "11122222",
-    "21122222",
-};
-
-/* 'o' — the ghost house, its bottom-left corner */
-static const char* const g_maze_house_bottom_left[] = {
-    "22222112",
-    "22222111",
-    "22222111",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-};
-
-/* 'p' — the ghost house, its bottom-right corner */
-static const char* const g_maze_house_bottom_right[] = {
-    "21122222",
-    "11122222",
-    "11122222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-};
-
 /* 's' — the ghost house roof, stopping at the gate */
 static const char* const g_maze_house_gate_left[] = {
     "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
+    "11111112",
+    "11111112",
+    "11111112",
+    "11111112",
     "11111112",
     "11111112",
     "22222222",
@@ -904,10 +677,10 @@ static const char* const g_maze_house_gate_left[] = {
 /* 't' — the ghost house roof, resuming after the gate */
 static const char* const g_maze_house_gate_right[] = {
     "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
+    "21111111",
+    "21111111",
+    "21111111",
+    "21111111",
     "21111111",
     "21111111",
     "22222222",
@@ -916,10 +689,10 @@ static const char* const g_maze_house_gate_right[] = {
 /* '-' — the gate itself; ghosts pass, and it is drawn pink */
 static const char* const g_maze_house_gate[] = {
     "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
-    "22222222",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
     "11111111",
     "11111111",
     "22222222",
@@ -1478,17 +1251,7 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_MAZE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom},
     [SPRITE_SET_MAZE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left},
     [SPRITE_SET_MAZE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right},
-    [SPRITE_SET_MAZE_TOP_TEE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_top_tee_right},
-    [SPRITE_SET_MAZE_TOP_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_top_tee_left},
-    [SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_right},
-    [SPRITE_SET_MAZE_BOTTOM_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_left},
-    [SPRITE_SET_MAZE_TUNNEL_ABOVE] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_tunnel_above},
-    [SPRITE_SET_MAZE_TUNNEL_BELOW] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_tunnel_below},
     [SPRITE_SET_MAZE_BLOCK_SOLID] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_solid},
-    [SPRITE_SET_MAZE_LEFT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_bottom},
-    [SPRITE_SET_MAZE_LEFT_TEE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_top},
-    [SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right_tee_bottom},
-    [SPRITE_SET_MAZE_RIGHT_TEE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right_tee_top},
     [SPRITE_SET_MAZE_BLOCK_TOP_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_top_left},
     [SPRITE_SET_MAZE_BLOCK_TOP_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_top_right},
     [SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_bottom_left},
@@ -1503,14 +1266,6 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
                                                  g_maze_block_bottom_into_right},
     [SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_left_into_top},
     [SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_right_into_top},
-    [SPRITE_SET_MAZE_HOUSE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_left},
-    [SPRITE_SET_MAZE_HOUSE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_right},
-    [SPRITE_SET_MAZE_HOUSE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top},
-    [SPRITE_SET_MAZE_HOUSE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_bottom},
-    [SPRITE_SET_MAZE_HOUSE_TOP_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top_left},
-    [SPRITE_SET_MAZE_HOUSE_TOP_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_top_right},
-    [SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_bottom_left},
-    [SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_bottom_right},
     [SPRITE_SET_MAZE_HOUSE_GATE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_gate_left},
     [SPRITE_SET_MAZE_HOUSE_GATE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_gate_right},
     [SPRITE_SET_MAZE_HOUSE_GATE] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_house_gate},
@@ -1572,12 +1327,6 @@ static const struct
     {'B', SPRITE_SET_MAZE_BOTTOM},
     {'L', SPRITE_SET_MAZE_LEFT},
     {'R', SPRITE_SET_MAZE_RIGHT},
-    {'4', SPRITE_SET_MAZE_TOP_TEE_RIGHT},
-    {'5', SPRITE_SET_MAZE_TOP_TEE_LEFT},
-    {'6', SPRITE_SET_MAZE_LEFT_TEE_BOTTOM},
-    {'7', SPRITE_SET_MAZE_LEFT_TEE_TOP},
-    {'8', SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM},
-    {'9', SPRITE_SET_MAZE_RIGHT_TEE_TOP},
     {'e', SPRITE_SET_MAZE_BLOCK_TOP_LEFT},
     {'f', SPRITE_SET_MAZE_BLOCK_TOP_RIGHT},
     {'g', SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT},
@@ -1590,17 +1339,9 @@ static const struct
     {'y', SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT},
     {'z', SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP},
     {'w', SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP},
-    {'m', SPRITE_SET_MAZE_HOUSE_TOP_LEFT},
-    {'n', SPRITE_SET_MAZE_HOUSE_TOP_RIGHT},
-    {'o', SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT},
-    {'p', SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT},
     {'s', SPRITE_SET_MAZE_HOUSE_GATE_LEFT},
     {'t', SPRITE_SET_MAZE_HOUSE_GATE_RIGHT},
     {'-', SPRITE_SET_MAZE_HOUSE_GATE},
-    {'i', SPRITE_SET_MAZE_HOUSE_RIGHT},
-    {'q', SPRITE_SET_MAZE_HOUSE_LEFT},
-    {'k', SPRITE_SET_MAZE_HOUSE_TOP},
-    {'j', SPRITE_SET_MAZE_HOUSE_BOTTOM},
 };
 
 /* ==========================================================================

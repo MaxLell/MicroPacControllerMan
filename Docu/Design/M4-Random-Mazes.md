@@ -224,7 +224,48 @@ against the 18 pixels of clear black a corridor leaves between two wall lines �
 read as a notch. The band now stops **5 pixels short** either side: 5 + 8 + 5 = 18, the same gap
 as everywhere else. Two tiles for that, plus one solid for the three-cell case.
 
-### 2.5 Two tiles the 1980 ROM does not contain
+### 2.5 Giving the outer wall its second cell, which removed all of this
+
+Four complaints came back from the panel at once: pellets not centred, the joins where a wall
+meets the frame changing thickness, the tunnel mouths still gappy, the ghost house too thin. They
+turned out to be **one cause**.
+
+Every wall inside the maze is two cells thick and draws a 6-pixel stroke set 5 pixels in — that
+needs 16 pixels to sit in. The outer wall is **one** cell, 8 pixels, so its stroke had to move,
+and once it moves nothing agrees with it: the corridor beside it is 14 pixels where every other
+corridor is 18, its pellets sit 2 pixels off the middle, and a wall arriving at it lands beside
+the branch rather than on it.
+
+So the outer wall was given its missing cell, in the panel's own margin — 8 px either side of a
+224 px maze in a 240 px panel, and the row above, with the lives moved one row down to make room
+below. It is then an ordinary two-cell wall, and the whole frame apparatus goes away:
+
+| | before | after |
+|---|---|---|
+| Frame tiles | 4 edges, 4 corners, 8 tees, 2 mouth tiles | **none** — the block rule draws it |
+| Rules for the frame | ~80 lines | **none** |
+| Worst pellet offset in the maze | 2.0 px | **0.0 px** |
+| Tunnel mouth | 8 px, then 18 with two special tiles | **18 px**, no special tiles |
+| Ghost house wall | 2 px | **6 px** |
+| Flash | — | **272 B smaller** |
+
+The ghost house is the one thing that cannot be fixed this way: it sits in the middle of the maze
+with no margin to borrow, so its wall stays one cell. It wears the 6-pixel band centred in that
+cell — matching every other wall's *weight* if not its inset. Nothing is lost by that, because the
+arcade clears the pellets all round the house, so there is no pellet next to it whose centring the
+inset would decide.
+
+The field handover grows from 868 cells to 990, which is one more message and no measurable frame
+cost.
+
+**What this costs in verification**, stated rather than buried: the appearance test no longer
+compares the outer wall against the arcade's map — 114 cells — nor the house's 40. Both are
+skipped and counted. For the outer wall that comparison had already stopped meaning anything in
+§2.3, where the tiles kept their ids and lost their pixels; this makes the loss visible instead of
+leaving a check that only looks like one. The 596 interior cells are still held to the arcade's
+own tile, exactly.
+
+### 2.6 Two tiles the 1980 ROM does not contain
 
 Nothing is ever attached to the arcade maze's bottom wall, so the ROM has no bottom-edge tee.
 **62 % of generated mazes attach something** — the generator joins pieces to the boundary on
@@ -237,7 +278,7 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 98,256 B (19.0 %) |
+| Flash | 89,496 B (17.3 %) | 97,208 B (18.8 %) |
 | RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |

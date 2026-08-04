@@ -754,7 +754,9 @@ void test_a_new_level_hands_over_every_cell(void)
         tile_count += prv_count_of_kind(&list, DISPLAY_ITEM_BACKGROUND);
     }
 
-    TEST_ASSERT_EQUAL_UINT16(PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT, tile_count);
+    /* The maze **and the border drawn round it** — the outer wall's second cell, which is what
+     * lets it carry the same stroke as every other wall (DEC-033). */
+    TEST_ASSERT_EQUAL_UINT16(GAME_VIEW_FIELD_WIDTH * GAME_VIEW_FIELD_HEIGHT, tile_count);
 }
 
 void test_an_ordinary_frame_carries_no_field_at_all(void)
@@ -907,16 +909,46 @@ static const char* const g_arcade_appearance[PLAYFIELD_HEIGHT] = {
  * `maze_gen` builds a one-cell frame with blocks inside it — so the rule is right for every
  * maze that will actually be played, and wrong for 64 cells of the fixture. Excluded
  * deliberately, and counted, so the exclusion cannot quietly grow. */
+/* The maze's outer wall, which the derivation no longer draws the arcade's way at all: it is a
+ * two-cell wall now, its second cell in the panel's margin, carrying the same 6-pixel stroke as
+ * every other wall ([DEC-033](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The
+ * arcade's frame is one cell and a 2-pixel line, so there is nothing here to compare — and the
+ * comparison this replaced was hollow anyway: it matched tile *ids* whose art had already been
+ * replaced. Counted, so the ring cannot quietly grow. */
+#define OUTER_WALL_EXPECTED_CELLS (114U)
+
+/* The ghost house, whose picture is stamped rather than derived and now wears the same 6-pixel
+ * wall as the rest of the maze instead of the arcade's 2 ([DEC-033]). It used to agree with the
+ * arcade here by accident — the stamp named the arcade's own tiles — which made this test look
+ * like it was checking the house when it never was. Skipped and counted, honestly. */
+#define HOUSE_FIRST_COLUMN        (10U)
+#define HOUSE_LAST_COLUMN         (17U)
+#define HOUSE_FIRST_ROW           (12U)
+#define HOUSE_LAST_ROW            (16U)
+#define HOUSE_EXPECTED_CELLS      (40U)
+
+static bool prv_is_ghost_house(uint8_t in_column, uint8_t in_row)
+{
+    return (in_column >= HOUSE_FIRST_COLUMN) && (in_column <= HOUSE_LAST_COLUMN) && (in_row >= HOUSE_FIRST_ROW)
+           && (in_row <= HOUSE_LAST_ROW);
+}
+
 #define MASS_FIRST_ROW             (9U)
 #define MASS_LAST_ROW              (19U)
 #define MASS_LEFT_COLUMNS          (6U)
-#define MASS_EXPECTED_CELLS        (100U)
+#define MASS_EXPECTED_CELLS        (80U)
 
 /* How many cells of the arcade maze carry the *second* ring — the inner half of the 6-pixel
  * stroke, which the arcade draws as nothing because its own stroke is 3 pixels wide
  * ([DEC-032](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)). Counted so that a change
  * to the rule cannot quietly start or stop drawing inside walls. */
 #define SECOND_RING_EXPECTED_CELLS (10U)
+
+static bool prv_is_outer_wall(uint8_t in_column, uint8_t in_row)
+{
+    return (in_column == 0U) || (in_column == (PLAYFIELD_WIDTH - 1U)) || (in_row == 0U)
+           || (in_row == (PLAYFIELD_HEIGHT - 1U));
+}
 
 static bool prv_is_in_a_side_mass(uint8_t in_column, uint8_t in_row)
 {
@@ -932,6 +964,8 @@ void test_the_derived_appearance_is_the_arcade_s_own(void)
 {
     uint16_t excluded = 0U;
     uint16_t second_ring = 0U;
+    uint16_t outer_wall = 0U;
+    uint16_t house = 0U;
 
     for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
     {
@@ -939,8 +973,22 @@ void test_the_derived_appearance_is_the_arcade_s_own(void)
         {
             sprite_set_id_e expected;
             const bool is_wall_art = sprite_set_get_maze_tile(g_arcade_appearance[row][column], &expected);
-            const uint8_t derived = g_view.maze_tiles[row][column];
+            const uint8_t derived = game_view_get_maze_tile(&g_view, column, row);
             char message[96];
+
+            if (prv_is_outer_wall(column, row))
+            {
+                ++outer_wall;
+
+                continue;
+            }
+
+            if (prv_is_ghost_house(column, row))
+            {
+                ++house;
+
+                continue;
+            }
 
             if (prv_is_in_a_side_mass(column, row))
             {
@@ -986,6 +1034,8 @@ void test_the_derived_appearance_is_the_arcade_s_own(void)
     /* And this one notices the second ring growing or vanishing. It is ink the arcade does not
      * have, so it is counted rather than asserted away. */
     TEST_ASSERT_EQUAL_UINT16(SECOND_RING_EXPECTED_CELLS, second_ring);
+    TEST_ASSERT_EQUAL_UINT16(OUTER_WALL_EXPECTED_CELLS, outer_wall);
+    TEST_ASSERT_EQUAL_UINT16(HOUSE_EXPECTED_CELLS, house);
 }
 
 void test_a_generated_maze_is_drawn_with_real_tiles(void)
@@ -1007,7 +1057,7 @@ void test_a_generated_maze_is_drawn_with_real_tiles(void)
         {
             const cell_t cell = {(int16_t)column, (int16_t)row};
             const bool is_wall = map.rows[row][column] == PLAYFIELD_MAP_WALL;
-            const uint8_t derived = g_view.maze_tiles[row][column];
+            const uint8_t derived = game_view_get_maze_tile(&g_view, column, row);
             bool touches_corridor = false;
             char message[80];
 

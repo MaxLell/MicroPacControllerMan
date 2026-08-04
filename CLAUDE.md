@@ -130,8 +130,11 @@ silently working around a wart.
   whatever its thickness** (DEC-032), drawn across two cell rings — the same rule one cell further
   in, turned half a turn, so no new art was needed; a wall exactly three cells thick has no room
   for a hole and is drawn solid, which is most generated boxes. A **tunnel mouth is 18 px**, the
-  same gap a corridor leaves between two wall lines. RAM 68.0 %, flash 19.0 %; frame cost
-  unchanged at 8 ms of 16.
+  same gap a corridor leaves between two wall lines. **The outer wall has a second cell in the
+  panel's margin** (DEC-033) and is therefore an ordinary two-cell wall: the whole frame tile
+  family and its rules are gone, pellets are centred to 0.0 px everywhere, and flash went *down*.
+  The ghost house has no margin to borrow, so it keeps a one-cell wall with the 6 px band centred
+  in it. RAM 68.0 %, flash 18.8 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)

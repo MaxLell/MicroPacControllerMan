@@ -130,23 +130,9 @@ typedef enum
     SPRITE_SET_MAZE_BOTTOM,
     SPRITE_SET_MAZE_LEFT,
     SPRITE_SET_MAZE_RIGHT,
-    SPRITE_SET_MAZE_TOP_TEE_RIGHT,
-    SPRITE_SET_MAZE_TOP_TEE_LEFT,
-    /* Not in the 1980 ROM: the arcade never attached anything to its bottom wall. The
-     * top tees turned upside down, for the generated mazes that do (FR-029). */
-    SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT,
-    SPRITE_SET_MAZE_BOTTOM_TEE_LEFT,
-    /* The frame where a tunnel breaks it: the band stops 5 pixels short of the mouth, so the
-     * opening is as wide as a corridor's own gap rather than one cell (DEC-032). */
-    SPRITE_SET_MAZE_TUNNEL_ABOVE,
-    SPRITE_SET_MAZE_TUNNEL_BELOW,
     /* Solid: the inside of a wall three cells thick, where a 6-pixel stroke either side
      * leaves a 2-pixel hole not worth drawing (DEC-032). */
     SPRITE_SET_MAZE_BLOCK_SOLID,
-    SPRITE_SET_MAZE_LEFT_TEE_BOTTOM,
-    SPRITE_SET_MAZE_LEFT_TEE_TOP,
-    SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM,
-    SPRITE_SET_MAZE_RIGHT_TEE_TOP,
     SPRITE_SET_MAZE_BLOCK_TOP_LEFT,
     SPRITE_SET_MAZE_BLOCK_TOP_RIGHT,
     SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT,
@@ -159,15 +145,6 @@ typedef enum
     SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT,
     SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP,
     SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP,
-    /* The ghost house keeps the arcade's 2-pixel wall; the outer frame is 6 (DEC-031). */
-    SPRITE_SET_MAZE_HOUSE_LEFT,
-    SPRITE_SET_MAZE_HOUSE_RIGHT,
-    SPRITE_SET_MAZE_HOUSE_TOP,
-    SPRITE_SET_MAZE_HOUSE_BOTTOM,
-    SPRITE_SET_MAZE_HOUSE_TOP_LEFT,
-    SPRITE_SET_MAZE_HOUSE_TOP_RIGHT,
-    SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT,
-    SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT,
     SPRITE_SET_MAZE_HOUSE_GATE_LEFT,
     SPRITE_SET_MAZE_HOUSE_GATE_RIGHT,
     SPRITE_SET_MAZE_HOUSE_GATE,
