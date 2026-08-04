@@ -347,8 +347,8 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 96,264 B (18.7 %) |
-| RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
+| Flash | 89,496 B (17.3 %) | 96,320 B (18.7 %) |
+| RAM | 176,428 B (67.3 %) | 178,248 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |
 
