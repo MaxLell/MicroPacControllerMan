@@ -144,13 +144,7 @@ static int16_t prv_get_stroke_inset(int16_t in_thickness)
     return centred;
 }
 
-/* Whether a pixel is on the stroke, given how far it is from the wall's nearest edge.
- *
- * The *nearest* edge, over all four directions — not each axis on its own. Taking the axes
- * separately and accepting either was the first attempt and it is wrong: at the end of a wall
- * the cap then reaches the wall's full depth instead of the stroke's, and every wall end grows a
- * pair of horns. One distance, one test, and a corner is simply where two edges are equally
- * near. */
+/* Whether a pixel is on the stroke, given how far it is from the wall's edge. */
 static bool prv_is_on_stroke(int16_t in_distance, int16_t in_inset)
 {
     return (in_distance >= in_inset) && (in_distance < (in_inset + WALL_STROKE_WIDTH));
@@ -159,6 +153,58 @@ static bool prv_is_on_stroke(int16_t in_distance, int16_t in_inset)
 static int16_t prv_get_smaller(int16_t in_first, int16_t in_second)
 {
     return (in_first < in_second) ? in_first : in_second;
+}
+
+static int16_t prv_get_larger(int16_t in_first, int16_t in_second)
+{
+    return (in_first > in_second) ? in_first : in_second;
+}
+
+/* How far a pixel is from the nearest pixel that is not wall.
+ *
+ * **Measured to the nearest edge in any direction, corners included** — not as the smallest of
+ * the four axis distances, which was the first attempt and left a gap at every junction. Where a
+ * branch meets a wall the nearest edge is the inside corner of the join, which is diagonal: to an
+ * axis it looks eleven pixels away and it is five, so the branch's stroke stopped short of the
+ * one it was meant to run into. A T with a gap in its neck, and the same at every box against the
+ * outer wall.
+ *
+ * Chebyshev distance, so a stroke turns a corner squarely rather than rounding it, and a straight
+ * edge gives exactly the same answer as before. Only cells within two of this one are looked at:
+ * the stroke reaches ten pixels in at the most, and two cells is sixteen. */
+static int16_t prv_get_distance_to_edge(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y,
+                                        int16_t in_pixel_x, int16_t in_pixel_y)
+{
+    const int16_t reach = 2;
+    int16_t nearest = (int16_t)(WALL_STROKE_INSET + WALL_STROKE_WIDTH + 1);
+
+    for (int16_t offset_y = -reach; offset_y <= reach; ++offset_y)
+    {
+        for (int16_t offset_x = -reach; offset_x <= reach; ++offset_x)
+        {
+            const int16_t left = (int16_t)(offset_x * GAME_VIEW_TILE_SIZE);
+            const int16_t top = (int16_t)(offset_y * GAME_VIEW_TILE_SIZE);
+            int16_t distance_x;
+            int16_t distance_y;
+
+            if (prv_is_wall(in_map, (int16_t)(in_x + offset_x), (int16_t)(in_y + offset_y)))
+            {
+                continue;
+            }
+
+            distance_x = prv_get_larger(0, prv_get_larger((int16_t)(left - in_pixel_x),
+                                                          (int16_t)(in_pixel_x - (left + GAME_VIEW_TILE_SIZE - 1))));
+            distance_y = prv_get_larger(0, prv_get_larger((int16_t)(top - in_pixel_y),
+                                                          (int16_t)(in_pixel_y - (top + GAME_VIEW_TILE_SIZE - 1))));
+
+            nearest = prv_get_smaller(nearest, prv_get_larger(distance_x, distance_y));
+        }
+    }
+
+    /* Less one, so that 0 means "the outermost pixel of the wall" and the inset above counts the
+     * pixels of wall left outside the stroke. Without it every distance is one too many and the
+     * stroke sits a pixel further out than asked, which narrows every corridor by two. */
+    return (nearest > 0) ? (int16_t)(nearest - 1) : 0;
 }
 
 /* The pixels of one wall cell.
@@ -175,8 +221,8 @@ static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_
     const int16_t right = (int16_t)(GAME_VIEW_TILE_SIZE * prv_get_wall_run(in_map, in_x, in_y, 1, 0));
 
     /* How deep the wall is here on each axis, and therefore how far in the stroke may sit. The
-     * smaller of the two governs: a wall that is thin one way cannot hold a stroke set further
-     * in than it is deep, and the ghost house — one cell — is exactly that case. */
+     * smaller of the two governs: a wall that is thin one way cannot hold a stroke set further in
+     * than it is deep. */
     const int16_t inset = prv_is_ghost_house(in_x, in_y)
                               ? prv_get_stroke_inset(GAME_VIEW_TILE_SIZE)
                               : prv_get_smaller(prv_get_stroke_inset((int16_t)(left + right + GAME_VIEW_TILE_SIZE)),
@@ -184,16 +230,11 @@ static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_
 
     for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
     {
-        const int16_t nearest_vertical =
-            prv_get_smaller((int16_t)(above + row), (int16_t)(below + (GAME_VIEW_TILE_SIZE - 1 - row)));
         uint8_t bits = 0U;
 
         for (int16_t column = 0; column < GAME_VIEW_TILE_SIZE; ++column)
         {
-            const int16_t nearest_horizontal =
-                prv_get_smaller((int16_t)(left + column), (int16_t)(right + (GAME_VIEW_TILE_SIZE - 1 - column)));
-
-            if (prv_is_on_stroke(prv_get_smaller(nearest_vertical, nearest_horizontal), inset))
+            if (prv_is_on_stroke(prv_get_distance_to_edge(in_map, in_x, in_y, column, row), inset))
             {
                 bits |= (uint8_t)(0x80U >> column);
             }
@@ -295,7 +336,14 @@ static void prv_describe_cell(const game_view_t* const in_view, int16_t in_colum
 {
     const bool is_in_maze =
         (in_column >= 0) && (in_column < PLAYFIELD_WIDTH) && (in_row >= 0) && (in_row < PLAYFIELD_HEIGHT);
-    const char cell = is_in_maze ? in_view->maze.rows[in_row][in_column] : PLAYFIELD_MAP_WALL;
+
+    /* Out in the border, `prv_is_wall` decides — it mirrors the maze's edge cell, so the border is
+     * wall beside a wall and **open beside a tunnel mouth**. Treating every border cell as wall
+     * was what drew a wall straight across the mouth, and a portal Pacman cannot walk through is
+     * not a portal. */
+    const char cell = is_in_maze                                       ? in_view->maze.rows[in_row][in_column]
+                      : prv_is_wall(&in_view->maze, in_column, in_row) ? PLAYFIELD_MAP_WALL
+                                                                       : PLAYFIELD_MAP_OPEN;
 
     if (cell == PLAYFIELD_MAP_WALL)
     {

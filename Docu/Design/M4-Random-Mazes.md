@@ -289,6 +289,14 @@ corners, junctions, wall ends, the mouths where a tunnel breaks the wall. The pi
 the display list — `DISPLAY_ITEM_WALL` carries an 8-byte bitmap where a background item carries a
 drawing's name — so Render stays as ignorant of the maze as it always was.
 
+The distance is measured to the nearest edge **in any direction, corners included** — Chebyshev,
+so a stroke turns a corner squarely rather than rounding it. That was not the first attempt: the
+first took the smallest of the four axis distances, which is the same answer along a straight edge
+and the wrong one at a junction. Where a branch meets a wall the nearest edge is the *inside
+corner* of the join, which is diagonal; to an axis it looks eleven pixels away when it is five, so
+the branch's stroke stopped short of the one it was meant to run into. A T with a gap in its neck,
+and the same wherever a box met the outer wall. One correction, and both closed.
+
 Two known departures, both deliberate:
 
 - The **ghost house is told its depth** instead of measured. Depth is found by running along an
@@ -309,6 +317,11 @@ actually going wrong. Two unit tests rebuild the picture from the display list a
 
 Those are the two faults the owner reported, and they are now caught by `ceedling` rather than by
 looking at the panel.
+
+One more fault was reported and it was not geometry at all: a wall was drawn straight across the
+tunnel mouths. The border outside the maze mirrors the maze's edge cell — wall beside wall, open
+beside a mouth — and the *geometry* used that rule while the code that decides what a cell **is**
+still treated every border cell as wall. A portal Pacman cannot walk through is not a portal.
 
 ### 2.7 Two tiles the 1980 ROM does not contain
 
