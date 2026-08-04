@@ -155,11 +155,14 @@ static uint8_t prv_count_of_kind(const msg_display_list_t* in_list, display_item
  * is *derived* from the walls now (FR-029), and the arcade layout is the one case where the
  * answer is written down independently — in the map at the bottom of this file, transcribed
  * from the 1980 game — so it is what the derivation is judged against. */
+static playfield_t g_arcade_rules;
+
 static void prv_set_arcade_maze(void)
 {
     playfield_map_t map;
 
     playfield_get_arcade_map(&map);
+    playfield_load_from_map(&g_arcade_rules, &map);
     game_view_set_maze(&g_view, &map);
 }
 
@@ -904,10 +907,16 @@ static const char* const g_arcade_appearance[PLAYFIELD_HEIGHT] = {
  * `maze_gen` builds a one-cell frame with blocks inside it — so the rule is right for every
  * maze that will actually be played, and wrong for 64 cells of the fixture. Excluded
  * deliberately, and counted, so the exclusion cannot quietly grow. */
-#define MASS_FIRST_ROW      (9U)
-#define MASS_LAST_ROW       (19U)
-#define MASS_LEFT_COLUMNS   (6U)
-#define MASS_EXPECTED_CELLS (64U)
+#define MASS_FIRST_ROW             (9U)
+#define MASS_LAST_ROW              (19U)
+#define MASS_LEFT_COLUMNS          (6U)
+#define MASS_EXPECTED_CELLS        (100U)
+
+/* How many cells of the arcade maze carry the *second* ring — the inner half of the 6-pixel
+ * stroke, which the arcade draws as nothing because its own stroke is 3 pixels wide
+ * ([DEC-032](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)). Counted so that a change
+ * to the rule cannot quietly start or stop drawing inside walls. */
+#define SECOND_RING_EXPECTED_CELLS (10U)
 
 static bool prv_is_in_a_side_mass(uint8_t in_column, uint8_t in_row)
 {
@@ -922,6 +931,7 @@ static bool prv_is_in_a_side_mass(uint8_t in_column, uint8_t in_row)
 void test_the_derived_appearance_is_the_arcade_s_own(void)
 {
     uint16_t excluded = 0U;
+    uint16_t second_ring = 0U;
 
     for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
     {
@@ -951,9 +961,20 @@ void test_the_derived_appearance_is_the_arcade_s_own(void)
             {
                 TEST_ASSERT_EQUAL_UINT8_MESSAGE((uint8_t)expected, derived, message);
             }
+            else if (derived != GAME_VIEW_NO_WALL_TILE)
+            {
+                /* The second ring: the inner half of a 6-pixel stroke, which the arcade has no
+                 * equivalent of because its own stroke is 3 (DEC-032). Only ever *inside* a
+                 * wall — never on a cell an actor can stand on, which is the part that would
+                 * matter. */
+                const cell_t cell = {(int16_t)column, (int16_t)row};
+
+                TEST_ASSERT_FALSE_MESSAGE(playfield_is_walkable(&g_arcade_rules, cell), message);
+                ++second_ring;
+            }
             else
             {
-                TEST_ASSERT_EQUAL_UINT8_MESSAGE(GAME_VIEW_NO_WALL_TILE, derived, message);
+                /* Both agree there is nothing here. */
             }
         }
     }
@@ -961,6 +982,10 @@ void test_the_derived_appearance_is_the_arcade_s_own(void)
     /* If a change makes the derivation agree with the masses too, or disagree more widely,
      * this is the line that notices. */
     TEST_ASSERT_EQUAL_UINT16(MASS_EXPECTED_CELLS, excluded);
+
+    /* And this one notices the second ring growing or vanishing. It is ink the arcade does not
+     * have, so it is counted rather than asserted away. */
+    TEST_ASSERT_EQUAL_UINT16(SECOND_RING_EXPECTED_CELLS, second_ring);
 }
 
 void test_a_generated_maze_is_drawn_with_real_tiles(void)

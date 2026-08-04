@@ -190,7 +190,41 @@ that leaves a visible step, so the band now simply **stops square** at the cell 
 corridor begins. A 2-pixel line ending squarely looked like a stray line, which is what started
 §2.2; a 6-pixel band ending squarely looks like a wall ending.
 
-### 2.4 Two tiles the 1980 ROM does not contain
+### 2.4 The stroke, and the width of a portal
+
+Two more things the owner asked for from the panel, both **measured before being changed**:
+
+| | before | after |
+|---|---|---|
+| Frame | 6 px | 6 px |
+| Wall two cells thick | 6 px (two 3-px tiles meeting) | unchanged |
+| Wall three or more cells thick | **3 px** | **6 px** |
+| Tunnel mouth | **8 px** | **18 px** |
+
+The stroke first. A two-cell wall looked right because its two 3-pixel tiles meet into 6; a
+thicker wall showed each side's 3 pixels alone. The fix is not a thicker tile but a **second
+ring**: run the very same rule one cell further in — treating the outer ring as if it were
+corridor — and turn the answer through half a turn, so the inner tile's line completes the stroke
+the outer one started. Every one of the twelve block tiles turns out to be the half-turn of
+another (checked by flipping the bitmaps and matching, not assumed), so **this needed no new
+art**.
+
+The geometry is now uniform: a 6-pixel stroke set 5 pixels inside the wall's boundary, whatever
+the wall's thickness. Which is also why the corridors did not narrow — the 5-pixel setback is what
+sets the gap between two wall lines, and it did not move.
+
+**It has a visible consequence and it should be said plainly:** 24 pixels of wall, less 5 either
+side, leaves 14 for two 6-pixel strokes — a 2-pixel hole. So a wall exactly three cells thick is
+drawn **solid**, and since the generator upscales by three, most generated boxes are solid. Only
+walls four cells or thicker still read as outlines. On the arcade maze this changes 10 cells, all
+of them inside walls where nothing can stand.
+
+Then the mouth. The frame band used to stop flush with the cell boundary, giving an 8-pixel gap
+against the 18 pixels of clear black a corridor leaves between two wall lines — which is why it
+read as a notch. The band now stops **5 pixels short** either side: 5 + 8 + 5 = 18, the same gap
+as everywhere else. Two tiles for that, plus one solid for the three-cell case.
+
+### 2.5 Two tiles the 1980 ROM does not contain
 
 Nothing is ever attached to the arcade maze's bottom wall, so the ROM has no bottom-edge tee.
 **62 % of generated mazes attach something** — the generator joins pieces to the boundary on
@@ -203,7 +237,7 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 97,616 B (18.9 %) |
+| Flash | 89,496 B (17.3 %) | 98,256 B (19.0 %) |
 | RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |

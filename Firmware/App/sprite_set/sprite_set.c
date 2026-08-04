@@ -557,6 +557,34 @@ static const char* const g_maze_bottom_tee_left[] = {
     "22222222",
 };
 
+/* The frame either side of a tunnel mouth: the band, stopped 5 pixels short of the opening.
+ *
+ * The mouth is then 5 + 8 + 5 = 18 pixels of clear black, which is exactly the gap a corridor
+ * leaves between two wall lines — so a portal reads as an opening in the wall rather than as a
+ * notch in it (DEC-032). Ending the band flush with the cell gave 8 pixels, and 8 looked like a
+ * seam. */
+static const char* const g_maze_tunnel_above[] = {
+    "21111112",
+    "21111112",
+    "21111112",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+};
+
+static const char* const g_maze_tunnel_below[] = {
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "22222222",
+    "21111112",
+    "21111112",
+    "21111112",
+};
+
 /* '6' — left frame, branching east at the bottom */
 static const char* const g_maze_left_tee_bottom[] = {
     "21111112",
@@ -603,6 +631,20 @@ static const char* const g_maze_right_tee_top[] = {
     "21111112",
     "21111112",
     "21111112",
+};
+
+/* The inside of a wall three cells thick. A 6-pixel stroke on both sides of 24 pixels, set in
+ * by 5, leaves 2 pixels between them — a hole nobody can see and every renderer has to draw
+ * around. Solid instead (DEC-032). */
+static const char* const g_maze_block_solid[] = {
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
+    "11111111",
 };
 
 /* 'e' — a wall block, its top-left corner */
@@ -1440,6 +1482,9 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_MAZE_TOP_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_top_tee_left},
     [SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_right},
     [SPRITE_SET_MAZE_BOTTOM_TEE_LEFT] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_bottom_tee_left},
+    [SPRITE_SET_MAZE_TUNNEL_ABOVE] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_tunnel_above},
+    [SPRITE_SET_MAZE_TUNNEL_BELOW] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_tunnel_below},
+    [SPRITE_SET_MAZE_BLOCK_SOLID] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_block_solid},
     [SPRITE_SET_MAZE_LEFT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_bottom},
     [SPRITE_SET_MAZE_LEFT_TEE_TOP] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_left_tee_top},
     [SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_maze_right_tee_bottom},

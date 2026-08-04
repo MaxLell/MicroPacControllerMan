@@ -136,6 +136,13 @@ typedef enum
      * top tees turned upside down, for the generated mazes that do (FR-029). */
     SPRITE_SET_MAZE_BOTTOM_TEE_RIGHT,
     SPRITE_SET_MAZE_BOTTOM_TEE_LEFT,
+    /* The frame where a tunnel breaks it: the band stops 5 pixels short of the mouth, so the
+     * opening is as wide as a corridor's own gap rather than one cell (DEC-032). */
+    SPRITE_SET_MAZE_TUNNEL_ABOVE,
+    SPRITE_SET_MAZE_TUNNEL_BELOW,
+    /* Solid: the inside of a wall three cells thick, where a 6-pixel stroke either side
+     * leaves a 2-pixel hole not worth drawing (DEC-032). */
+    SPRITE_SET_MAZE_BLOCK_SOLID,
     SPRITE_SET_MAZE_LEFT_TEE_BOTTOM,
     SPRITE_SET_MAZE_LEFT_TEE_TOP,
     SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM,

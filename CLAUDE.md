@@ -126,8 +126,12 @@ silently working around a wart.
   mazes need one. **The outer frame is 6 px thick, not the arcade's 2** (DEC-031): the owner asked
   for it to match the weight a two-cell inner wall already renders at, knowing that at 6 px in an
   8 px cell the screen corners become solid right angles. The ghost house keeps the arcade's 2 px
-  wall and has four tiles of its own for it. RAM 68.0 %, flash 18.9 %; frame cost unchanged at
-  8 ms of 16.
+  wall and has four tiles of its own for it. **A wall's outline is a 6 px stroke set 5 px in
+  whatever its thickness** (DEC-032), drawn across two cell rings — the same rule one cell further
+  in, turned half a turn, so no new art was needed; a wall exactly three cells thick has no room
+  for a hole and is drawn solid, which is most generated boxes. A **tunnel mouth is 18 px**, the
+  same gap a corridor leaves between two wall lines. RAM 68.0 %, flash 19.0 %; frame cost
+  unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)

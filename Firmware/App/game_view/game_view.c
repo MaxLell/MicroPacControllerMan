@@ -77,7 +77,93 @@ static bool prv_is_open(const playfield_map_t* const in_map, int16_t in_x, int16
     return !prv_is_wall(in_map, in_x, in_y);
 }
 
-static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y);
+/* The eight neighbours, as offsets. The diagonals matter: a wall cell whose only open
+ * neighbour is a corner still carries a piece of outline. */
+static const int8_t g_neighbours[8][2] = {
+    {0, -1}, {1, 0}, {0, 1}, {-1, 0}, {-1, -1}, {1, -1}, {1, 1}, {-1, 1},
+};
+
+/* Whether this wall cell is on its region's edge — the outer ring of the outline. */
+static bool prv_is_edge_wall(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    if (!prv_is_wall(in_map, in_x, in_y))
+    {
+        return false;
+    }
+
+    for (uint8_t index = 0U; index < 8U; ++index)
+    {
+        if (prv_is_open(in_map, (int16_t)(in_x + g_neighbours[index][0]), (int16_t)(in_y + g_neighbours[index][1])))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Whether this cell is one step further in — the ring that carries the other half of the
+ * stroke. */
+static bool prv_is_second_ring_wall(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    if (!prv_is_wall(in_map, in_x, in_y) || prv_is_edge_wall(in_map, in_x, in_y))
+    {
+        return false;
+    }
+
+    for (uint8_t index = 0U; index < 8U; ++index)
+    {
+        if (prv_is_edge_wall(in_map, (int16_t)(in_x + g_neighbours[index][0]),
+                             (int16_t)(in_y + g_neighbours[index][1])))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* What counts as *outside* the shape being outlined.
+ *
+ * For the outer ring that is the corridor. For the second ring it is the corridor plus the
+ * outer ring itself, so running the very same rule one cell further in traces the inner edge
+ * of the stroke — which is the whole trick that makes a 6-pixel stroke out of two 3-pixel
+ * tiles without a single new drawing. */
+static bool prv_is_outside(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y, bool in_second_ring)
+{
+    if (prv_is_open(in_map, in_x, in_y))
+    {
+        return true;
+    }
+
+    return in_second_ring && prv_is_edge_wall(in_map, in_x, in_y);
+}
+
+/* The same tile turned through half a turn. The second ring's stroke faces the other way, and
+ * every one of the twelve block tiles is the half-turn of another — checked, not assumed. */
+static uint8_t prv_get_half_turn(uint8_t in_tile)
+{
+    switch (in_tile)
+    {
+        case SPRITE_SET_MAZE_BLOCK_TOP_LEFT: return SPRITE_SET_MAZE_BLOCK_BOTTOM_RIGHT;
+        case SPRITE_SET_MAZE_BLOCK_BOTTOM_RIGHT: return SPRITE_SET_MAZE_BLOCK_TOP_LEFT;
+        case SPRITE_SET_MAZE_BLOCK_TOP_RIGHT: return SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT;
+        case SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT: return SPRITE_SET_MAZE_BLOCK_TOP_RIGHT;
+        case SPRITE_SET_MAZE_BLOCK_TOP: return SPRITE_SET_MAZE_BLOCK_BOTTOM;
+        case SPRITE_SET_MAZE_BLOCK_BOTTOM: return SPRITE_SET_MAZE_BLOCK_TOP;
+        case SPRITE_SET_MAZE_BLOCK_LEFT: return SPRITE_SET_MAZE_BLOCK_RIGHT;
+        case SPRITE_SET_MAZE_BLOCK_RIGHT: return SPRITE_SET_MAZE_BLOCK_LEFT;
+        case SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_LEFT: return SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP;
+        case SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP: return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_LEFT;
+        case SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT: return SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP;
+        case SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP: return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT;
+        default: break;
+    }
+
+    return in_tile;
+}
+
+static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y, bool in_second_ring);
 
 /* The ring: the wall cells along the panel's edge, which carry the maze's boundary line.
  *
@@ -124,9 +210,14 @@ static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in
          * what the owner saw on the panel. A block end was tried next and was right until the
          * frame became six pixels thick (DEC-031), at which point a three-pixel block cap left a
          * visible step. A band that stops squarely needs no cap at all. */
-        if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)) || prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
+        if (prv_is_open(in_map, in_x, (int16_t)(in_y + 1)))
         {
-            return is_left ? SPRITE_SET_MAZE_LEFT : SPRITE_SET_MAZE_RIGHT;
+            return SPRITE_SET_MAZE_TUNNEL_ABOVE;
+        }
+
+        if (prv_is_open(in_map, in_x, (int16_t)(in_y - 1)))
+        {
+            return SPRITE_SET_MAZE_TUNNEL_BELOW;
         }
 
         if (prv_is_wall(in_map, (int16_t)(in_x + inward), in_y))
@@ -165,6 +256,27 @@ static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in
     }
 }
 
+/* The second ring's tile: the same rule one cell further in, turned through half a turn so its
+ * stroke faces back out — which completes the 6-pixel line the outer ring started.
+ *
+ * Where a wall is only three cells thick the two strokes would leave 2 pixels between them, and
+ * the cell in the middle faces *outside* on two opposite sides at once. There is no tile for
+ * that and there does not need to be: it is drawn solid. */
+static uint8_t prv_get_second_ring_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    const bool north = prv_is_outside(in_map, in_x, (int16_t)(in_y - 1), true);
+    const bool south = prv_is_outside(in_map, in_x, (int16_t)(in_y + 1), true);
+    const bool west = prv_is_outside(in_map, (int16_t)(in_x - 1), in_y, true);
+    const bool east = prv_is_outside(in_map, (int16_t)(in_x + 1), in_y, true);
+
+    if ((north && south) || (west && east))
+    {
+        return SPRITE_SET_MAZE_BLOCK_SOLID;
+    }
+
+    return prv_get_half_turn(prv_get_block_tile(in_map, in_x, in_y, true));
+}
+
 /* A wall block: the cell carries part of that block's own outline, which the arcade draws
  * inset from the block's edge — which is why a thick wall reads as a thin blue rectangle and
  * why the inside of a block is drawn as nothing at all.
@@ -172,12 +284,12 @@ static uint8_t prv_get_ring_tile(const playfield_map_t* const in_map, int16_t in
  * Four convex corners, four straight edges and four concave corners cover every rectilinear
  * shape, and the ROM has all twelve. The concave ones are found by the diagonals: a cell with
  * no open neighbour but an open corner is where the outline bends around an inside angle. */
-static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y, bool in_second_ring)
 {
-    const bool north = prv_is_open(in_map, in_x, (int16_t)(in_y - 1));
-    const bool south = prv_is_open(in_map, in_x, (int16_t)(in_y + 1));
-    const bool west = prv_is_open(in_map, (int16_t)(in_x - 1), in_y);
-    const bool east = prv_is_open(in_map, (int16_t)(in_x + 1), in_y);
+    const bool north = prv_is_outside(in_map, in_x, (int16_t)(in_y - 1), in_second_ring);
+    const bool south = prv_is_outside(in_map, in_x, (int16_t)(in_y + 1), in_second_ring);
+    const bool west = prv_is_outside(in_map, (int16_t)(in_x - 1), in_y, in_second_ring);
+    const bool east = prv_is_outside(in_map, (int16_t)(in_x + 1), in_y, in_second_ring);
 
     if (north && west)
     {
@@ -219,22 +331,22 @@ static uint8_t prv_get_block_tile(const playfield_map_t* const in_map, int16_t i
         return SPRITE_SET_MAZE_BLOCK_RIGHT;
     }
 
-    if (prv_is_open(in_map, (int16_t)(in_x - 1), (int16_t)(in_y + 1)))
+    if (prv_is_outside(in_map, (int16_t)(in_x - 1), (int16_t)(in_y + 1), in_second_ring))
     {
         return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT;
     }
 
-    if (prv_is_open(in_map, (int16_t)(in_x + 1), (int16_t)(in_y + 1)))
+    if (prv_is_outside(in_map, (int16_t)(in_x + 1), (int16_t)(in_y + 1), in_second_ring))
     {
         return SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_LEFT;
     }
 
-    if (prv_is_open(in_map, (int16_t)(in_x - 1), (int16_t)(in_y - 1)))
+    if (prv_is_outside(in_map, (int16_t)(in_x - 1), (int16_t)(in_y - 1), in_second_ring))
     {
         return SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP;
     }
 
-    if (prv_is_open(in_map, (int16_t)(in_x + 1), (int16_t)(in_y - 1)))
+    if (prv_is_outside(in_map, (int16_t)(in_x + 1), (int16_t)(in_y - 1), in_second_ring))
     {
         return SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP;
     }
@@ -264,9 +376,18 @@ static void prv_derive_maze_tiles(game_view_t* const inout_view, const playfield
             {
                 inout_view->maze_tiles[y][x] = prv_get_ring_tile(in_map, x, y);
             }
+            else if (prv_is_edge_wall(in_map, x, y))
+            {
+                inout_view->maze_tiles[y][x] = prv_get_block_tile(in_map, x, y, false);
+            }
+            else if (prv_is_second_ring_wall(in_map, x, y))
+            {
+                inout_view->maze_tiles[y][x] = prv_get_second_ring_tile(in_map, x, y);
+            }
             else
             {
-                inout_view->maze_tiles[y][x] = prv_get_block_tile(in_map, x, y);
+                /* Deep inside a wall, where the arcade draws nothing and so do we. */
+                inout_view->maze_tiles[y][x] = NO_TILE;
             }
         }
     }
