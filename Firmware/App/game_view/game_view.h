@@ -98,10 +98,6 @@
  *         `sprite_set_id_e`, so the first comparison always reports a change. */
 #define GAME_VIEW_HUD_NOT_DRAWN (0xFFU)
 
-/*! \brief Stands in `game_view_t::maze_tiles` for a cell that is not a piece of wall art —
- *         corridor, the inside of a wall block, the inside of the ghost house. */
-#define GAME_VIEW_NO_WALL_TILE  (0xFFU)
-
 typedef struct
 {
     /*!< The last state received. Held rather than consumed, because the view is asked
@@ -130,12 +126,10 @@ typedef struct
      *   time would cost more of the frame than the five actors do. */
     uint8_t drawn_hud[GAME_VIEW_HUD_ITEM_COUNT];
 
-    /*!< Which wall drawing goes in each cell, worked out once per maze from where the walls
-     *   are — a `sprite_set_id_e`, or \ref GAME_VIEW_NO_WALL_TILE for a cell that is not
-     *   wall art. 868 bytes, held rather than recomputed because it is read for every cell
-     *   of every field handover and it cannot change until the next maze. */
-    /* Indexed with \ref GAME_VIEW_MAZE_BORDER added, so maze cell (0,0) is `[1][1]`. */
-    uint8_t maze_tiles[GAME_VIEW_FIELD_HEIGHT][GAME_VIEW_FIELD_WIDTH];
+    /*!< The maze being drawn. Held rather than turned into pictures up front: a wall cell's
+     *   pixels are arithmetic on where the walls are, and the only time they are all wanted at
+     *   once is the handover after a new maze. */
+    playfield_map_t maze;
     bool has_maze;
 } game_view_t;
 
@@ -206,18 +200,6 @@ bool game_view_is_field_pending(const game_view_t* in_view);
  * \param[out]      out_y: top edge in pixels, must not be `NULL`
  */
 void game_view_get_cell_pixel(uint8_t in_column, uint8_t in_row, int16_t* out_x, int16_t* out_y);
-
-/*! \brief Which drawing a maze cell carries, or \ref GAME_VIEW_NO_WALL_TILE for one that is not
- *         wall art.
- *
- * A `sprite_set_id_e`. The border drawn outside the maze (\ref GAME_VIEW_MAZE_BORDER) is not
- * addressable through this — it holds no gameplay and nothing outside this module needs it.
- *
- * \param[in]       in_view: the view, with a maze set, must not be `NULL`
- * \param[in]       in_column: cell column, below \ref PLAYFIELD_WIDTH
- * \param[in]       in_row: cell row, below \ref PLAYFIELD_HEIGHT
- */
-uint8_t game_view_get_maze_tile(const game_view_t* in_view, uint8_t in_column, uint8_t in_row);
 
 /*! \brief Whether this cell is drawn as a piece of maze wall.
  *

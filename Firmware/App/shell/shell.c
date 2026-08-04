@@ -100,9 +100,8 @@ static void prv_add(msg_display_list_t* inout_list, sprite_set_id_e in_sprite, s
      * under. Asking Render to save-under a screen of text would spend its whole budget on
      * restoring pixels that are about to be overwritten anyway. */
     item->kind = (uint8_t)DISPLAY_ITEM_BACKGROUND;
-    item->sprite = (uint8_t)in_sprite;
+    item->drawing.sprite = (uint8_t)in_sprite;
     item->palette = (uint8_t)in_palette;
-    item->reserved = 0U;
     item->x = in_x;
     item->y = in_y;
 

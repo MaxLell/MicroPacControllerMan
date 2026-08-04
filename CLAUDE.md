@@ -134,7 +134,14 @@ silently working around a wart.
   panel's margin** (DEC-033) and is therefore an ordinary two-cell wall: the whole frame tile
   family and its rules are gone, pellets are centred to 0.0 px everywhere, and flash went *down*.
   The ghost house has no margin to borrow, so it keeps a one-cell wall with the 6 px band centred
-  in it. RAM 68.0 %, flash 18.8 %; frame cost unchanged at 8 ms of 16.
+  in it. **And then the tile alphabet went away** (DEC-034): the maze is drawn as geometry now —
+  a pixel is ink when its distance to the wall's nearest edge is in `[inset, inset + 6)`, inset
+  being half the spare depth capped at 5 — so width and setback are arithmetic rather than a
+  choice from 24 ROM tiles that only composed at one thickness. The pixels travel in the display
+  list (`DISPLAY_ITEM_WALL`). The arcade tile comparison is gone with them; what replaces it are
+  two unit tests that rebuild the picture and measure it — every pellet within 1 px of its
+  corridor's centre, every tunnel mouth exactly a corridor's gap wide.
+  RAM 68.0 %, flash 18.6 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)

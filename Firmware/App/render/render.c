@@ -101,9 +101,37 @@ static void prv_save(render_save_t* const inout_save, int16_t in_x, int16_t in_y
     }
 }
 
+/* A wall cell: the pixels come with the message, so there is nothing to look up. Set bits take
+ * the palette's line colour and clear bits its background — a wall cell is opaque, which is why
+ * it can be drawn without reading what is under it. */
+static void prv_draw_wall(const msg_display_item_t* const in_item)
+{
+    const sprite_palette_t* const palette = sprite_set_get_palette((sprite_set_palette_e)in_item->palette);
+
+    for (uint8_t row = 0U; row < MSG_WALL_CELL_SIZE; ++row)
+    {
+        const uint8_t bits = in_item->drawing.wall_rows[row];
+
+        for (uint8_t column = 0U; column < MSG_WALL_CELL_SIZE; ++column)
+        {
+            const bool is_line = (bits & (uint8_t)(0x80U >> column)) != 0U;
+
+            framebuffer_set_pixel(&g_framebuffer, (int16_t)(in_item->x + column), (int16_t)(in_item->y + row),
+                                  is_line ? palette->colors[1] : palette->colors[2]);
+        }
+    }
+}
+
 static void prv_draw_item(const msg_display_item_t* const in_item)
 {
-    sprite_draw(&g_framebuffer, sprite_set_get((sprite_set_id_e)in_item->sprite),
+    if (in_item->kind == (uint8_t)DISPLAY_ITEM_WALL)
+    {
+        prv_draw_wall(in_item);
+
+        return;
+    }
+
+    sprite_draw(&g_framebuffer, sprite_set_get((sprite_set_id_e)in_item->drawing.sprite),
                 sprite_set_get_palette((sprite_set_palette_e)in_item->palette), in_item->x, in_item->y);
 }
 
@@ -157,13 +185,19 @@ void render_draw(const msg_display_list_t* in_list)
      *    been eaten must win over the pixels that were saved while it still had one. */
     for (uint8_t index = 0U; index < in_list->count; ++index)
     {
-        if (in_list->items[index].kind == (uint8_t)DISPLAY_ITEM_BACKGROUND)
+        if (in_list->items[index].kind == (uint8_t)DISPLAY_ITEM_WALL)
+        {
+            prv_draw_item(&in_list->items[index]);
+            prv_present_clipped(in_list->items[index].x, in_list->items[index].y, (int16_t)MSG_WALL_CELL_SIZE,
+                                (int16_t)MSG_WALL_CELL_SIZE);
+        }
+        else if (in_list->items[index].kind == (uint8_t)DISPLAY_ITEM_BACKGROUND)
         {
             /* The sprite's own size, not the largest one there is. A field tile is 8 x 8
              * and sending it as 16 x 16 quadruples the bytes — invisible in a frame that
              * changes one pellet, and a third of a second of black screen on the 868 tiles
              * of a level change. */
-            const sprite_t* const sprite = sprite_set_get((sprite_set_id_e)in_list->items[index].sprite);
+            const sprite_t* const sprite = sprite_set_get((sprite_set_id_e)in_list->items[index].drawing.sprite);
 
             prv_draw_item(&in_list->items[index]);
             prv_present_clipped(in_list->items[index].x, in_list->items[index].y, (int16_t)sprite->width,
@@ -190,7 +224,7 @@ void render_draw(const msg_display_list_t* in_list)
         ASSERT(actor_index < MSG_ACTOR_COUNT);
 
         save = &g_saves[actor_index];
-        sprite = sprite_set_get((sprite_set_id_e)item->sprite);
+        sprite = sprite_set_get((sprite_set_id_e)item->drawing.sprite);
         previous_x = save->is_saved ? save->x : item->x;
         previous_y = save->is_saved ? save->y : item->y;
 

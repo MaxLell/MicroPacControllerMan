@@ -265,7 +265,52 @@ skipped and counted. For the outer wall that comparison had already stopped mean
 leaving a check that only looks like one. The 596 interior cells are still held to the arcade's
 own tile, exactly.
 
-### 2.6 Two tiles the 1980 ROM does not contain
+### 2.6 And then the tiles went away
+
+Four rounds of the above — [DEC-031](../PrePlanning/11-Decisions-and-As-Built.md) to DEC-033 —
+each fixed a visible fault by adding tiles or a special case, and each time another seam appeared
+somewhere else. The owner asked why the tiles could not simply be generic sprites placed where
+needed, which is what they already were, and then asked for shaunlebron's own approach instead:
+draw the maze as geometry. He said the original tiles were not needed here.
+
+So the whole alphabet is gone — 24 tiles, the letter map that named them, and the two lookups —
+and one rule replaces it:
+
+> A pixel of a wall cell is **ink** when its distance to the wall's nearest edge lies in
+> `[inset, inset + 6)`, where `inset` is half the wall's spare depth, capped at 5.
+
+Six is the stroke; five is the setback that leaves every corridor the same clear black. Both are
+now *arithmetic*, so they are the same everywhere by construction — which is exactly what a fixed
+alphabet could not give, because a tile's ink sits at a fixed place in its 8 pixels and therefore
+only composes at the thickness it was drawn for.
+
+Everything the alphabet had a piece for falls out of that one line: edges, outer and inner
+corners, junctions, wall ends, the mouths where a tunnel breaks the wall. The pixels travel in
+the display list — `DISPLAY_ITEM_WALL` carries an 8-byte bitmap where a background item carries a
+drawing's name — so Render stays as ignorant of the maze as it always was.
+
+Two known departures, both deliberate:
+
+- The **ghost house is told its depth** instead of measured. Depth is found by running along an
+  axis until the wall ends; the house is a ring one cell thick, and running along a ring never
+  leaves it, so its corners would measure the length of their own arms. It is fair to be told —
+  the house is furniture, at coordinates the game already depends on (§10.4).
+- A wall **exactly three cells thick** shows the 2-pixel hole the arithmetic gives it, rather than
+  being drawn solid. DEC-032's solid tile went with the rest.
+
+**What it costs is the arcade comparison**, entirely: there is no tile left to compare against the
+1980 map, and §2.1's 764-of-764 goes with the alphabet. What replaces it is aimed at what was
+actually going wrong. Two unit tests rebuild the picture from the display list and measure it:
+
+| | asserted |
+|---|---|
+| Every pellet | within **1 px** of its corridor's centre line |
+| Every tunnel mouth | exactly as wide as a corridor's own gap (**18 px**) |
+
+Those are the two faults the owner reported, and they are now caught by `ceedling` rather than by
+looking at the panel.
+
+### 2.7 Two tiles the 1980 ROM does not contain
 
 Nothing is ever attached to the arcade maze's bottom wall, so the ROM has no bottom-edge tee.
 **62 % of generated mazes attach something** — the generator joins pieces to the boundary on
@@ -278,7 +323,7 @@ rather than new art in an old style.
 
 | | Before | After |
 |---|---|---|
-| Flash | 89,496 B (17.3 %) | 97,208 B (18.8 %) |
+| Flash | 89,496 B (17.3 %) | 95,988 B (18.6 %) |
 | RAM | 176,428 B (67.3 %) | 178,216 B (68.0 %) |
 | Frame cost on the target | 8 ms of 16 | 8 ms of 16 |
 | Achieved frame rate | 59 fps | 59 fps |
