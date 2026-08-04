@@ -27,7 +27,7 @@ Design rules:
 - **Fixed-size messages, copied by value — with no exceptions.** A message is a topic ID plus a small fixed-size payload, moved by value so no module ever holds a pointer into another's memory (NFR-103, FR-103). The render frame used to be the one exception; it is not any more, because the game state turned out to be 246 bytes and the large thing — the image — never travels (§3.3).
 - **One input queue per broker.** Publishers hand a message to the broker via its API; the broker owns the input queue.
 - **One output queue per subscriber.** A module registers its output queue for the topics it cares about; the broker copies each message into every subscribed module's output queue.
-- **The owning loop moves the messages (FR-108).** Fan-out happens when the owner asks for it — `game` drains its broker at the end of a tick, so an event published while the rules are running reaches its subscriber after that tick and never mid-way through it. There is no thread of the broker's own.
+- **The owning loop delivers the messages (FR-108).** Delivery happens when the owner asks for it — `game` drains its broker at the end of a tick, so an event published while the rules are running reaches its subscriber after that tick and never mid-way through it. There is no thread of the broker's own.
 - **Backpressure (NFR-105).** A publisher can ask the broker how much room is left in the input queue; a publish onto a full queue returns a status instead of blocking the publisher.
 - **Slow-consumer isolation.** If a subscriber's output queue is full, that message is dropped for that subscriber (and counted) rather than stalling the broker or other subscribers.
 - **Host parity.** The same code runs on the host, so the game and any bus user build and run unmodified on both platforms (FR-104).
@@ -45,11 +45,11 @@ void                msg_broker_start     (msg_broker_t *self);                  
 void                msg_broker_subscribe (msg_broker_t *self, msg_subscriber_t *sub, msg_id_e topic);
 msg_broker_status_e msg_broker_publish   (msg_broker_t *self, const msg_t *msg);      /* into input queue */
 bool                msg_broker_has_input_space(const msg_broker_t *self, uint16_t headroom); /* NFR-105 */
-uint32_t            msg_broker_process_all(msg_broker_t *self);                       /* fan out (FR-108) */
+uint32_t            msg_broker_process_all(msg_broker_t *self);                       /* deliver (FR-108) */
 msg_broker_status_e msg_subscriber_receive(msg_subscriber_t *sub, msg_t *out_msg);    /* a module reads its own queue */
 ```
 
-`msg_broker_process_all()` is the call the original design gave to a broker task. Its caller is the loop that owns the instance, which is what makes the fan-out point explicit rather than a scheduling accident.
+`msg_broker_process_all()` is the one call that delivers: it empties the input queue, copying each message to its subscribers. Its caller is the loop that owns the instance, which is what makes the moment of delivery explicit rather than a scheduling accident.
 
 ### 3.2.2 Firmware Structure (layered calls, message types by value)
 

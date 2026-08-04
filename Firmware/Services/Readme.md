@@ -44,7 +44,7 @@ reference implementation it was adapted from
 **Threading:** there is none, on either platform (§3.4, DEC-027). `msg_broker_process()`
 and `active_object_process_all()` are called by whoever owns the instance, at a point that
 owner chooses — the game drains its broker at the end of a tick, so an event published
-mid-tick is delivered after it rather than inside it. That the fan-out point is *named*
+mid-tick is delivered after it rather than inside it. That the moment of delivery is *named*
 rather than left to a scheduler is the property to keep if this ever grows a second loop.
 
 Candidates as the project grows:

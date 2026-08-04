@@ -82,7 +82,7 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | FR-103 | Value-Only Module Interfaces | Firmware modules shall not share mutable state. Everything that crosses a module boundary shall be a fixed-size value copied by value — a declared message type — and no such value shall carry a pointer into another module's memory. |
 | FR-104 | Host Buildability | The Model and Control components shall be buildable and executable unmodified on the host computer, using SDL to implement the View. |
 | FR-105 | Cooperative Execution | The firmware shall run as a single cooperative loop with no preemptive scheduler. Periodic work shall be driven either from the 1 kHz system tick (input sampling and console reception) or from a software timer serviced by that loop (the frame), and no handler shall block the loop for longer than one frame. |
-| FR-108 | Message-Broker Fan-Out | The message broker shall move each published message from its input queue into the output queue of every module subscribed to that message's topic. Fan-out shall be driven synchronously by the loop that owns the broker, at a point that loop chooses, rather than by a thread of the broker's own. |
+| FR-108 | Message Delivery to Subscribers | The message broker shall take each published message from its input queue and copy it into the output queue of every module subscribed to that message's topic — one copy per subscriber, so no two modules read the same stored message. Delivery shall be performed by the loop that owns the broker, when that loop asks for it, and not by a thread of the broker's own. |
 | FR-110 | Pacman Internal Message Bus | The Pacman application shall carry its game events — pellet eaten, ghost eaten, frightened started — between its own modules on an internal message-bus instance that it owns, so that a module reacting to an event is not called by the module that caused it. |
 
 ### 2.1.9 On-Target Test (OTT) Framework
@@ -150,4 +150,3 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | CON-101 | Language | The firmware and game logic shall be written in C. |
 | CON-102 | Test Framework | Unit tests shall run under Ceedling/Unity. |
 | CON-103 | Host View Library | The host build's View shall use SDL. |
-| CON-104 | RTOS | *(withdrawn — the firmware runs bare, see FR-105 and [DEC-027](11-Decisions-and-As-Built.md). The ID is retired, not reused.)* |

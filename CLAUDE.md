@@ -35,7 +35,7 @@ silently working around a wart.
 - **The doc set is re-baselined onto what is built** (DEC-027, 2026-08-04). **There is no
   RTOS and none is planned:** CON-104 is withdrawn, FR-105 is now *cooperative execution*
   (one loop plus the 1 kHz tick, [03 §3.4](Docu/PrePlanning/03-Architecture.md#34-execution-model)),
-  FR-108 keeps the broker's fan-out without a task, and VT-INT-009 is withdrawn with them.
+  FR-108 keeps the broker delivering to its subscribers but without a task of its own.
   FR-103 asks for what the firmware guarantees — no shared mutable state, everything
   crossing a boundary a fixed-size value copied by value — rather than for the
   system-level bus that was never built. One broker instance exists: the game's own,

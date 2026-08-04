@@ -1,7 +1,8 @@
 /*
  * msg_broker.h
  *
- * Publish/subscribe message bus — the only path between modules (FR-103, FR-107).
+ * Publish/subscribe message bus, for events announced to an unknown number of
+ * listeners (FR-108, FR-110).
  * Specified in [03 §3.2](../../../Docu/PrePlanning/03-Architecture.md); adapted from
  * MovyDesk_Prototype's MessageBroker with the two changes that doc calls for:
  * subscribers register an **output queue** instead of a callback, and the broker is an
@@ -23,7 +24,7 @@
  * The broker is content-agnostic: it routes on the topic ID and never looks at a
  * payload.
  *
- * **Threading.** There is none, and none is planned (DEC-027). Fan-out happens when the
+ * **Threading.** There is none, and none is planned (DEC-027). Delivery happens when the
  * owner asks for it: #msg_broker_process_all is called by the loop that owns the
  * instance — for the game, at the end of a tick — so an event published mid-tick reaches
  * its subscriber after that tick rather than inside it (FR-108).
@@ -155,7 +156,7 @@ bool msg_broker_has_input_space(const msg_broker_t* in_broker, uint16_t in_headr
 
 /*! \brief Move one message from the input queue to every subscriber of its topic.
  *
- * The body of the worker of FR-108. A subscriber whose queue is full has this message
+ * The delivery step of FR-108. A subscriber whose queue is full has this message
  * dropped and counted; the others still get it, and the broker is not stalled.
  *
  * \param[in,out]   inout_broker: started instance
