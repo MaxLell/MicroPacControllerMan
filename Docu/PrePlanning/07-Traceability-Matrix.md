@@ -14,7 +14,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-002 | High Score Menu | VT-INT-011 |
 | FR-003 | Game Start | VT-INT-012 |
 | FR-004 | Directional Control | VT-INT-019, VT-INT-020, VT-INT-013, VT-INT-010 |
-| FR-005 | Game Rendering | VT-INT-006, VT-INT-016 |
+| FR-005 | Game Rendering | VT-INT-006, VT-INT-022 |
 | FR-006 | Starting Lives | VT-INT-014 |
 | FR-007 | Game Over | VT-INT-014 |
 | FR-008 | High Score Update | VT-INT-015 |
@@ -37,9 +37,8 @@ A few items are structural/process requirements rather than automatically observ
 | FR-025 | Level Count & Mazes | VT-UNIT-006, VT-INT-017 |
 | FR-026 | Difficulty Scaling | VT-UNIT-006, VT-INT-017 |
 | FR-027 | Game Completion | VT-INT-017 |
+| FR-029 | Randomly Generated Maze | VT-UNIT-007, VT-UNIT-008 (its appearance), VT-INT-022 (played on the board) |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
-| NFR-002 | Rendering Rate | VT-INT-021 (the figure was chosen against it), VT-INT-016 (the game keeps it) |
-| NFR-003 | Input Latency | VT-INT-020 (the drawing half), VT-INT-013 (the whole path) |
 | NFR-004 | NVM Write Frequency | VT-INT-015 |
 | NFR-005 | Logo Display Delay | VT-INT-011 |
 | CON-001 | Target Hardware | VT-INT-001, VT-INT-002 |
@@ -56,7 +55,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-102 | Stateless Control | VT-UNIT-003 |
 | FR-103 | Value-Only Module Interfaces | VT-UNIT-001, VT-UNIT-002 (every payload is a value; no module holds a pointer into another's) |
 | FR-104 | Host Buildability | VT-INT-008 |
-| FR-105 | Cooperative Execution | VT-INT-011 (each screen reached inside its budget), VT-INT-016, VT-INT-022 (a frame stays inside NFR-002 with the loop also serving the console) |
+| FR-105 | Cooperative Execution | VT-INT-011 (each screen reached inside its budget), VT-INT-022 (a frame still has room with the loop also serving the console) |
 | FR-106 | On-Target Test (OTT) Framework | VT-INT-018, VT-INT-015, VT-INT-022 (each exercises an OTT command) |
 | FR-107 | OTT Result Reporting | VT-INT-018, VT-INT-015, VT-INT-022 |
 | FR-108 | Message Delivery to Subscribers | VT-UNIT-001 |
@@ -77,21 +76,14 @@ A few items are structural/process requirements rather than automatically observ
 - Every `VT-*` test in [06 Verification & Validation](06-Verification-and-Validation.md) traces back to at least one requirement above. No orphaned tests found.
 - Known gap: CON-101, NFR-102 and FR-111 rely on manual/tooling enforcement rather than an automated `VT-*` test — tracked here rather than hidden.
 
-## 7.4 Status at close-out (2026-08-04)
+## 7.4 Status
 
-The matrix above says which test *would* verify each requirement. Development ended before
-two of them were built, so it is not the same as a pass list — the close-out in
-[04 §4.2](04-Implementation-Phases-and-Milestones.md#42-close-out) is. In short:
+Every requirement in the matrix above has a test, and every one of those tests passes: **371 host
+unit tests**, the automatic OTT suite (VT-INT-001/002/011/015) and the manual OTTs, both builds
+warning-free.
 
-- **NFR-003 (Input Latency) is not met.** ~34 ms against a 30 ms budget, 32 ms of it the shared
-  debounce window ([RF-014](../Refactoring-Backlog.md#rf-014)). The figure is M2's, taken against
-  `joystick_dot` rather than the finished game loop, because —
-- **VT-INT-013's automatic latency measurement was never built**, so NFR-003's "whole path" column
-  above names a measurement that does not exist. Directional control itself is covered
-  (`ott joystick`, VT-INT-010, playing `ott pacman`); only the number is missing.
-- **VT-INT-016 was never built**, so NFR-002's "the game keeps it" column is carried by
-  VT-INT-021's measured 175 fps ceiling and by `ott pacman`'s operator-present frame cost rather
-  than by a scripted assertion. The margin over 60 fps is large; it is simply not asserted.
-
-Everything else in the catalogue passes: 357 host unit tests, the automatic OTT suite
-(VT-INT-001/002/011/015) and the manual OTTs, both builds warning-free.
+Two non-functional requirements used to sit here as *unmet* — a rendering rate of 60 FPS and an
+input latency of 30 ms. They are **withdrawn**, not satisfied: the owner judged both irrelevant to
+this game ([DEC-036](11-Decisions-and-As-Built.md)). The figures behind them survive as design
+figures where they still explain something — the 16 ms frame period, the interpolation, the
+debounce window — but nothing is measured against them any more.

@@ -9,8 +9,11 @@ choices and the questions still to be answered. The
 and deliberately carry none of this detail.
 
 Requirements realised here: CON-002, CON-003, CON-004 (display, joystick, carrier),
-FR-004 (directional control), FR-005 / FR-028 (colour rendering), NFR-002 (frame rate),
-NFR-003 (input latency).
+FR-004 (directional control), FR-005 / FR-028 (colour rendering), and the two timing budgets
+this milestone measured — a 60 FPS frame rate and a 30 ms input latency. Those two were
+requirements (NFR-002, NFR-003) while this document was written and are **withdrawn**
+now ([DEC-036](../PrePlanning/11-Decisions-and-As-Built.md)); the measurements below stand,
+and what they no longer do is decide whether the system passes.
 
 ## 1. Pin mapping
 
@@ -237,9 +240,9 @@ configured.
 Consequence for all firmware: never express a delay as a spin count. Use `Services/delay`
 or `Services/sw_timer`, which are clock-independent.
 
-## 3. Frame budget — why NFR-002 needs partial updates
+## 3. Frame budget — why 60 FPS needs partial updates
 
-NFR-002 asks for at least 60 frames per second — a figure §3.2 arrives at by measurement;
+The frame-rate target is at least 60 frames per second — a figure §3.2 arrives at by measurement;
 it read 30 while this section was first written, and the conclusion below holds either way.
 Neither can be met by transmitting whole frames, and the margin is not close.
 
@@ -288,7 +291,7 @@ entering another, plus a couple of eaten pellets, so twelve cells:
 
 Twelve 8x8 cells are 1,536 bytes against 153,600 — **one percent of the data, and 73
 times faster.** At 30 FPS that uses **10 % of the frame budget and leaves 90 %** for the
-game; at the 60 FPS eventually required, 21 % and 79 %. NFR-002 is reachable at the bit rate
+game; at the 60 FPS eventually chosen, 21 % and 79 %. Either rate is reachable at the bit rate
 already configured.
 
 Worth noting where the remaining time goes: pure transfer of 1,536 bytes at 5 Mbit/s is
@@ -321,7 +324,7 @@ through `ott_framebuffer`, because the second scenario that declared its own wou
 ### 3.2 Smooth is not the same as fast
 
 290 FPS answers how much the panel can take. It does not answer whether Pacman will *look*
-smooth, and that is the question NFR-002 exists for. Smoothness is not a function of the
+smooth, and that is the question the rate was chosen to answer. Smoothness is not a function of the
 frame rate on its own but of how far a sprite jumps between two frames — a sprite at 10 FPS
 covering nine pixels a frame and one at 60 FPS covering one and a half are the same speed
 and look nothing alike.
@@ -343,7 +346,7 @@ dominates the dirty rectangle and the step contributes only a few columns — so
 the rate nearly doubles the data rate.** That is the real ceiling. Unpaced, drawing the same
 frames as fast as the path allows, it sits at **175 FPS**.
 
-**NFR-002 was therefore raised from 30 FPS to 60.** Three things say 60 rather than more:
+**The target was therefore raised from 30 FPS to 60.** Three things say 60 rather than more:
 
 - **It costs little.** 5.26 ms of a 16.7 ms frame, so 69 % of every frame still belongs to
   the game — and the measured ceiling is nearly three times the target.
@@ -365,9 +368,9 @@ screen — is where a seam would first show. The tearing-effect output is alread
 **PA0** and named in `dio_bsp_pin_e`, unused so far, and it is the fix if one ever does;
 a lower frame rate is not.
 
-### 3.3 Input latency (NFR-003) — the debounce is the whole budget
+### 3.3 Input latency — the debounce is the whole budget
 
-NFR-003 allows 30 ms from a key press to the movement appearing. `joystick_dot` measures the
+The budget is 30 ms from a key press to the movement appearing. `joystick_dot` measures the
 drawing half through the real path, one move being the cell vacated plus the cell entered:
 
 ```
@@ -381,15 +384,17 @@ The surprise is the other half. `Bsp/switch` reports a key only after
 **`SWITCH_DEBOUNCE_SAMPLES` = 32 consecutive agreeing samples**, and it is sampled from the
 1 ms tick, so a settled contact takes **32 ms to be reported** — before anything is drawn.
 
-> **32 ms of debounce + 2.08 ms of drawing = 34 ms, against a 30 ms requirement.** The
-> budget is spent on debouncing a switch, and the display is not the problem.
+> **32 ms of debounce + 2.08 ms of drawing = 34 ms, against a 30 ms budget.** The budget is
+> spent on debouncing a switch, and the display is not the problem.
 
 Nothing about that is measured-and-therefore-fixed: 32 ms is an unusually long window, chosen
 because it happens to be the width of the `uint32_t` the history lives in, not because a
 contact needs it. Eight samples is the conventional figure and would put the whole path at
 about 10 ms. The window is not changed here — it is shared with `user_button`, where 32 ms is
-harmless, and shortening it belongs with the game loop that will actually be judged against
-NFR-003. Recorded as [RF-014](../Refactoring-Backlog.md#rf-014).
+harmless, and shortening it belongs with the game loop that will actually be judged.
+Recorded as [RF-014](../Refactoring-Backlog.md#rf-014). *(The 30 ms budget was withdrawn as a
+requirement in [DEC-036](../PrePlanning/11-Decisions-and-As-Built.md); RF-014 stays, because
+32 ms was never what a contact needs.)*
 
 ## 4. Flashing and debugging
 
@@ -421,7 +426,7 @@ disabled clock.
 4. **Joystick debouncing** — `Bsp/switch` already debounces a GPIO over a 32-sample history;
    confirm it serves five keys without change. *Answered: five instances of the primitive,
    polled from the same 1 ms tick as `user_button`, need no change to it — `Bsp/joystick` is
-   the instance module. But the window costs 32 ms, which is the whole of NFR-003; see §3.3.*
+   the instance module. But the window costs 32 ms, which is the whole input budget; see §3.3.*
 5. **Confirming the display lines on the board** (§1.4) — paper is not silicon.
 
 Settled since this document was written: the pin map (§1), the non-existence of the supposed

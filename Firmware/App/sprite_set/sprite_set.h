@@ -119,42 +119,6 @@ typedef enum
     SPRITE_SET_GLYPH_Y,
     SPRITE_SET_GLYPH_Z,
 
-    /* The maze walls: the arcade's own line and corner pieces, one per cell. The letters
-     * in the comments are the ones the arcade's map uses for them, kept so the map in
-     * `game_view` can be read straight across against its source. */
-    SPRITE_SET_MAZE_CORNER_TOP_LEFT,
-    SPRITE_SET_MAZE_CORNER_TOP_RIGHT,
-    SPRITE_SET_MAZE_CORNER_BOTTOM_LEFT,
-    SPRITE_SET_MAZE_CORNER_BOTTOM_RIGHT,
-    SPRITE_SET_MAZE_TOP,
-    SPRITE_SET_MAZE_BOTTOM,
-    SPRITE_SET_MAZE_LEFT,
-    SPRITE_SET_MAZE_RIGHT,
-    SPRITE_SET_MAZE_TOP_TEE_RIGHT,
-    SPRITE_SET_MAZE_TOP_TEE_LEFT,
-    SPRITE_SET_MAZE_LEFT_TEE_BOTTOM,
-    SPRITE_SET_MAZE_LEFT_TEE_TOP,
-    SPRITE_SET_MAZE_RIGHT_TEE_BOTTOM,
-    SPRITE_SET_MAZE_RIGHT_TEE_TOP,
-    SPRITE_SET_MAZE_BLOCK_TOP_LEFT,
-    SPRITE_SET_MAZE_BLOCK_TOP_RIGHT,
-    SPRITE_SET_MAZE_BLOCK_BOTTOM_LEFT,
-    SPRITE_SET_MAZE_BLOCK_BOTTOM_RIGHT,
-    SPRITE_SET_MAZE_BLOCK_TOP,
-    SPRITE_SET_MAZE_BLOCK_BOTTOM,
-    SPRITE_SET_MAZE_BLOCK_LEFT,
-    SPRITE_SET_MAZE_BLOCK_RIGHT,
-    SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_LEFT,
-    SPRITE_SET_MAZE_BLOCK_BOTTOM_INTO_RIGHT,
-    SPRITE_SET_MAZE_BLOCK_LEFT_INTO_TOP,
-    SPRITE_SET_MAZE_BLOCK_RIGHT_INTO_TOP,
-    SPRITE_SET_MAZE_HOUSE_TOP_LEFT,
-    SPRITE_SET_MAZE_HOUSE_TOP_RIGHT,
-    SPRITE_SET_MAZE_HOUSE_BOTTOM_LEFT,
-    SPRITE_SET_MAZE_HOUSE_BOTTOM_RIGHT,
-    SPRITE_SET_MAZE_HOUSE_GATE_LEFT,
-    SPRITE_SET_MAZE_HOUSE_GATE_RIGHT,
-    SPRITE_SET_MAZE_HOUSE_GATE,
     SPRITE_SET_ID_COUNT
 } sprite_set_id_e;
 
@@ -222,18 +186,6 @@ sprite_set_id_e sprite_set_get_frightened_sprite(cell_progress_t in_progress);
  */
 sprite_set_id_e sprite_set_get_pacman_sprite(direction_e in_direction, cell_progress_t in_progress);
 
-/*! \brief Which maze drawing a character of the arcade's own map stands for.
- *
- * The map lives in `game_view` — it is the maze's *appearance*, not its rules — and it is
- * kept in the arcade's own letters so it can be read straight across against the source it
- * was transcribed from. This is the one place that knows what those letters mean.
- *
- * \param[in]       in_map_character: a character of that map
- * \param[out]      out_id: the drawing, untouched when the character is not a wall
- * \return          `true` when the character is a piece of maze wall
- */
-bool sprite_set_get_maze_tile(char in_map_character, sprite_set_id_e* out_id);
-
 /*! \brief The drawing for a character of the HUD's alphabet.
  *
  * Digits, capital letters and the space. Anything else is a programming error rather than
@@ -243,9 +195,5 @@ bool sprite_set_get_maze_tile(char in_map_character, sprite_set_id_e* out_id);
  * \return          A `SPRITE_SET_GLYPH_*` id
  */
 sprite_set_id_e sprite_set_get_glyph(char in_character);
-
-/*! \brief Whether a maze drawing is the ghost house gate, which is drawn in its own
- *         colour rather than the walls' blue. */
-bool sprite_set_is_maze_gate(sprite_set_id_e in_id);
 
 #endif /* SPRITE_SET_H */

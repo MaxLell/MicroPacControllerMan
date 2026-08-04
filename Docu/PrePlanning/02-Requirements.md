@@ -56,10 +56,11 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 | FR-006 | Starting Lives | The system shall start each game run with a fixed number of Pacman lives (default 3 — *tunable*). |
 | FR-024 | Life Lost & Respawn | When Pacman is caught and at least one life remains, the system shall decrement the lives, reset Pacman and the ghosts to their level start positions, and continue the current level. |
 | FR-007 | Game Over | When Pacman's remaining lives reach zero, the system shall end the game and return to the menu screen. |
-| FR-025 | Level Count & Maze | The game shall consist of 21 levels, all played on the same maze, differing from one another only in difficulty (FR-026). |
+| FR-025 | Level Count | The game shall consist of 21 levels, each played on its own maze (FR-029) and differing in difficulty (FR-026). *(Amended by [DEC-029](11-Decisions-and-As-Built.md): every level used to play the same maze.)* |
 | FR-021 | Level Clear | While a game is in progress, when Pacman has consumed the last pellet and power pellet of the maze and it is not the final level, the system shall advance to the next level — restoring the pellets and applying that level's difficulty — while keeping the accumulated score and remaining lives. |
 | FR-026 | Difficulty Scaling | No level shall be easier than the one before it, and the difficulty of each level — the speeds of Pacman and of each ghost, the frightened duration, the scatter/chase schedule, and the thresholds at which Blinky accelerates as the maze empties — shall follow the progression in [10 Pacman Game Design](10-Pacman-Game-Design.md). |
 | FR-027 | Game Completion | When Pacman clears the final (21st) level, the system shall end the game as fully completed (won). |
+| FR-029 | Randomly Generated Maze | When a level begins, the system shall play a maze generated for that level rather than a fixed layout. Each generated maze shall be left-right symmetric, enclosed by wall except where a tunnel crosses it, have every pellet reachable from Pacman's starting cell counting the tunnel wrap, hold four power pellets, and place the ghost house, its gate, the four ghost starting cells and Pacman's starting cell at the same coordinates every time. Given the same seed the system shall generate the same maze. |
 | FR-023 | End-of-Game Score Screen | When a game run ends (all lives lost, or the final level cleared), the system shall display the final score on its own screen for 2 seconds before returning to the menu screen. *(2 s default — tunable)* |
 
 ### 2.1.7 High Score & Persistence
@@ -105,8 +106,6 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | Unique-ID | Name | Description |
 |---|---|---|
 | NFR-001 | Loading Screen Duration | The loading screen shall be displayed for no more than 3 seconds before the menu is shown. *(default value — see [A-001](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
-| NFR-002 | Rendering Rate | While a game is in progress, the system shall refresh the display at a minimum of 60 frames per second. *(measured and chosen — see [A-002](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
-| NFR-003 | Input Latency | When a joystick directional key is pressed, the system shall reflect the corresponding movement on the display within 30 ms. *(default value — see [A-003](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-005 | Logo Display Delay | Upon power-on, the system shall wait 200 ms before displaying the Pacman logo of the loading screen (FR-001). |
 
 ### 2.2.2 Persistence

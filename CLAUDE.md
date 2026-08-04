@@ -4,14 +4,17 @@ Standalone embedded **Pacman** on an **STM32U545RE-Q Nucleo-64**: joystick input
 240×320 colour LCD, single NVM high score. Secondary goal: probe how far an
 AI agent can carry a disciplined embedded project. See `Docu/Idea.md` for origin.
 
-> **Development is finished (2026-08-04, DEC-028).** The game is complete and plays on
-> the board; nothing further is planned — no milestone, no refactoring, no feature. The
-> Refactoring Backlog is closed and none of it will be picked up. Before changing
-> anything here, read the close-out in
-> [04 §4.2](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out):
-> it records that **NFR-003 (input latency, ~34 ms against 30 ms) ends unmet** and that
-> **VT-INT-013's latency measurement and VT-INT-016 were never built**. Treat this file
-> and the doc set as a finished record, not a plan.
+> **Closed on 2026-08-04 (DEC-028), reopened the same day (DEC-029)** when the owner asked
+> for randomly generated mazes — Milestone 5, delivered. **Every requirement in the spec now
+> has a passing test.** The two that used to be unmet — a 60 fps rendering rate and a 30 ms
+> input latency — are **withdrawn, not satisfied** (DEC-036): the owner judged both irrelevant
+> to this game, so NFR-002 and NFR-003 are deleted along with VT-INT-016 and the automatic
+> latency half of VT-INT-013. Both figures survive as *design* figures — 60 fps is why the
+> frame period is 16 ms, and 30 ms is why RF-014 noticed the 32 ms debounce window — but
+> nothing is measured against them. The close-out is
+> [04 §4.2](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out) and
+> what came after it is
+> [04 §4.3](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#43-milestone-5--random-mazes).
 
 ## Source of truth — read before coding
 
@@ -31,9 +34,10 @@ requirements deliberately carry none of that: keep hardware detail out of `02` a
 
 Firmware specifics live in **[`Firmware/README.md`](Firmware/README.md)**.
 
-Work deliberately left undone is recorded in
-**[`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md)** (`RF-xxx`), now **closed** —
-read it before "fixing" something that was a conscious deferral. It is a record, not a queue.
+Known work deliberately left undone is tracked in
+**[`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md)** (`RF-xxx`) — check it
+before "fixing" something that was a conscious deferral, and add to it rather than
+silently working around a wart.
 
 ## Status
 
@@ -54,10 +58,11 @@ read it before "fixing" something that was a conscious deferral. It is a record,
   **active LOW**, not the active high UM2750 claims. The ST7789V driver, the RGB565 frame
   buffer and partial updates are in (3 fps whole-frame becomes 290 fps for what a game
   actually changes), and `joystick_dot` and `animation` put input and display together.
-  **NFR-002 is now 60 FPS, not 30** — measured: five moving actors cost 5.26 ms of a
-  16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
-  Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
-  budget (RF-014), to be chosen against a real game loop.
+  **The frame-rate target became 60 FPS, not 30** — measured: five moving actors cost 5.26 ms
+  of a 16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
+  Open, and deliberately so: the 32 ms debounce window is a whole 30 ms input budget
+  (RF-014), to be chosen against a real game loop. Both figures were requirements at the
+  time and are design figures now (DEC-036).
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — done, playable on the board and on the host.** `game` publishes a
   246-byte state, `game_view` turns cells into pixels and interpolates between simulation
@@ -104,6 +109,46 @@ read it before "fixing" something that was a conscious deferral. It is a record,
   the scatter targets in the unreachable dead space with the corners assigned the right way
   round. Seeking is a route search rather than the arcade's one-cell greedy choice — the one
   deliberate departure, asked for by the owner.
+
+- **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level plays
+  a maze **generated** for it (FR-029) instead of the arcade's one layout. `App/maze_gen` is a
+  faithful port of the tetris-stacking generator from
+  [shaunlebron/pacman-mazegen](https://github.com/shaunlebron/pacman-mazegen) — 9 × 5 grid of
+  stacked pieces, upscaled by three, mirrored, which *is* 28 × 31. Faithful on purpose, JavaScript
+  accidents included, because that is what made it checkable: the original and the port were run
+  under the same seeded PRNG and their output compared **byte for byte over 300 seeds**. The seed
+  is **the tick at the moment start was pressed**, and `ott pacman` prints it so a maze can be
+  reproduced. The ghost house, its gate, the four ghost starts and Pacman's start stay at the
+  arcade's coordinates — the generator's own grid already puts them there — so release, revival,
+  the gate rule and the scatter targets keep their meaning. **Tunnels are shorter** than the
+  arcade's six cells (one or two), so the tunnel is a weaker escape.
+  **The maze is no longer written down twice**: `game_view` derives the appearance from the walls
+  (DEC-030), which reproduces the arcade's hand-drawn tile map for **764 of 764 cells** outside
+  the two tunnel masses; the 64 inside them are excluded and asserted. Two tiles were added as
+  vertical mirrors of the top tees — the 1980 ROM has no bottom-edge tee and 62 % of generated
+  mazes need one. **The outer frame is 6 px thick, not the arcade's 2** (DEC-031): the owner asked
+  for it to match the weight a two-cell inner wall already renders at, knowing that at 6 px in an
+  8 px cell the screen corners become solid right angles. The ghost house keeps the arcade's 2 px
+  wall and has four tiles of its own for it. **A wall's outline is a 6 px stroke set 5 px in
+  whatever its thickness** (DEC-032), drawn across two cell rings — the same rule one cell further
+  in, turned half a turn, so no new art was needed; a wall exactly three cells thick has no room
+  for a hole and is drawn solid, which is most generated boxes. A **tunnel mouth is 18 px**, the
+  same gap a corridor leaves between two wall lines. **The outer wall has a second cell in the
+  panel's margin** (DEC-033) and is therefore an ordinary two-cell wall: the whole frame tile
+  family and its rules are gone, pellets are centred to 0.0 px everywhere, and flash went *down*.
+  The ghost house has no margin to borrow, so it keeps a one-cell wall with the 6 px band centred
+  in it. **And then the tile alphabet went away** (DEC-034): the maze is drawn as geometry now —
+  a pixel is ink when its distance to the wall's nearest edge is in `[inset, inset + 6)`, inset
+  being half the spare depth capped at 5 — so width and setback are arithmetic rather than a
+  choice from 24 ROM tiles that only composed at one thickness. The pixels travel in the display
+  list (`DISPLAY_ITEM_WALL`). The arcade tile comparison is gone with them; what replaces it are
+  two unit tests that rebuild the picture and measure it — every pellet within 1 px of its
+  corridor's centre, every tunnel mouth exactly a corridor's gap wide. Every wall stroke's centre
+  lands on a cell boundary — including the ghost house's, which needed a second drawing cell to get
+  there (a one-cell ring can have the 6 px stroke, the grid, or a roomy inside: any two, and the
+  owner chose the grid).
+  RAM 68.0 %, flash 18.6 %; frame cost unchanged at 8 ms of 16.
+  See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)
 

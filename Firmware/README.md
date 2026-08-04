@@ -4,12 +4,15 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
 **STM32CubeProgrammer** over ST-LINK V3E.
 
-> **Finished (2026-08-04).** The game is complete and plays on the board — RAM **67.3 %**
-> (176,428 of 256 kB), flash **17.3 %** (89,496 of the 504 kB left after the high-score
-> page), both builds warning-free, 357 host unit tests green. No further work is
-> planned; the known edges are recorded in the closed
-> [Refactoring Backlog](../Docu/Refactoring-Backlog.md) and the close-out in
-> [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out).
+> The game is complete and plays on the board, with a **randomly generated maze per level**
+> (FR-029) — RAM **68.0 %** (178,248 of 256 kB), flash **18.7 %** (96,320 of the 504 kB left
+> after the high-score page), both builds warning-free, **371** host unit tests green. Every
+> requirement in the spec has a passing test; the two timing budgets that used to sit here as
+> unmet are **withdrawn** rather than satisfied
+> ([DEC-036](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The known edges are recorded in
+> the [Refactoring Backlog](../Docu/Refactoring-Backlog.md); the milestone record is
+> [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out) and
+> [§4.3](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#43-milestone-5--random-mazes).
 
 ## Toolchain
 
@@ -155,7 +158,7 @@ source of truth in
 | Module | What |
 |---|---|
 | `App/app_main.c` | Entry point, called from the generated `main()`. Initialises the platform, runs a pending OTT, prints the boot banner, then the super-loop. |
-| `App/playfield/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/`, `sprite_set/`, `game_view/`, `render/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). Nothing calls them on the target yet; they are in the target build for compile coverage, and `--gc-sections` keeps them out of the image. |
+| `App/playfield/`, `maze_gen/`, `agent/`, `pacman/`, `ghost_path/`, `ghost/`, `score/`, `game/`, `sprite_set/`, `game_view/`, `render/` | The Pacman game — pure logic, no hardware, host-testable in full. See [App/Readme.md](App/Readme.md). `maze_gen` builds the level's maze (FR-029, [M4 Random Mazes](../Docu/Design/M4-Random-Mazes.md)); `playfield` turns a maze into rules and `game_view` derives its appearance from the same map. |
 | `Bsp/dio_bsp/` | Digital I/O. **The only module that calls HAL GPIO** — everything else names a pin via `dio_bsp_pin_e`. |
 | `Bsp/uart_bsp/` | Blocking console transport. The instance and the 115200 8N1 contract are `#define`s. |
 | `Bsp/systick_bsp/` | 1 kHz tick (`systick_bsp_get_tick`) plus a 1 ms callback hook. |
@@ -286,5 +289,5 @@ measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 - **M2 on the new board (current).** The panel turned out to be an **ST7789V**, not the
   ILI9341 this project had been assuming. Display, joystick, the RGB565 frame buffer and
   partial updates are in, and the two halves are verified against each other by
-  `joystick_dot`. NFR-002 was raised from 30 to **60 FPS** on the strength of the
-  `animation` measurements.
+  `joystick_dot`. The frame-rate target was raised from 30 to **60 FPS** on the strength of
+  the `animation` measurements.

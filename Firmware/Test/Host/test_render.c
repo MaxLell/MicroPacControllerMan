@@ -42,9 +42,8 @@ static void prv_add(display_item_kind_e in_kind, sprite_set_id_e in_sprite, spri
     msg_display_item_t* const item = &g_list.items[g_list.count];
 
     item->kind = (uint8_t)in_kind;
-    item->sprite = (uint8_t)in_sprite;
+    item->drawing.sprite = (uint8_t)in_sprite;
     item->palette = (uint8_t)in_palette;
-    item->reserved = 0U;
     item->x = in_x;
     item->y = in_y;
 

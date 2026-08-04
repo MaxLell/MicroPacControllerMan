@@ -28,6 +28,7 @@
 #include "gfx.h"
 #include "ghost.h"
 #include "ghost_path.h"
+#include "maze_gen.h"
 #include "mock_display.h"
 #include "mock_systick_bsp.h"
 #include "msg.h"
@@ -163,6 +164,17 @@ void test_the_frames_keep_coming(void)
     TEST_ASSERT_EQUAL_UINT32(expected_frame_count, frame_count);
 }
 
+/* Start a run on the arcade's own maze, so a test may say which way Pacman can walk. The
+ * production path is `game_session_start`, with a seed and a generated maze; that one is
+ * exercised by `test_a_seeded_run_hands_over_a_generated_maze` below. */
+static void prv_start_run(void)
+{
+    playfield_map_t map;
+
+    playfield_get_arcade_map(&map);
+    game_session_start_on_map(&map);
+}
+
 /* The other trap: a level hands the whole field over across several display lists, and a
  * frame that drained one of them would leave the panel half drawn. The handover therefore
  * has to finish inside the frame that starts it.
@@ -172,7 +184,7 @@ void test_the_field_is_handed_over_in_a_single_frame(void)
     uint32_t handover_region_count;
     uint32_t steady_region_count;
 
-    game_session_start();
+    prv_start_run();
 
     handover_region_count = prv_run_one_frame();
 
@@ -187,12 +199,38 @@ void test_the_field_is_handed_over_in_a_single_frame(void)
 
 void test_starting_a_run_puts_the_game_at_the_beginning(void)
 {
-    game_session_start();
+    prv_start_run();
 
     TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_session_get_state());
     TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_session_get_lives());
     TEST_ASSERT_EQUAL_UINT8(1U, game_session_get_level());
     TEST_ASSERT_EQUAL_UINT32(0U, game_session_get_score());
+}
+
+/* The production path: a seed rather than a map, so the maze is generated. What is checked is
+ * that the whole chain still works when nobody knows what the maze looks like — the game
+ * generates one, the view derives its appearance, and the field is handed over in one frame.
+ * The maze reaching the view is the part that could silently not happen: it cannot ride inside
+ * the state message, so the session has to notice the level changing and hand it over itself.
+ */
+void test_a_seeded_run_hands_over_a_generated_maze(void)
+{
+    uint32_t handover_region_count;
+    uint32_t steady_region_count;
+
+    game_session_start(20260804U);
+
+    TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_session_get_state());
+
+    handover_region_count = prv_run_one_frame();
+
+    (void)prv_run_one_frame();
+    steady_region_count = prv_run_one_frame();
+
+    /* A whole field went out, and then frames settled to actor-sized ones — which together say
+     * the view had a maze to draw. Without one it would have drawn nothing at all. */
+    TEST_ASSERT_GREATER_THAN_UINT32(TEST_STEADY_MAX_REGION_COUNT, handover_region_count);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(TEST_STEADY_MAX_REGION_COUNT, steady_region_count);
 }
 
 /* A direction is a request, not a move: it is granted at the first cell where the turn is
@@ -201,7 +239,7 @@ void test_starting_a_run_puts_the_game_at_the_beginning(void)
  */
 void test_the_direction_reaches_the_game(void)
 {
-    game_session_start();
+    prv_start_run();
 
     game_session_set_direction(DIRECTION_WEST);
 

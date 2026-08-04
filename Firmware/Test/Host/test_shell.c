@@ -32,6 +32,7 @@
 #include "ghost.h"
 #include "ghost_path.h"
 #include "high_score.h"
+#include "maze_gen.h"
 #include "mock_display.h"
 #include "mock_flash_bsp.h"
 #include "mock_systick_bsp.h"

@@ -62,6 +62,20 @@ typedef struct
 {
     /* --- the Model --- */
     playfield_t playfield;
+
+    /*! \brief The maze this level is played on, kept as characters as well as loaded into
+     *         `playfield`, because the *view* needs it too: it derives what to draw from where
+     *         the walls are, and the rules keep no record of the map they came from. */
+    playfield_map_t maze;
+
+    /*! \brief The run's seed. Each level's maze is generated from this and the level number,
+     *         so a run is reproducible from one number and two runs differ. */
+    uint32_t maze_seed;
+
+    /*! \brief Set when the caller supplied a maze instead of a seed, in which case every
+     *         level of the run plays that one maze. It is how a test asserts about a corridor:
+     *         a generated maze has no corridor anyone can name in advance. */
+    bool is_maze_fixed;
     pacman_t pacman;
     ghost_t ghosts[GHOST_COUNT];
     score_t score;
@@ -131,8 +145,35 @@ typedef struct
  */
 void game_init(game_t* inout_game);
 
-/*! \brief Begin a new run at level 1 with a full set of lives (FR-003/006). */
-void game_start(game_t* inout_game);
+/*! \brief Begin a new run at level 1 with a full set of lives (FR-003/006).
+ *
+ * Every level of the run gets its **own generated maze** (FR-029), derived from `in_maze_seed`
+ * and the level number. The seed is therefore the whole of what makes one run's mazes differ
+ * from another's, and a run replayed with the same seed plays the same mazes — which is what
+ * makes a report about a maze worth anything.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_maze_seed: any value; caller's job to make it vary between runs
+ */
+void game_start(game_t* inout_game, uint32_t in_maze_seed);
+
+/*! \brief Begin a run on one maze, given rather than generated.
+ *
+ * Every level of the run plays `in_map`. Two callers want this: a test, which cannot assert
+ * anything about a corridor it has not been told about, and anything that wants the arcade's
+ * own maze (#playfield_get_arcade_map).
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_map: the maze to play, copied in; must not be `NULL`
+ */
+void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map);
+
+/*! \brief The maze being played, for a caller that has to draw it.
+ *
+ * \param[in]       in_game: the game, must not be `NULL`
+ * \return          The current level's maze, owned by the game and valid until the next level
+ */
+const playfield_map_t* game_get_maze(const game_t* in_game);
 
 /*! \brief Record the player's intended direction (FR-004).
  *

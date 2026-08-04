@@ -19,6 +19,11 @@ static game_view_t g_view;
 static sw_timer_t g_frame_timer;
 static bool g_is_frame_due;
 
+/* The level whose maze the view was last given, so a new one is handed over exactly once.
+ * `GAME_SESSION_NO_LEVEL` is not a level, so the first state always counts as a change. */
+#define GAME_SESSION_NO_LEVEL (0U)
+static uint8_t g_drawn_maze_level;
+
 /* A timer is *registered* once and armed as often as you like: `sw_timer_create` asserts on
  * a second registration of the same instance, and #game_session_init is called again for
  * every run the player starts. */
@@ -47,6 +52,7 @@ void game_session_init(void)
     game_view_init(&g_view);
 
     g_is_frame_due = false;
+    g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
 
     if (!g_is_timer_created)
     {
@@ -58,9 +64,19 @@ void game_session_init(void)
     sw_timer_start(&g_frame_timer, GAME_SESSION_FRAME_PERIOD_MS, prv_on_frame_due);
 }
 
-void game_session_start(void)
+void game_session_start(uint32_t in_maze_seed)
 {
-    game_start(&g_game);
+    game_start(&g_game, in_maze_seed);
+
+    /* The run's mazes are new, so nothing the view holds applies to them. */
+    g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
+}
+
+void game_session_start_on_map(const playfield_map_t* in_map)
+{
+    game_start_on_map(&g_game, in_map);
+
+    g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
 }
 
 void game_session_set_direction(direction_e in_direction)
@@ -83,6 +99,18 @@ bool game_session_service(void)
     game_tick(&g_game, GAME_SESSION_FRAME_PERIOD_MS);
 
     game_get_state_message(&g_game, &state);
+
+    /* A level's maze reaches the view here, and only when it changes. It cannot ride along
+     * inside the state message: the state is 246 bytes of a 256-byte payload and a maze does
+     * not fit in what is left. It does not need to — a maze changes once a level, where the
+     * state changes every step. */
+    if (g_drawn_maze_level != state.level)
+    {
+        g_drawn_maze_level = state.level;
+
+        game_view_set_maze(&g_view, game_get_maze(&g_game));
+    }
+
     game_view_set_state(&g_view, &state);
 
     /* A level change hands the whole field over across several lists; an ordinary frame is

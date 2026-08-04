@@ -47,6 +47,24 @@
 #define GAME_VIEW_ORIGIN_X         ((FRAMEBUFFER_WIDTH - (PLAYFIELD_WIDTH * GAME_VIEW_TILE_SIZE)) / 2)
 #define GAME_VIEW_ORIGIN_Y         (24)
 
+/*! \brief One cell of wall drawn *outside* the maze, all the way round it.
+ *
+ * The maze's outer wall is one cell thick, and one cell cannot carry the same line as the
+ * rest of the maze: every wall inside is two cells thick and draws a 6-pixel stroke set 5
+ * pixels in from its edge, which needs 16 pixels to sit in. Squeezed into 8 the stroke has to
+ * move, and then the corridor beside it is narrower than every other corridor, its pellets sit
+ * off the middle, and the joins where a wall meets it do not line up
+ * ([DEC-033](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)).
+ *
+ * So the outer wall is given its second cell in the panel's own margin — 8 px either side of a
+ * 224 px maze in a 240 px panel, and the row above. It is then an ordinary two-cell wall and
+ * needs no rules, no tiles and no exceptions of its own. */
+#define GAME_VIEW_MAZE_BORDER      (1)
+
+/*! \brief The drawn field, which is the maze plus that border. */
+#define GAME_VIEW_FIELD_WIDTH      (PLAYFIELD_WIDTH + (2 * GAME_VIEW_MAZE_BORDER))
+#define GAME_VIEW_FIELD_HEIGHT     (PLAYFIELD_HEIGHT + (2 * GAME_VIEW_MAZE_BORDER))
+
 /*! \brief The HUD, in the rows the maze leaves free above and below it (FR-022).
  *
  * Three rows above and six below, and the arcade's own arrangement in them: a label on the
@@ -60,7 +78,8 @@
  */
 #define GAME_VIEW_HUD_LABEL_ROW_Y  (0)
 #define GAME_VIEW_HUD_VALUE_ROW_Y  (GAME_VIEW_TILE_SIZE)
-#define GAME_VIEW_HUD_LIVES_Y      (GAME_VIEW_ORIGIN_Y + (PLAYFIELD_HEIGHT * GAME_VIEW_TILE_SIZE))
+/* One cell lower than the maze ends, because the border is drawn there now. */
+#define GAME_VIEW_HUD_LIVES_Y      (GAME_VIEW_ORIGIN_Y + ((PLAYFIELD_HEIGHT + GAME_VIEW_MAZE_BORDER) * GAME_VIEW_TILE_SIZE))
 
 #define GAME_VIEW_HUD_SCORE_DIGITS (7U)
 #define GAME_VIEW_HUD_LEVEL_DIGITS (2U)
@@ -106,6 +125,12 @@ typedef struct
      *   out. The score changes on almost every pellet, and re-sending seven digits each
      *   time would cost more of the frame than the five actors do. */
     uint8_t drawn_hud[GAME_VIEW_HUD_ITEM_COUNT];
+
+    /*!< The maze being drawn. Held rather than turned into pictures up front: a wall cell's
+     *   pixels are arithmetic on where the walls are, and the only time they are all wanted at
+     *   once is the handover after a new maze. */
+    playfield_map_t maze;
+    bool has_maze;
 } game_view_t;
 
 /* ==========================================================================
@@ -118,6 +143,26 @@ typedef struct
  * \param[out]      inout_view: instance to initialise, must not be `NULL`
  */
 void game_view_init(game_view_t* inout_view);
+
+/*! \brief Take the maze that is about to be played, and work out how to draw it.
+ *
+ * Called once per maze, before the first state of that maze. The appearance is **derived**
+ * from where the walls are: which of the arcade's thirty-odd line, corner and junction
+ * pieces goes in a cell follows from which of its neighbours are open, so a generated maze
+ * (FR-029) draws itself with no second map to keep in step.
+ *
+ * That is a change of principle. The maze used to be written down twice — the rules in
+ * `playfield`, the appearance here — with a unit test holding the two together, because a
+ * hand-drawn tile map cannot be derived from a wall bitmap. Once the maze is generated there
+ * is nothing to hand-draw, so the derivation replaces the copy and the test now checks the
+ * derivation against the arcade's own map instead.
+ *
+ * Forces the whole field to be described again: a new maze is every cell changed.
+ *
+ * \param[in,out]   inout_view: the view, must not be `NULL`
+ * \param[in]       in_map: the maze, in `playfield`'s legend; must not be `NULL`
+ */
+void game_view_set_maze(game_view_t* inout_view, const playfield_map_t* in_map);
 
 /*! \brief Take a new game state.
  *
@@ -158,16 +203,17 @@ void game_view_get_cell_pixel(uint8_t in_column, uint8_t in_row, int16_t* out_x,
 
 /*! \brief Whether this cell is drawn as a piece of maze wall.
  *
- * The maze is written down twice — once in `playfield` as the rules see it, once here as
- * the panel sees it — because neither form can be derived from the other. This is what
- * lets the two be checked against each other instead of merely believed.
- *
  * The ghost house gate is **not** a wall by this measure: it is drawn, but a ghost may
- * cross it, which is the one place the two maps disagree on purpose.
+ * cross it, which is the one place the picture and the rules disagree on purpose.
  *
+ * Neither is the inside of a wall block: the arcade draws a wall as a thin outline with
+ * nothing inside it, so most of a thick wall is drawn as emptiness while remaining solid to
+ * the rules. "Drawn as wall" means wall *art*, not "impassable".
+ *
+ * \param[in]       in_view: the view, with a maze set, must not be `NULL`
  * \param[in]       in_column: cell column, below \ref PLAYFIELD_WIDTH
  * \param[in]       in_row: cell row, below \ref PLAYFIELD_HEIGHT
  */
-bool game_view_is_wall_drawn_at(uint8_t in_column, uint8_t in_row);
+bool game_view_is_wall_drawn_at(const game_view_t* in_view, uint8_t in_column, uint8_t in_row);
 
 #endif /* GAME_VIEW_H */

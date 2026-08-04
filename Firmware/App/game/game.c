@@ -9,6 +9,7 @@
 #include "custom_assert.h"
 #include "difficulty.h"
 #include "ghost.h"
+#include "maze_gen.h"
 #include "msg.h"
 #include "msg_broker.h"
 #include "pacman.h"
@@ -101,6 +102,23 @@ static void prv_place_entities(game_t* const inout_game)
 
 static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index);
 
+/* The seed for one level's maze.
+ *
+ * Mixed rather than `seed + level`, so that consecutive levels are not neighbours in the
+ * generator's own sequence: two xorshift32 streams started one apart diverge after a few
+ * words, but their first words do not — and the first words are what place the first pieces,
+ * which is the corner of the maze a player looks at first. */
+static uint32_t prv_get_level_maze_seed(uint32_t in_run_seed, uint8_t in_level)
+{
+    uint32_t seed = in_run_seed + (0x9E3779B9U * (uint32_t)in_level);
+
+    seed ^= seed >> 16;
+    seed *= 0x7FEB352DU;
+    seed ^= seed >> 15;
+
+    return seed;
+}
+
 static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 {
     inout_game->level = in_level;
@@ -109,7 +127,12 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
      * long that lasts is the level's business (§10.9). */
     difficulty_get(in_level, &inout_game->difficulty);
 
-    playfield_load(&inout_game->playfield);
+    if (!inout_game->is_maze_fixed)
+    {
+        maze_gen_generate(&inout_game->maze, prv_get_level_maze_seed(inout_game->maze_seed, in_level));
+    }
+
+    playfield_load_from_map(&inout_game->playfield, &inout_game->maze);
     prv_place_entities(inout_game);
 
     /* A new level starts the personal counters over and puts the global one away (§10.4).
@@ -657,13 +680,18 @@ void game_init(game_t* inout_game)
     inout_game->state = GAME_STATE_IDLE;
     inout_game->lives = 0U;
 
+    /* An idle game still holds a whole level, so everything downstream — the state message,
+     * the view, the panel — has something consistent to work with before a run begins. The
+     * seed is fixed because nothing is being played yet; #game_start replaces it. */
+    inout_game->maze_seed = 1U;
+    inout_game->is_maze_fixed = false;
+
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
-void game_start(game_t* inout_game)
+/* What both ways of starting a run have in common. */
+static void prv_begin_run(game_t* const inout_game)
 {
-    ASSERT(inout_game != NULL);
-
     /* A fresh bus rather than reset fields, so the score, the bonus chain and the
      * subscriptions are rebuilt together and cannot drift apart. */
     prv_init_bus(inout_game);
@@ -672,6 +700,34 @@ void game_start(game_t* inout_game)
     inout_game->state = GAME_STATE_RUNNING;
 
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
+}
+
+void game_start(game_t* inout_game, uint32_t in_maze_seed)
+{
+    ASSERT(inout_game != NULL);
+
+    inout_game->maze_seed = in_maze_seed;
+    inout_game->is_maze_fixed = false;
+
+    prv_begin_run(inout_game);
+}
+
+void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map)
+{
+    ASSERT(inout_game != NULL);
+    ASSERT(in_map != NULL);
+
+    inout_game->maze = *in_map;
+    inout_game->is_maze_fixed = true;
+
+    prv_begin_run(inout_game);
+}
+
+const playfield_map_t* game_get_maze(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return &in_game->maze;
 }
 
 void game_set_direction(game_t* inout_game, direction_e in_direction)

@@ -40,6 +40,39 @@ typedef struct
     int16_t y; /*!< Row, `0` is the top edge          */
 } cell_t;
 
+/* The map legend, one character per cell ([10 §10.2](../../../Docu/PrePlanning/10-Pacman-Game-Design.md)).
+ *
+ * It is out here rather than private to `playfield.c` because it is a *contract* now: since
+ * FR-029 the maze is generated, and `maze_gen` writes exactly these characters for
+ * #playfield_load_from_map to read back. Two modules agreeing on a legend by eye is how a
+ * wall turns into a pellet.
+ *
+ * `PLAYFIELD_MAP_GHOST_START_FIRST` is the first of #PLAYFIELD_GHOST_COUNT consecutive
+ * digits, one per ghost, numbered as `ghost_personality_e` numbers them — Blinky, Pinky,
+ * Inky, Clyde. Blinky's is the one *outside*, just above the gate, because that is where the
+ * arcade puts him; the other three stand inside. Digits rather than initials because 'P' is
+ * already Pacman's and 'C'/'I' would read as maze pieces. */
+#define PLAYFIELD_MAP_WALL              '#'
+#define PLAYFIELD_MAP_PELLET            '.'
+#define PLAYFIELD_MAP_POWER_PELLET      'o'
+#define PLAYFIELD_MAP_PACMAN_START      'P'
+#define PLAYFIELD_MAP_HOUSE             'H'
+#define PLAYFIELD_MAP_GATE              'D'
+#define PLAYFIELD_MAP_TUNNEL            'T'
+#define PLAYFIELD_MAP_OPEN              ' '
+#define PLAYFIELD_MAP_GHOST_START_FIRST '0'
+
+/*! \brief A maze as characters, one row per line, each `NUL`-terminated so a row is
+ *         printable and comparable as a string.
+ *
+ * The type lives here rather than with the generator because it is `playfield`'s input
+ * format, and it has three users who must agree on it: `maze_gen` writes one, this module
+ * turns one into rules, and `game_view` derives the maze's *appearance* from one. */
+typedef struct
+{
+    char rows[PLAYFIELD_HEIGHT][PLAYFIELD_WIDTH + 1];
+} playfield_map_t;
+
 typedef enum
 {
     PLAYFIELD_PELLET_NONE = 0, /*!< Nothing to eat here               */
@@ -68,15 +101,41 @@ typedef struct
  * playfield - public API
  * ========================================================================= */
 
-/*! \brief Load the maze, with every pellet restored.
+/*! \brief Load the arcade's own maze, with every pellet restored.
  *
- * There is one maze and every level plays it (§10.2). It used to take a level number and
- * pick one of five layouts; the difficulty a level carries now lives in `difficulty`,
- * which is where the arcade puts it too.
+ * **This is no longer what a game plays** — since FR-029 every level gets a generated maze
+ * (`maze_gen`, #playfield_load_from_map). The arcade layout stays because it is the one maze
+ * whose every property is known from outside this codebase: 244 pellets, the corridors the
+ * Dossier's ghost behaviour was described against, the tile map `game_view` derives its
+ * appearance rules from. That makes it the fixture the generated mazes are judged against,
+ * and a fixture has to stay put.
  *
  * \param[out]      inout_playfield: playfield to load into, must not be `NULL`
  */
 void playfield_load(playfield_t* inout_playfield);
+
+/*! \brief The arcade's own maze, as a map.
+ *
+ * For a caller that needs to *hand it somewhere* rather than load it — a test starting a run
+ * on a maze whose corridors are known, which is the only way to assert about a corridor at
+ * all once the real mazes are generated.
+ *
+ * \param[out]      out_map: filled in completely, must not be `NULL`
+ */
+void playfield_get_arcade_map(playfield_map_t* out_map);
+
+/*! \brief Load a maze from a map, with every pellet restored.
+ *
+ * The map is read and not kept: everything the rules need is copied out, so a caller may
+ * reuse or discard it immediately.
+ *
+ * A map that is missing a ghost start, or that holds no pellets, is a defect in whatever
+ * produced it rather than a runtime condition, and asserts.
+ *
+ * \param[out]      inout_playfield: playfield to load into, must not be `NULL`
+ * \param[in]       in_map: maze to load, must not be `NULL`
+ */
+void playfield_load_from_map(playfield_t* inout_playfield, const playfield_map_t* in_map);
 
 /*! \brief Bring an out-of-range cell back inside the grid, wrapping each axis.
  *

@@ -14,7 +14,11 @@
  * game_view - private
  * ========================================================================= */
 
-#define GAME_VIEW_CELL_COUNT (PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT)
+/* Every cell the field handover covers: the maze plus the border drawn round it. */
+#define GAME_VIEW_CELL_COUNT (GAME_VIEW_FIELD_WIDTH * GAME_VIEW_FIELD_HEIGHT)
+
+/* The border shifts maze coordinates into the tile array and the field walk. */
+#define BORDER               (GAME_VIEW_MAZE_BORDER)
 
 /* A full step, in the 1/256ths of cell_progress_t. */
 #define GAME_VIEW_FULL_STEP  (256)
@@ -28,54 +32,250 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
     SPRITE_SET_PALETTE_CLYDE,
 };
 
-/* How the maze is *drawn*, one character per cell — the arcade's own map, transcribed
- * unchanged, with `sprite_set` holding what each letter draws.
+/* ---- how a wall is drawn -------------------------------------------------- */
+
+/* The whole of the maze's appearance, in two numbers.
  *
- * This is the maze a second time, and that is deliberate: `playfield.c` holds what the
- * rules need (wall, pellet, pen, tunnel) and this holds what the panel needs (which of
- * thirty-odd line and corner pieces goes in this cell). Neither can be derived from the
- * other — a wall bitmap does not say which corner piece to draw, and a corner piece does
- * not say whether a ghost may stand there. They come from the same source and a unit test
- * checks they still agree, which is what makes the duplication safe rather than a trap.
+ * A wall is drawn as a **stroke of `WALL_STROKE_WIDTH` pixels, set `WALL_STROKE_INSET`
+ * pixels inside the wall's edge**. Six is the weight the arcade's own two-cell walls read at.
+ * Five is what leaves a corridor the same clear black on both sides, which is what puts a
+ * pellet in the middle of it.
  *
- * Everything that is not a wall letter is corridor: `.` and `P` carry pellets and a space
- * carries nothing. What is actually left to eat comes from the state message, not from
- * here — this map never changes. */
-/* clang-format off */
-static const char* const g_maze_appearance[PLAYFIELD_HEIGHT] = {
-    "0UUUUUUUUUUUU45UUUUUUUUUUUU1",
-    "L............rl............R",
-    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
-    "LPr  l.r   l.rl.r   l.r  lPR",
-    "L.guuh.guuuh.gh.guuuh.guuh.R",
-    "L..........................R",
-    "L.ebbf.ef.ebbbbbbf.ef.ebbf.R",
-    "L.guuh.rl.guuyxuuh.rl.guuh.R",
-    "L......rl....rl....rl......R",
-    "2BBBBf.rzbbf rl ebbwl.eBBBB3",
-    "     L.rxuuh gh guuyl.R     ",
-    "     L.rl          rl.R     ",
-    "     L.rl mjs--tjn rl.R     ",
-    "UUUUUh.gh i      q gh.gUUUUU",
-    "      .   i      q   .      ",
-    "BBBBBf.ef i      q ef.eBBBBB",
-    "     L.rl okkkkkkp rl.R     ",
-    "     L.rl          rl.R     ",
-    "     L.rl ebbbbbbf rl.R     ",
-    "0UUUUh.gh guuyxuuh gh.gUUUU1",
-    "L............rl............R",
-    "L.ebbf.ebbbf.rl.ebbbf.ebbf.R",
-    "L.guyl.guuuh.gh.guuuh.rxuh.R",
-    "LP..rl.......  .......rl..PR",
-    "6bf.rl.ef.ebbbbbbf.ef.rl.eb8",
-    "7uh.gh.rl.guuyxuuh.rl.gh.gu9",
-    "L......rl....rl....rl......R",
-    "L.ebbbbwzbbf.rl.ebbwzbbbbf.R",
-    "L.guuuuuuuuh.gh.guuuuuuuuh.R",
-    "L..........................R",
-    "2BBBBBBBBBBBBBBBBBBBBBBBBBB3",
-};
-/* clang-format on */
+ * There is no tile alphabet any more (DEC-034). There was one, decoded from the 1980 ROM, and
+ * it worked for as long as every wall was two cells thick — which is what its pieces were
+ * drawn for. A piece has its ink at a fixed place in its 8 pixels, so it can only compose
+ * correctly at the thickness it was designed for; every wall of another thickness needed a
+ * family of its own, and every seam between two families was a visible fault. Four rounds of
+ * them were reported from the panel. Below, the width and the inset are *arithmetic*, so they
+ * are the same everywhere by construction rather than by case analysis. */
+#define WALL_STROKE_WIDTH      (6)
+#define WALL_STROKE_INSET      (5)
+
+/* The ghost house gate: not a wall, but drawn like one and in its own colour. */
+#define HOUSE_GATE_ROW         (12)
+
+/* The ghost house, fixed in every maze (`maze_gen`): its wall is the ring rows 12..16 by columns
+ * 10..17, and its inside is what that ring encloses.
+ *
+ * The ring is **one cell thick**, and a 6-pixel stroke set 5 pixels in does not fit in 8 pixels.
+ * Centred in the cell instead, it lands half a cell off the grid every other wall sits on — of one
+ * maze's strokes, 964 were on the grid and 32 beside it, which is visible — and it leaves the
+ * corridor round the house 14 pixels wide where every other corridor is 18.
+ *
+ * So for **drawing**, the house's wall is two cells thick: the ring, plus the first ring of its
+ * inside. It is then an ordinary wall and needs no exception of its own. The ghosts wait in there
+ * and are drawn over it, which they already were. The two cells under the gate are left out, or
+ * the way through would be drawn shut. */
+#define HOUSE_FIRST_COLUMN     (10)
+#define HOUSE_LAST_COLUMN      (17)
+#define HOUSE_FIRST_ROW        (12)
+#define HOUSE_LAST_ROW         (16)
+#define HOUSE_GATE_LEFT_COLUMN (13)
+
+/*! \brief Whether a cell is inside the ghost house, its wall included. */
+static bool prv_is_in_the_house(int16_t in_x, int16_t in_y)
+{
+    return (in_x >= HOUSE_FIRST_COLUMN) && (in_x <= HOUSE_LAST_COLUMN) && (in_y >= HOUSE_FIRST_ROW)
+           && (in_y <= HOUSE_LAST_ROW);
+}
+
+static bool prv_is_house_lining(int16_t in_x, int16_t in_y)
+{
+    const bool is_inside = (in_x > HOUSE_FIRST_COLUMN) && (in_x < HOUSE_LAST_COLUMN) && (in_y > HOUSE_FIRST_ROW)
+                           && (in_y < HOUSE_LAST_ROW);
+    const bool is_against_the_ring = (in_x == (HOUSE_FIRST_COLUMN + 1)) || (in_x == (HOUSE_LAST_COLUMN - 1))
+                                     || (in_y == (HOUSE_FIRST_ROW + 1)) || (in_y == (HOUSE_LAST_ROW - 1));
+    return is_inside && is_against_the_ring;
+}
+
+/* The gate, and the cell under it: **wall that happens to be pink**.
+ *
+ * Left out of the wall it would break the house's top in two, and a broken stroke ends in caps —
+ * two blue blocks either side of the opening, which is what the first attempt at this looked like.
+ * It is the same shape as the wall around it and differs only in colour, which is also all the
+ * arcade does with it. Passable to a ghost either way: that is the map's business, not the
+ * picture's. */
+static bool prv_is_gate(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    const bool is_gate_column = (in_x == HOUSE_GATE_LEFT_COLUMN) || (in_x == (HOUSE_GATE_LEFT_COLUMN + 1));
+
+    if (!is_gate_column || (in_y < HOUSE_FIRST_ROW) || (in_y > (HOUSE_FIRST_ROW + 1)))
+    {
+        return false;
+    }
+
+    /* The gate's own row is marked in the map; the row under it is the lining below that. */
+    return (in_y == (HOUSE_FIRST_ROW + 1)) || (in_map->rows[in_y][in_x] == PLAYFIELD_MAP_GATE);
+}
+
+/* Whether there is wall at a cell, counting the border drawn outside the maze.
+ *
+ * The border **mirrors the maze's edge cell**: beside a wall it is wall, beside a tunnel mouth it
+ * is open, so the maze's outer wall is two cells thick and a portal goes cleanly through it
+ * (DEC-033). Beyond that one cell there is nothing — which matters, because the geometry below
+ * measures how deep a wall is by how far it runs, and a wall that ran on for ever would have no
+ * edge to set its stroke in from. */
+static bool prv_is_wall(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y)
+{
+    int16_t x = in_x;
+    int16_t y = in_y;
+
+    if ((in_x < -BORDER) || (in_x >= (PLAYFIELD_WIDTH + BORDER)) || (in_y < -BORDER)
+        || (in_y >= (PLAYFIELD_HEIGHT + BORDER)))
+    {
+        return false;
+    }
+
+    x = (x < 0) ? 0 : ((x >= PLAYFIELD_WIDTH) ? (PLAYFIELD_WIDTH - 1) : x);
+    y = (y < 0) ? 0 : ((y >= PLAYFIELD_HEIGHT) ? (PLAYFIELD_HEIGHT - 1) : y);
+
+    return (in_map->rows[y][x] == PLAYFIELD_MAP_WALL) || prv_is_house_lining(x, y) || prv_is_gate(in_map, x, y);
+}
+
+/* How many cells of wall run on from this one in a direction, not counting it. */
+static int16_t prv_get_wall_run(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y, int16_t in_step_x,
+                                int16_t in_step_y)
+{
+    int16_t run = 0;
+    int16_t x = (int16_t)(in_x + in_step_x);
+    int16_t y = (int16_t)(in_y + in_step_y);
+
+    while (prv_is_wall(in_map, x, y))
+    {
+        ++run;
+        x = (int16_t)(x + in_step_x);
+        y = (int16_t)(y + in_step_y);
+
+        /* A run can never be longer than the field; the guard is against a map that is wall
+         * all the way across, which the border makes possible. */
+        if (run > GAME_VIEW_FIELD_HEIGHT)
+        {
+            break;
+        }
+    }
+
+    return run;
+}
+
+/* Where the stroke sits, along one axis.
+ *
+ * `in_thickness` is how deep the wall is on that axis, in pixels. The stroke is centred in it
+ * up to the inset: a wall thick enough gets the full 5, and one that is not — the ghost house,
+ * whose wall is a single cell — gets what fits, so it is drawn rather than dropped. */
+static int16_t prv_get_stroke_inset(int16_t in_thickness)
+{
+    const int16_t centred = (int16_t)((in_thickness - WALL_STROKE_WIDTH) / 2);
+
+    if (centred < 0)
+    {
+        return 0;
+    }
+
+    if (centred > WALL_STROKE_INSET)
+    {
+        return WALL_STROKE_INSET;
+    }
+
+    return centred;
+}
+
+/* Whether a pixel is on the stroke, given how far it is from the wall's edge. */
+static bool prv_is_on_stroke(int16_t in_distance, int16_t in_inset)
+{
+    return (in_distance >= in_inset) && (in_distance < (in_inset + WALL_STROKE_WIDTH));
+}
+
+static int16_t prv_get_smaller(int16_t in_first, int16_t in_second)
+{
+    return (in_first < in_second) ? in_first : in_second;
+}
+
+static int16_t prv_get_larger(int16_t in_first, int16_t in_second)
+{
+    return (in_first > in_second) ? in_first : in_second;
+}
+
+/* How far a pixel is from the nearest pixel that is not wall.
+ *
+ * **Measured to the nearest edge in any direction, corners included** — not as the smallest of
+ * the four axis distances, which was the first attempt and left a gap at every junction. Where a
+ * branch meets a wall the nearest edge is the inside corner of the join, which is diagonal: to an
+ * axis it looks eleven pixels away and it is five, so the branch's stroke stopped short of the
+ * one it was meant to run into. A T with a gap in its neck, and the same at every box against the
+ * outer wall.
+ *
+ * Chebyshev distance, so a stroke turns a corner squarely rather than rounding it, and a straight
+ * edge gives exactly the same answer as before. Only cells within two of this one are looked at:
+ * the stroke reaches ten pixels in at the most, and two cells is sixteen. */
+static int16_t prv_get_distance_to_edge(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y,
+                                        int16_t in_pixel_x, int16_t in_pixel_y)
+{
+    const int16_t reach = 2;
+    int16_t nearest = (int16_t)(WALL_STROKE_INSET + WALL_STROKE_WIDTH + 1);
+
+    for (int16_t offset_y = -reach; offset_y <= reach; ++offset_y)
+    {
+        for (int16_t offset_x = -reach; offset_x <= reach; ++offset_x)
+        {
+            const int16_t left = (int16_t)(offset_x * GAME_VIEW_TILE_SIZE);
+            const int16_t top = (int16_t)(offset_y * GAME_VIEW_TILE_SIZE);
+            int16_t distance_x;
+            int16_t distance_y;
+
+            if (prv_is_wall(in_map, (int16_t)(in_x + offset_x), (int16_t)(in_y + offset_y)))
+            {
+                continue;
+            }
+
+            distance_x = prv_get_larger(0, prv_get_larger((int16_t)(left - in_pixel_x),
+                                                          (int16_t)(in_pixel_x - (left + GAME_VIEW_TILE_SIZE - 1))));
+            distance_y = prv_get_larger(0, prv_get_larger((int16_t)(top - in_pixel_y),
+                                                          (int16_t)(in_pixel_y - (top + GAME_VIEW_TILE_SIZE - 1))));
+
+            nearest = prv_get_smaller(nearest, prv_get_larger(distance_x, distance_y));
+        }
+    }
+
+    /* Less one, so that 0 means "the outermost pixel of the wall" and the inset above counts the
+     * pixels of wall left outside the stroke. Without it every distance is one too many and the
+     * stroke sits a pixel further out than asked, which narrows every corridor by two. */
+    return (nearest > 0) ? (int16_t)(nearest - 1) : 0;
+}
+
+/* The pixels of one wall cell.
+ *
+ * Everything the old alphabet had a piece for — edges, outer corners, inner corners, junctions,
+ * ends, the one-cell walls of the ghost house, the mouths where a tunnel breaks the wall — comes
+ * out of the one test below. */
+static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_x, int16_t in_y,
+                                uint8_t* const out_rows)
+{
+    const int16_t above = (int16_t)(GAME_VIEW_TILE_SIZE * prv_get_wall_run(in_map, in_x, in_y, 0, -1));
+    const int16_t below = (int16_t)(GAME_VIEW_TILE_SIZE * prv_get_wall_run(in_map, in_x, in_y, 0, 1));
+    const int16_t left = (int16_t)(GAME_VIEW_TILE_SIZE * prv_get_wall_run(in_map, in_x, in_y, -1, 0));
+    const int16_t right = (int16_t)(GAME_VIEW_TILE_SIZE * prv_get_wall_run(in_map, in_x, in_y, 1, 0));
+
+    /* How deep the wall is here on each axis, and therefore how far in the stroke may sit. The
+     * smaller of the two governs: a wall that is thin one way cannot hold a stroke set further in
+     * than it is deep. */
+    const int16_t inset = prv_get_smaller(prv_get_stroke_inset((int16_t)(left + right + GAME_VIEW_TILE_SIZE)),
+                                          prv_get_stroke_inset((int16_t)(above + below + GAME_VIEW_TILE_SIZE)));
+
+    for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
+    {
+        uint8_t bits = 0U;
+
+        for (int16_t column = 0; column < GAME_VIEW_TILE_SIZE; ++column)
+        {
+            if (prv_is_on_stroke(prv_get_distance_to_edge(in_map, in_x, in_y, column, row), inset))
+            {
+                bits |= (uint8_t)(0x80U >> column);
+            }
+        }
+
+        out_rows[row] = bits;
+    }
+}
 
 static void prv_add_item(msg_display_list_t* const inout_list, display_item_kind_e in_kind, sprite_set_id_e in_sprite,
                          sprite_set_palette_e in_palette, int16_t in_x, int16_t in_y)
@@ -85,9 +285,8 @@ static void prv_add_item(msg_display_list_t* const inout_list, display_item_kind
     ASSERT(inout_list->count < MSG_DISPLAY_ITEM_MAX);
 
     item->kind = (uint8_t)in_kind;
-    item->sprite = (uint8_t)in_sprite;
+    item->drawing.sprite = (uint8_t)in_sprite;
     item->palette = (uint8_t)in_palette;
-    item->reserved = 0U;
     item->x = in_x;
     item->y = in_y;
 
@@ -114,9 +313,22 @@ static void prv_get_actor_pixel(const msg_actor_t* const in_actor, int16_t* cons
      * than a square in it. */
     const int16_t inset = (int16_t)((GAME_VIEW_ACTOR_SIZE - GAME_VIEW_TILE_SIZE) / 2);
 
+    /* Half a cell to the right while an actor is inside the ghost house.
+     *
+     * The three waiting ghosts are 16 pixels each and stand two cells apart, so they touch; but
+     * their centres fall on cell *centres* while the gate's centre — and the house's — fall on a
+     * cell *boundary*, four pixels away. No whole cell is at both, so on the grid alone Pinky
+     * cannot sit under the gate. This is the four pixels, and it is **drawing only**: the cell an
+     * actor stands on is untouched, and so is everything the rules read.
+     *
+     * It costs a four-pixel sideways step as a ghost leaves the house, where the offset ends. The
+     * owner was shown that and chose it over the alternatives (DEC-035). */
+    const int16_t house_offset =
+        prv_is_in_the_house(in_actor->column, in_actor->row) ? (int16_t)(GAME_VIEW_TILE_SIZE / 2) : 0;
+
     game_view_get_cell_pixel(in_actor->column, in_actor->row, out_x, out_y);
 
-    *out_x = (int16_t)(*out_x - inset);
+    *out_x = (int16_t)((*out_x - inset) + house_offset);
     *out_y = (int16_t)(*out_y - inset);
 
     switch ((direction_e)in_actor->direction)
@@ -135,45 +347,60 @@ static void prv_get_actor_pixel(const msg_actor_t* const in_actor, int16_t* cons
     }
 }
 
-bool game_view_is_wall_drawn_at(uint8_t in_column, uint8_t in_row)
+bool game_view_is_wall_drawn_at(const game_view_t* in_view, uint8_t in_column, uint8_t in_row)
 {
-    sprite_set_id_e id;
-
+    ASSERT(in_view != NULL);
     ASSERT(in_column < PLAYFIELD_WIDTH);
     ASSERT(in_row < PLAYFIELD_HEIGHT);
 
-    if (!sprite_set_get_maze_tile(g_maze_appearance[in_row][in_column], &id))
-    {
-        return false;
-    }
-
-    return !sprite_set_is_maze_gate(id);
+    /* Straight off the map now. There used to be a second map of the maze to disagree with, and
+     * this question was how the two were held together; with one map there is nothing to hold. */
+    return in_view->maze.rows[in_row][in_column] == PLAYFIELD_MAP_WALL;
 }
 
-/* What a field cell should look like, given the pellets that are left. Walls come from the
- * appearance map rather than from the state, because they never change and sending 868
- * unchanging bits every frame would be silly. */
-static void prv_describe_cell(const game_view_t* const in_view, uint8_t in_column, uint8_t in_row,
-                              sprite_set_id_e* const out_sprite, sprite_set_palette_e* const out_palette)
+/* What one cell of the field is: a piece of wall, the gate, a pellet, or nothing.
+ *
+ * A wall's pixels are computed here rather than looked up, and they are computed from the map
+ * rather than from the game state, because a wall cannot change until the next maze — sending
+ * 990 unchanging cells every frame would be silly. */
+static void prv_describe_cell(const game_view_t* const in_view, int16_t in_column, int16_t in_row,
+                              msg_display_item_t* const out_item)
 {
-    if (sprite_set_get_maze_tile(g_maze_appearance[in_row][in_column], out_sprite))
+    const bool is_in_maze =
+        (in_column >= 0) && (in_column < PLAYFIELD_WIDTH) && (in_row >= 0) && (in_row < PLAYFIELD_HEIGHT);
+
+    /* Out in the border, `prv_is_wall` decides — it mirrors the maze's edge cell, so the border is
+     * wall beside a wall and **open beside a tunnel mouth**. Treating every border cell as wall
+     * was what drew a wall straight across the mouth, and a portal Pacman cannot walk through is
+     * not a portal. */
+    const char cell = prv_is_wall(&in_view->maze, in_column, in_row) ? PLAYFIELD_MAP_WALL
+                      : is_in_maze                                   ? in_view->maze.rows[in_row][in_column]
+                                                                     : PLAYFIELD_MAP_OPEN;
+
+    if (cell == PLAYFIELD_MAP_WALL)
     {
-        *out_palette = sprite_set_is_maze_gate(*out_sprite) ? SPRITE_SET_PALETTE_DOOR : SPRITE_SET_PALETTE_WALL;
+        out_item->kind = (uint8_t)DISPLAY_ITEM_WALL;
+        out_item->palette = prv_is_gate(&in_view->maze, in_column, in_row) ? (uint8_t)SPRITE_SET_PALETTE_DOOR
+                                                                           : (uint8_t)SPRITE_SET_PALETTE_WALL;
+        prv_get_wall_bitmap(&in_view->maze, in_column, in_row, out_item->drawing.wall_rows);
 
         return;
     }
 
-    if (!msg_cell_bitmap_get(in_view->state.has_pellet, in_column, in_row))
+    out_item->kind = (uint8_t)DISPLAY_ITEM_BACKGROUND;
+
+    if (!is_in_maze || !msg_cell_bitmap_get(in_view->state.has_pellet, (uint8_t)in_column, (uint8_t)in_row))
     {
-        *out_sprite = SPRITE_SET_TILE;
-        *out_palette = SPRITE_SET_PALETTE_EMPTY;
+        out_item->drawing.sprite = (uint8_t)SPRITE_SET_TILE;
+        out_item->palette = (uint8_t)SPRITE_SET_PALETTE_EMPTY;
 
         return;
     }
 
-    *out_sprite = msg_cell_bitmap_get(in_view->state.is_power, in_column, in_row) ? SPRITE_SET_TILE_POWER_PELLET
-                                                                                  : SPRITE_SET_TILE_PELLET;
-    *out_palette = SPRITE_SET_PALETTE_PELLET;
+    out_item->drawing.sprite = msg_cell_bitmap_get(in_view->state.is_power, (uint8_t)in_column, (uint8_t)in_row)
+                                   ? (uint8_t)SPRITE_SET_TILE_POWER_PELLET
+                                   : (uint8_t)SPRITE_SET_TILE_PELLET;
+    out_item->palette = (uint8_t)SPRITE_SET_PALETTE_PELLET;
 }
 
 /* Whether a cell looks different from the last time the field was described. */
@@ -200,17 +427,18 @@ static bool prv_has_cell_changed(const game_view_t* const in_view, uint8_t in_co
  * A level change is 99 tiles and takes several messages; a swallowed pellet is one. Both
  * go through here, because "the field is not what Render last drew" is the same problem
  * at two sizes. */
-static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list_t* const inout_list, uint8_t in_column,
-                              uint8_t in_row)
+static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list_t* const inout_list, int16_t in_column,
+                              int16_t in_row)
 {
-    sprite_set_id_e sprite;
-    sprite_set_palette_e palette;
-    int16_t x;
-    int16_t y;
+    msg_display_item_t* const item = &inout_list->items[inout_list->count];
 
-    prv_describe_cell(in_view, in_column, in_row, &sprite, &palette);
-    game_view_get_cell_pixel(in_column, in_row, &x, &y);
-    prv_add_item(inout_list, DISPLAY_ITEM_BACKGROUND, sprite, palette, x, y);
+    ASSERT(inout_list->count < MSG_DISPLAY_ITEM_MAX);
+
+    prv_describe_cell(in_view, in_column, in_row, item);
+    item->x = (int16_t)(GAME_VIEW_ORIGIN_X + (in_column * GAME_VIEW_TILE_SIZE));
+    item->y = (int16_t)(GAME_VIEW_ORIGIN_Y + (in_row * GAME_VIEW_TILE_SIZE));
+
+    ++inout_list->count;
 }
 
 /* ---- the HUD ------------------------------------------------------------- */
@@ -368,8 +596,8 @@ static void prv_fill_full_field(game_view_t* const inout_view, msg_display_list_
 {
     while ((inout_view->pending_field_cell < GAME_VIEW_CELL_COUNT) && (inout_list->count < MSG_DISPLAY_ITEM_MAX))
     {
-        const uint8_t column = (uint8_t)(inout_view->pending_field_cell % PLAYFIELD_WIDTH);
-        const uint8_t row = (uint8_t)(inout_view->pending_field_cell / PLAYFIELD_WIDTH);
+        const int16_t column = (int16_t)((inout_view->pending_field_cell % GAME_VIEW_FIELD_WIDTH) - BORDER);
+        const int16_t row = (int16_t)((inout_view->pending_field_cell / GAME_VIEW_FIELD_WIDTH) - BORDER);
 
         ++inout_view->pending_field_cell;
 
@@ -391,7 +619,8 @@ static void prv_fill_changed_cells(game_view_t* const inout_view, msg_display_li
 {
     const uint8_t room = (uint8_t)(MSG_DISPLAY_ITEM_MAX - MSG_ACTOR_COUNT);
 
-    for (uint16_t index = 0U; index < GAME_VIEW_CELL_COUNT; ++index)
+    /* Inside the maze only: what changes between frames is a pellet, and the border has none. */
+    for (uint16_t index = 0U; index < (PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT); ++index)
     {
         const uint8_t column = (uint8_t)(index % PLAYFIELD_WIDTH);
         const uint8_t row = (uint8_t)(index / PLAYFIELD_WIDTH);
@@ -408,7 +637,7 @@ static void prv_fill_changed_cells(game_view_t* const inout_view, msg_display_li
             return;
         }
 
-        prv_add_cell_item(inout_view, inout_list, column, row);
+        prv_add_cell_item(inout_view, inout_list, (int16_t)column, (int16_t)row);
         msg_cell_bitmap_set(inout_view->drawn_field.has_pellet, column, row,
                             msg_cell_bitmap_get(inout_view->state.has_pellet, column, row));
         msg_cell_bitmap_set(inout_view->drawn_field.is_power, column, row,
@@ -463,6 +692,21 @@ void game_view_init(game_view_t* inout_view)
     prv_forget_hud(inout_view);
 }
 
+void game_view_set_maze(game_view_t* inout_view, const playfield_map_t* in_map)
+{
+    ASSERT(inout_view != NULL);
+    ASSERT(in_map != NULL);
+
+    inout_view->maze = *in_map;
+    inout_view->has_maze = true;
+
+    /* A new maze is every cell changed, so the field goes out again from the start. */
+    inout_view->has_drawn_field = false;
+    inout_view->pending_field_cell = 0U;
+    inout_view->is_full_field_pending = inout_view->has_state;
+    prv_forget_hud(inout_view);
+}
+
 void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_state)
 {
     ASSERT(inout_view != NULL);
@@ -494,7 +738,7 @@ bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out
 
     memset(out_list, 0, sizeof(*out_list));
 
-    if (!inout_view->has_state)
+    if (!inout_view->has_state || !inout_view->has_maze)
     {
         return false;
     }

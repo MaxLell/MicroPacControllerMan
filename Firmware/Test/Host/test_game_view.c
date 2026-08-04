@@ -20,6 +20,7 @@
 #include "custom_assert.h"
 #include "framebuffer.h"
 #include "game_view.h"
+#include "maze_gen.h"
 #include "msg.h"
 #include "playfield.h"
 #include "sprite_set.h"
@@ -129,7 +130,7 @@ static const msg_display_item_t* prv_find_actor(const msg_display_list_t* in_lis
 {
     for (uint8_t index = 0U; index < in_list->count; ++index)
     {
-        if ((in_list->items[index].kind == DISPLAY_ITEM_ACTOR) && (in_list->items[index].sprite == in_sprite))
+        if ((in_list->items[index].kind == DISPLAY_ITEM_ACTOR) && (in_list->items[index].drawing.sprite == in_sprite))
         {
             return &in_list->items[index];
         }
@@ -150,10 +151,26 @@ static uint8_t prv_count_of_kind(const msg_display_list_t* in_list, display_item
     return count;
 }
 
+/* The maze the view is asked to draw. The arcade's own throughout this file: the appearance
+ * is *derived* from the walls now (FR-029), and the arcade layout is the one case where the
+ * answer is written down independently — in the map at the bottom of this file, transcribed
+ * from the 1980 game — so it is what the derivation is judged against. */
+static playfield_t g_arcade_rules;
+
+static void prv_set_arcade_maze(void)
+{
+    playfield_map_t map;
+
+    playfield_get_arcade_map(&map);
+    playfield_load_from_map(&g_arcade_rules, &map);
+    game_view_set_maze(&g_view, &map);
+}
+
 void setUp(void)
 {
     assert_probe_begin();
     game_view_init(&g_view);
+    prv_set_arcade_maze();
     prv_make_state();
 }
 
@@ -239,26 +256,26 @@ void test_the_hud_spells_out_the_score_the_level_and_the_lives(void)
     /* The units digit, and the one above it. Right-aligned, so 1234 puts the 4 on the last
      * column and the 3 beside it. */
     prv_get_score_digit_pixel(0U, &x, &y);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), prv_find_at(items, count, x, y)->sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), prv_find_at(items, count, x, y)->drawing.sprite);
     prv_get_score_digit_pixel(1U, &x, &y);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('3'), prv_find_at(items, count, x, y)->sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('3'), prv_find_at(items, count, x, y)->drawing.sprite);
 
     /* And the places above the number are blank rather than zeroes — the arcade does not
      * pad a score out with leading noughts. */
     prv_get_score_digit_pixel(4U, &x, &y);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(' '), prv_find_at(items, count, x, y)->sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(' '), prv_find_at(items, count, x, y)->drawing.sprite);
 
     /* The level, right-aligned in its own two places at the other end. */
     game_view_get_cell_pixel(26U, 0U, &x, &y);
     TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('7'),
-                            prv_find_at(items, count, x, GAME_VIEW_HUD_VALUE_ROW_Y)->sprite);
+                            prv_find_at(items, count, x, GAME_VIEW_HUD_VALUE_ROW_Y)->drawing.sprite);
 
     /* Three lives, three little Pacmans along the bottom. */
     for (uint8_t slot = 0U; slot < 3U; ++slot)
     {
         game_view_get_cell_pixel((uint8_t)(2U + (slot * 2U)), 0U, &x, &y);
         TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_PACMAN_HALF_WEST,
-                                prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->sprite);
+                                prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->drawing.sprite);
     }
 }
 
@@ -282,7 +299,7 @@ void test_a_score_of_nothing_still_shows_a_nought(void)
     /* Blanking every leading zero would leave the row empty at the start of a run, which
      * reads as a HUD that has not come up yet. */
     prv_get_score_digit_pixel(0U, &x, &y);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('0'), prv_find_at(items, count, x, y)->sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('0'), prv_find_at(items, count, x, y)->drawing.sprite);
 }
 
 void test_only_the_digits_that_moved_are_sent_again(void)
@@ -302,7 +319,7 @@ void test_only_the_digits_that_moved_are_sent_again(void)
     count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
 
     TEST_ASSERT_EQUAL_UINT8(1U, count);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), items[0].sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph('4'), items[0].drawing.sprite);
 }
 
 void test_a_lost_life_is_wiped_rather_than_left_behind(void)
@@ -326,7 +343,7 @@ void test_a_lost_life_is_wiped_rather_than_left_behind(void)
 
     TEST_ASSERT_EQUAL_UINT8(1U, count);
     TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_ACTOR_BLANK,
-                            prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->sprite);
+                            prv_find_at(items, count, x, GAME_VIEW_HUD_LIVES_Y)->drawing.sprite);
 }
 
 void test_the_hud_never_lands_on_the_maze(void)
@@ -369,13 +386,15 @@ void test_the_hud_never_lands_on_the_maze(void)
 }
 
 /* ==========================================================================
- * the maze is described twice, and the two must agree
+ * the picture and the rules must agree
  * ========================================================================= */
 
 void test_the_drawn_maze_and_the_played_maze_agree(void)
 {
-    /* `playfield` says where a wall *is* and this module says what a wall *looks like*, and
-     * neither can be derived from the other — a wall bitmap does not name a corner piece,
+    /* `playfield` says where a wall *is* and this module says what a wall *looks like*. The
+     * appearance is derived from the walls now (FR-029), so the two cannot disagree about
+     * *where* — but they can still disagree about what counts as passable, which is what this
+     * checks. It used to guard a hand-written second copy of the maze;
      * and a corner piece does not say whether a ghost may stand there. So the maze is
      * written out twice, from the same source, and this is what stops the two drifting.
      *
@@ -393,7 +412,7 @@ void test_the_drawn_maze_and_the_played_maze_agree(void)
         {
             const cell_t cell = {(int16_t)column, (int16_t)row};
             const bool is_walkable = playfield_is_walkable(&maze, cell);
-            const bool is_drawn_as_wall = game_view_is_wall_drawn_at(column, row);
+            const bool is_drawn_as_wall = game_view_is_wall_drawn_at(&g_view, column, row);
             char message[72];
 
             (void)snprintf(message, sizeof(message), "cell %u,%u: drawn as wall %u, walkable %u", column, row,
@@ -413,7 +432,7 @@ void test_the_ghost_house_gate_is_drawn_but_not_a_wall(void)
     playfield_load(&maze);
 
     TEST_ASSERT_TRUE(playfield_is_walkable(&maze, gate));
-    TEST_ASSERT_FALSE(game_view_is_wall_drawn_at(13U, 12U));
+    TEST_ASSERT_FALSE(game_view_is_wall_drawn_at(&g_view, 13U, 12U));
 }
 
 /* ==========================================================================
@@ -526,6 +545,7 @@ void test_each_direction_interpolates_the_right_way(void)
         const msg_display_item_t* ghost;
 
         game_view_init(&g_view);
+        prv_set_arcade_maze();
         g_state.ghosts[0].column = OPEN_COLUMN;
         g_state.ghosts[0].row = OPEN_ROW;
         g_state.ghosts[0].direction = (uint8_t)cases[index].direction;
@@ -593,6 +613,7 @@ void test_a_corner_is_drawn_without_a_jump(void)
 
     /* The model has stepped north: it is on the cell above, none of that step run off. */
     game_view_init(&g_view);
+    prv_set_arcade_maze();
     g_state.pacman.row = (uint8_t)(OPEN_ROW - 1U);
     g_state.pacman.direction = (uint8_t)DIRECTION_NORTH;
     g_state.pacman.progress = 0U;
@@ -679,7 +700,7 @@ void test_a_frightened_ghost_turns_blue_and_the_others_do_not(void)
         {
             ++frightened_count;
             TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_frightened_sprite(g_state.ghosts[0].progress),
-                                    list.items[index].sprite);
+                                    list.items[index].drawing.sprite);
         }
     }
 
@@ -731,9 +752,14 @@ void test_a_new_level_hands_over_every_cell(void)
     {
         (void)game_view_get_display_list(&g_view, &list);
         tile_count += prv_count_of_kind(&list, DISPLAY_ITEM_BACKGROUND);
+        tile_count += prv_count_of_kind(&list, DISPLAY_ITEM_WALL);
     }
 
-    TEST_ASSERT_EQUAL_UINT16(PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT, tile_count);
+    /* The maze **and the border drawn round it** — the outer wall's second cell, which is what
+     * lets it carry the same stroke as every other wall (DEC-033). Wall cells and field cells
+     * together: a wall arrives as pixels and a pellet as a drawing, but both are one cell of the
+     * handover (DEC-034). */
+    TEST_ASSERT_EQUAL_UINT16(GAME_VIEW_FIELD_WIDTH * GAME_VIEW_FIELD_HEIGHT, tile_count);
 }
 
 void test_an_ordinary_frame_carries_no_field_at_all(void)
@@ -794,7 +820,7 @@ void test_the_emptied_cell_is_drawn_as_empty(void)
     game_view_get_cell_pixel(PELLET_COLUMN, PELLET_ROW, &x, &y);
 
     TEST_ASSERT_EQUAL_UINT8((uint8_t)DISPLAY_ITEM_BACKGROUND, list.items[0].kind);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_TILE, list.items[0].sprite);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_TILE, list.items[0].drawing.sprite);
     TEST_ASSERT_EQUAL_UINT8((uint8_t)SPRITE_SET_PALETTE_EMPTY, list.items[0].palette);
     TEST_ASSERT_EQUAL_INT16(x, list.items[0].x);
     TEST_ASSERT_EQUAL_INT16(y, list.items[0].y);
@@ -815,7 +841,7 @@ void test_a_wall_is_a_wall_and_a_power_pellet_is_bigger(void)
         for (uint8_t index = 0U; index < list.count; ++index)
         {
             has_wall = has_wall || (list.items[index].palette == (uint8_t)SPRITE_SET_PALETTE_WALL);
-            has_power = has_power || (list.items[index].sprite == (uint8_t)SPRITE_SET_TILE_POWER_PELLET);
+            has_power = has_power || (list.items[index].drawing.sprite == (uint8_t)SPRITE_SET_TILE_POWER_PELLET);
         }
     }
 
@@ -832,13 +858,199 @@ void test_nothing_is_drawn_before_a_state_arrives(void)
 }
 
 /* ==========================================================================
+ * the picture, as geometry
+ * ========================================================================= */
+
+/* The maze used to be checked by comparing every cell against the arcade's own tile map, which
+ * is what the tile alphabet made possible and what its removal takes away (DEC-034). What
+ * replaces it is better aimed: the two things a player actually noticed are now *measured*.
+ *
+ * Both need the picture, so the picture is rebuilt here from the display list — which is also a
+ * fair test of the list itself. */
+#define PICTURE_WIDTH  (GAME_VIEW_FIELD_WIDTH * GAME_VIEW_TILE_SIZE)
+#define PICTURE_HEIGHT (GAME_VIEW_FIELD_HEIGHT * GAME_VIEW_TILE_SIZE)
+
+static bool g_wall_ink[PICTURE_HEIGHT][PICTURE_WIDTH];
+static bool g_pellet_ink[PICTURE_HEIGHT][PICTURE_WIDTH];
+
+/* Draw the whole field into the two bitmaps above: wall ink, and where a pellet sits. */
+static void prv_paint_the_field(void)
+{
+    msg_display_list_t list;
+    const int16_t left = (int16_t)(GAME_VIEW_ORIGIN_X - (GAME_VIEW_MAZE_BORDER * GAME_VIEW_TILE_SIZE));
+    const int16_t top = (int16_t)(GAME_VIEW_ORIGIN_Y - (GAME_VIEW_MAZE_BORDER * GAME_VIEW_TILE_SIZE));
+
+    memset(g_wall_ink, 0, sizeof(g_wall_ink));
+    memset(g_pellet_ink, 0, sizeof(g_pellet_ink));
+
+    game_view_set_state(&g_view, &g_state);
+
+    while (game_view_is_field_pending(&g_view))
+    {
+        (void)game_view_get_display_list(&g_view, &list);
+
+        for (uint8_t index = 0U; index < list.count; ++index)
+        {
+            const msg_display_item_t* const item = &list.items[index];
+            const int16_t x = (int16_t)(item->x - left);
+            const int16_t y = (int16_t)(item->y - top);
+
+            if (item->kind == (uint8_t)DISPLAY_ITEM_WALL)
+            {
+                for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
+                {
+                    for (int16_t column = 0; column < GAME_VIEW_TILE_SIZE; ++column)
+                    {
+                        if ((item->drawing.wall_rows[row] & (0x80U >> column)) != 0U)
+                        {
+                            g_wall_ink[y + row][x + column] = true;
+                        }
+                    }
+                }
+            }
+            else if ((item->drawing.sprite == (uint8_t)SPRITE_SET_TILE_PELLET)
+                     || (item->drawing.sprite == (uint8_t)SPRITE_SET_TILE_POWER_PELLET))
+            {
+                g_pellet_ink[y + (GAME_VIEW_TILE_SIZE / 2)][x + (GAME_VIEW_TILE_SIZE / 2)] = true;
+            }
+            else
+            {
+                /* An empty cell. */
+            }
+        }
+    }
+}
+
+void test_every_pellet_sits_in_the_middle_of_its_corridor(void)
+{
+    /* The one a player sees immediately, and the reason the maze is drawn geometrically at all:
+     * a wall's stroke is set the same distance inside every wall, so the black either side of a
+     * corridor is the same width, so the pellet on the cell is on the corridor's centre line.
+     * Off by two, which is what a one-cell outer wall used to cause, reads as a wobble down the
+     * whole column. */
+    prv_paint_the_field();
+
+    for (int16_t y = 0; y < PICTURE_HEIGHT; ++y)
+    {
+        for (int16_t x = 0; x < PICTURE_WIDTH; ++x)
+        {
+            int16_t left = x;
+            int16_t right = x;
+            char message[80];
+
+            if (!g_pellet_ink[y][x])
+            {
+                continue;
+            }
+
+            while ((left > 0) && !g_wall_ink[y][left - 1])
+            {
+                --left;
+            }
+
+            while ((right < (PICTURE_WIDTH - 1)) && !g_wall_ink[y][right + 1])
+            {
+                ++right;
+            }
+
+            /* Only a corridor with wall on both sides has a middle to be in; along an open row
+             * the run reaches the picture's edge and says nothing. */
+            if ((left == 0) || (right == (PICTURE_WIDTH - 1)) || ((right - left) > (3 * GAME_VIEW_TILE_SIZE)))
+            {
+                continue;
+            }
+
+            /* Within a pixel: an 18-pixel gap has its centre *between* two pixels, so a pellet
+             * drawn on one of them cannot be exactly equidistant. Two would be a wobble. */
+            (void)snprintf(message, sizeof(message), "pellet at %d,%d sits in %d..%d", x, y, left, right);
+            TEST_ASSERT_INT16_WITHIN_MESSAGE(1, right - x, x - left, message);
+        }
+    }
+}
+
+void test_a_tunnel_mouth_is_as_wide_as_a_corridor(void)
+{
+    /* The other one: a portal used to read as a notch because the wall stopped flush with the
+     * cell instead of the stroke's own setback, leaving 8 pixels where a corridor leaves 18.
+     * Both numbers come out of the same geometry now, so this compares them rather than trusting
+     * them. */
+    playfield_map_t map;
+    playfield_t rules;
+    int16_t corridor_gap = 0;
+
+    playfield_get_arcade_map(&map);
+    playfield_load_from_map(&rules, &map);
+    game_view_set_maze(&g_view, &map);
+    prv_paint_the_field();
+
+    /* The standard gap: the black between two wall strokes across a one-cell corridor, measured
+     * on the row Pacman starts on, which has wall above and below along most of its length. */
+    for (int16_t y = 0; y < PICTURE_HEIGHT; ++y)
+    {
+        int16_t run = 0;
+
+        for (int16_t x = 0; x < PICTURE_WIDTH; ++x)
+        {
+            if (!g_wall_ink[y][x])
+            {
+                ++run;
+            }
+            else
+            {
+                if ((run > corridor_gap) && (run <= (3 * GAME_VIEW_TILE_SIZE)))
+                {
+                    corridor_gap = run;
+                }
+
+                run = 0;
+            }
+        }
+    }
+
+    TEST_ASSERT_EQUAL_INT16(18, corridor_gap);
+
+    for (int16_t row = 0; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        const cell_t mouth = {0, row};
+        const int16_t x = GAME_VIEW_MAZE_BORDER * GAME_VIEW_TILE_SIZE;
+        int16_t gap = 0;
+        int16_t y;
+        char message[80];
+
+        if (!playfield_is_tunnel(&rules, mouth))
+        {
+            continue;
+        }
+
+        /* Down the outer wall's own stroke column, the mouth is a run of black. */
+        y = (int16_t)((row + GAME_VIEW_MAZE_BORDER) * GAME_VIEW_TILE_SIZE);
+
+        while ((y > 0) && !g_wall_ink[y - 1][x])
+        {
+            --y;
+        }
+
+        while (((y + gap) < PICTURE_HEIGHT) && !g_wall_ink[y + gap][x])
+        {
+            ++gap;
+        }
+
+        (void)snprintf(message, sizeof(message), "the mouth on row %d is %d px", row, gap);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(corridor_gap, gap, message);
+    }
+}
+
+/* ==========================================================================
  * preconditions
  * ========================================================================= */
 
 void test_null_arguments_assert(void)
 {
     msg_display_list_t list;
+    playfield_map_t map;
     int16_t coordinate;
+
+    playfield_get_arcade_map(&map);
 
     ASSERT_PROBE_EXPECT(game_view_init(NULL), "inout_view != NULL");
     ASSERT_PROBE_EXPECT(game_view_set_state(NULL, &g_state), "inout_view != NULL");
@@ -848,4 +1060,7 @@ void test_null_arguments_assert(void)
     ASSERT_PROBE_EXPECT((void)game_view_is_field_pending(NULL), "in_view != NULL");
     ASSERT_PROBE_EXPECT(game_view_get_cell_pixel(0U, 0U, NULL, &coordinate), "out_x != NULL");
     ASSERT_PROBE_EXPECT(game_view_get_cell_pixel(0U, 0U, &coordinate, NULL), "out_y != NULL");
+    ASSERT_PROBE_EXPECT(game_view_set_maze(NULL, &map), "inout_view != NULL");
+    ASSERT_PROBE_EXPECT(game_view_set_maze(&g_view, NULL), "in_map != NULL");
+    ASSERT_PROBE_EXPECT((void)game_view_is_wall_drawn_at(NULL, 0U, 0U), "in_view != NULL");
 }

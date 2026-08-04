@@ -33,6 +33,9 @@
 
 static sw_timer_t g_timeout_timer;
 
+/* Reported so a maze that looks wrong on the panel can be generated again on the host. */
+static uint32_t g_maze_seed;
+
 static void prv_on_timeout(void)
 {
     /* Nothing to do: the run loop watches sw_timer_is_active(). */
@@ -90,7 +93,7 @@ static void prv_report_progress(void)
               (unsigned long)game_session_get_score());
 }
 
-/* What a frame of the real game costs on this board — the on-target number behind NFR-002.
+/* What a frame of the real game costs on this board — the on-target frame-budget number.
  *
  * Measured over the first frames of an untouched run, which is the honest case: every actor
  * is moving and the view is redrawing all five of them plus the pellets they eat. The
@@ -148,7 +151,12 @@ bool ott_pacman_run(const uint8_t* in_parameter, char* out_reason, size_t in_rea
         return false;
     }
 
-    game_session_start();
+    /* Seeded from the tick, as pressing start in the shell is, so the test plays the same
+     * kind of maze a player gets rather than one chosen for it. The seed is printed, so a
+     * maze that looks wrong on the panel can be generated again on the host. */
+    g_maze_seed = systick_bsp_get_tick();
+    cli_print("maze seed %lu", (unsigned long)g_maze_seed);
+    game_session_start(g_maze_seed);
 
     prv_measure_frame_cost();
 
@@ -177,7 +185,9 @@ bool ott_pacman_run(const uint8_t* in_parameter, char* out_reason, size_t in_rea
 
         if (joystick_take_press(JOYSTICK_KEY_CENTER) && (game_session_get_state() != GAME_STATE_RUNNING))
         {
-            game_session_start();
+            g_maze_seed = systick_bsp_get_tick();
+            cli_print("maze seed %lu", (unsigned long)g_maze_seed);
+            game_session_start(g_maze_seed);
         }
 
         if (game_session_service())

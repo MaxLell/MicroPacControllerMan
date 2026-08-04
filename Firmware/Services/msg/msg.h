@@ -201,25 +201,48 @@ typedef struct
 typedef enum
 {
     DISPLAY_ITEM_NONE = 0,
-    DISPLAY_ITEM_BACKGROUND, /*!< A field tile: a wall, a pellet, or emptiness   */
-    DISPLAY_ITEM_ACTOR       /*!< Moves; Render saves what it covers and restores it */
+    DISPLAY_ITEM_BACKGROUND, /*!< A field tile: a pellet, or emptiness            */
+    DISPLAY_ITEM_ACTOR,      /*!< Moves; Render saves what it covers and restores it */
+
+    /*!< A cell of maze wall, as **pixels rather than a drawing**: one bit per pixel of the
+     *   cell, computed by Game-View from where the walls are.
+     *
+     * There is no wall drawing to name any more. A maze wall's picture is a stroke of a
+     * fixed width set a fixed distance inside the wall's edge, and which pixels of a given
+     * cell that lands on depends on how thick the wall is there and where its corners are —
+     * which is a calculation, not a choice from an alphabet
+     * ([DEC-034](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)). */
+    DISPLAY_ITEM_WALL
 } display_item_kind_e;
 
-/*! \brief One thing to draw: a sprite, a palette, and where it goes in pixels.
+/*! \brief Side of a wall cell's bitmap, in pixels — one cell. */
+#define MSG_WALL_CELL_SIZE (8U)
+
+/*! \brief One thing to draw: where it goes, what colours it uses, and either a drawing to
+ *         look up or the pixels themselves.
  *
- * Uniform on purpose. A wall, an eaten pellet's empty tile and Pacman are all "this
- * drawing, that palette, here", which is what keeps Render free of the maze, the tile
- * size and the screen layout — all of that stays in Game-View, where it can be tested
- * without a display.
+ * Uniform on purpose. A pellet, an empty tile and Pacman are all "this drawing, that
+ * palette, here", which is what keeps Render free of the maze, the tile size and the screen
+ * layout — all of that stays in Game-View, where it can be tested without a display. A wall
+ * cell is the same message with the pixels in it instead of a name, for the reason
+ * \ref DISPLAY_ITEM_WALL gives.
  */
 typedef struct
 {
     uint8_t kind;    /*!< A \ref display_item_kind_e                        */
-    uint8_t sprite;  /*!< A `sprite_set_id_e`; this header does not name them */
     uint8_t palette; /*!< A `sprite_set_palette_e`                            */
-    uint8_t reserved;
-    int16_t x; /*!< Left edge, in panel pixels                          */
-    int16_t y; /*!< Top edge, in panel pixels                           */
+    int16_t x;       /*!< Left edge, in panel pixels                          */
+    int16_t y;       /*!< Top edge, in panel pixels                           */
+
+    union
+    {
+        uint8_t sprite; /*!< A `sprite_set_id_e`; this header does not name them */
+
+        /*!< One row per line, one bit per pixel, the most significant bit leftmost. Set is
+         *   the palette's line colour, clear is its background — a wall cell is opaque, so
+         *   it needs no transparency. */
+        uint8_t wall_rows[MSG_WALL_CELL_SIZE];
+    } drawing;
 } msg_display_item_t;
 
 /*! \brief How many items travel in one message.

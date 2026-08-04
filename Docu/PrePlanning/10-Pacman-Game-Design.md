@@ -12,16 +12,20 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
   - An entity that did not move reports **arrived** rather than a running fraction. One stopped against a wall keeps its facing and its timer keeps running, and a fraction would have it slide in from behind, on the spot, once per period.
   - The rules do not see any of this. Interpolation is presentation: an entity *is* in its current cell for every purpose the game logic cares about, and the fraction is written by the movement timer and read only by the view.
   - The earlier wording here said there is no sub-cell position at all, justified by "tile rendering on the monochrome display". That display is gone, and with it the reason.
-- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS (NFR-002), interpolating between steps as above.
+- **Simulation tick.** The game runs on a fixed, fine simulation tick. Each moving entity has a **movement period** and advances one cell when its period elapses; pellet-eating, collisions and mode timers are evaluated every tick. Rendering runs independently at ≥ 60 FPS, interpolating between steps as above.
 - **Pacman movement.** Pacman moves one cell every movement period, which is **per level and not constant within one** (§10.9): he is quicker while the ghosts are frightened and slower on the step after eating a pellet. He keeps a current direction and a *queued* direction; `MSG_INPUT_DIRECTION` sets the queued one. When he is due to move: if the queued direction is not blocked by a wall it becomes current; then he moves one cell if that cell is open, otherwise he stays put (stopped against a wall until the direction changes).
 - **Ghost movement.** A ghost moves one cell toward its target (§10.4) every ghost-movement-period. **Each ghost has its own**, because the period depends on more than the level (§10.9): a ghost in the tunnel crawls, a frightened one is slow, and Blinky speeds up as the maze empties. A ghost never reverses onto the cell it just left, except when its mode changes (scatter↔chase, or entering/leaving frightened).
 - **Tunnels.** Leaving the maze through a tunnel mouth (§10.2) re-enters at the opposite mouth, on the same row (FR-012).
 
 ## 10.2 The Maze (Playfield)
 
-There is **one maze and every level plays it** (FR-025): the arcade's own, a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD.
+**Every level plays its own generated maze** (FR-029), on a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD. How one is generated is [M4 Random Mazes](../Design/M4-Random-Mazes.md); what one is guaranteed to be true of is FR-029.
 
-This has been re-baselined twice, and both steps are worth recording. It began as an 11 × 9 reduction with five of them, one per level: the reduction was right when the panel was 128 px wide, and the five layouts were a way of making levels differ before §10.9 had a better one. It was then re-drawn at 28 × 31 by hand, to the right proportions — and 94 of its 868 cells still did not match the arcade. What settled it was wanting the arcade's wall tiles to draw with, because a tile map only fits the maze it was drawn for. The layout below is therefore transcribed, not authored.
+The arcade's own layout is below and is **still in the code**, as the reference: it is the one maze whose properties are known from outside this codebase — 244 pellets, the corridors the Dossier's ghost behaviour is described against, the hand-drawn tile map the appearance rules are checked against. It is what the generated mazes are judged by, and what a unit test plays when it needs a corridor it can name.
+
+What every maze shares, generated or not, is the furniture: the ghost house and its gate, the four ghost starting cells and Pacman's, all at the coordinates below. That is what lets §10.4's release order, §10.5's revival and the scatter targets mean the same thing in a maze nobody has seen.
+
+This has been re-baselined three times, and each step is worth recording. It began as an 11 × 9 reduction with five of them, one per level: the reduction was right when the panel was 128 px wide, and the five layouts were a way of making levels differ before §10.9 had a better one. It was then re-drawn at 28 × 31 by hand, to the right proportions — and 94 of its 868 cells still did not match the arcade. What settled it was wanting the arcade's wall tiles to draw with, because a tile map only fits the maze it was drawn for. The layout below is therefore transcribed, not authored. And then it stopped being what a level plays at all, because the owner asked for mazes that are generated ([DEC-029](11-Decisions-and-As-Built.md)).
 
 Legend: `#` wall · `.` pellet · `o` power pellet · `P` Pacman start · `G` ghost start (pen) · `T` tunnel · space = open, nothing on it.
 
@@ -145,7 +149,7 @@ Collected for convenience — these realise [A-006](05-Risks-Assumptions-and-Dep
 | Frightened ghost speed | half of the ghost's current speed |
 | Pellet / power-pellet points | 10 / 50 |
 | Ghost-eaten points | 200 / 400 / 800 / 1600 |
-| Render rate | ≥ 60 FPS (NFR-002) |
+| Render rate | ≥ 60 FPS *(a design figure; the requirement that asked for it is withdrawn — [DEC-036](11-Decisions-and-As-Built.md))* |
 
 ## 10.9 Levels & Difficulty (FR-025 / FR-026)
 
