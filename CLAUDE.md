@@ -5,11 +5,13 @@ Standalone embedded **Pacman** on an **STM32U545RE-Q Nucleo-64**: joystick input
 AI agent can carry a disciplined embedded project. See `Docu/Idea.md` for origin.
 
 > **Closed on 2026-08-04 (DEC-028), reopened the same day (DEC-029)** when the owner asked
-> for randomly generated mazes — Milestone 5, delivered. Two requirements are **unmet** and
-> the docs say so rather than rounding them off: **NFR-003** (input latency ~34 ms against
-> 30 ms, RF-014) and **NFR-002** (59 fps against 60, from the 16 ms frame period — measured
-> both before and after M5, so not caused by it). **VT-INT-013's latency measurement and
-> VT-INT-016 were never built.** The close-out is
+> for randomly generated mazes — Milestone 5, delivered. **Every requirement in the spec now
+> has a passing test.** The two that used to be unmet — a 60 fps rendering rate and a 30 ms
+> input latency — are **withdrawn, not satisfied** (DEC-036): the owner judged both irrelevant
+> to this game, so NFR-002 and NFR-003 are deleted along with VT-INT-016 and the automatic
+> latency half of VT-INT-013. Both figures survive as *design* figures — 60 fps is why the
+> frame period is 16 ms, and 30 ms is why RF-014 noticed the 32 ms debounce window — but
+> nothing is measured against them. The close-out is
 > [04 §4.2](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out) and
 > what came after it is
 > [04 §4.3](Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#43-milestone-5--random-mazes).
@@ -56,10 +58,11 @@ silently working around a wart.
   **active LOW**, not the active high UM2750 claims. The ST7789V driver, the RGB565 frame
   buffer and partial updates are in (3 fps whole-frame becomes 290 fps for what a game
   actually changes), and `joystick_dot` and `animation` put input and display together.
-  **NFR-002 is now 60 FPS, not 30** — measured: five moving actors cost 5.26 ms of a
-  16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
-  Open, and deliberately so: the 32 ms debounce window is the whole of the NFR-003 input
-  budget (RF-014), to be chosen against a real game loop.
+  **The frame-rate target became 60 FPS, not 30** — measured: five moving actors cost 5.26 ms
+  of a 16.7 ms frame, the unpaced ceiling is 175 fps, and the panel itself refreshes at 60 Hz.
+  Open, and deliberately so: the 32 ms debounce window is a whole 30 ms input budget
+  (RF-014), to be chosen against a real game loop. Both figures were requirements at the
+  time and are design figures now (DEC-036).
   See [M2 Board Bring-Up](Docu/Design/M2-Board-Bring-Up.md).
 - **M3 Game — done, playable on the board and on the host.** `game` publishes a
   246-byte state, `game_view` turns cells into pixels and interpolates between simulation

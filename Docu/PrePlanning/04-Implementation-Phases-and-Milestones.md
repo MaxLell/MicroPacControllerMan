@@ -4,9 +4,9 @@
 
 > **Development was closed on 2026-08-04 ([DEC-028](11-Decisions-and-As-Built.md)) and reopened
 > the same day ([DEC-029](11-Decisions-and-As-Built.md))** when the owner asked for randomly
-> generated mazes. Milestones 0–3 are met; **Milestone 4 is met in substance but not in full**
-> ([§4.2](#42-close-out) says what was left unbuilt and which requirement is unmet); **Milestone
-> 5 delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)).
+> generated mazes. Milestones 0–3 are met; **Milestone 4 is met**, with one catalogued test never
+> built ([§4.2](#42-close-out) says which, and why nothing is owed for it); **Milestone 5
+> delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)).
 
 This restates the phased roadmap from the original idea capture as a structured milestone table with entry/exit criteria. Test IDs link to [06 Verification & Validation](06-Verification-and-Validation.md).
 
@@ -61,8 +61,10 @@ the *how* in [M4 Random Mazes](../Design/M4-Random-Mazes.md).
 [shaunlebron/pacman-mazegen](https://github.com/shaunlebron/pacman-mazegen), verified against the
 original by running both under the same seeded PRNG and comparing output **byte for byte over 300
 seeds**. `game_view` derives the maze's appearance from its walls
-([DEC-030](11-Decisions-and-As-Built.md)) — checked against the arcade's own hand-drawn tile map,
-**764 of 764 cells outside the tunnel masses**. 370 host unit tests pass, 11 of them new and
+([DEC-030](11-Decisions-and-As-Built.md)), and by the end of the milestone draws them as geometry
+rather than from a tile alphabet ([DEC-034](11-Decisions-and-As-Built.md)) — checked by rebuilding
+the picture and measuring it: **every pellet within a pixel of its corridor's centre, every tunnel
+mouth exactly a corridor's gap wide**. 371 host unit tests pass, 11 of them new and
 asserting FR-029's properties over 100 seeds each. Verified on hardware: loading → menu → game,
 the ghosts hunt in a generated maze, the console still answers, and the frame cost is unchanged
 at 8 ms of 16.

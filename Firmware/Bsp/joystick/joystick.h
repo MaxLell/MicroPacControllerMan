@@ -23,8 +23,8 @@
 /*! \brief Delay from a settled contact to the key being reported, in milliseconds.
  *
  * The debounce window of the switch primitive, at the 1 ms rate #joystick_poll is
- * called at. It is the floor under the input latency of NFR-003, before anything is
- * drawn — see [M2 Board Bring-Up §5](../../../Docu/Design/M2-Board-Bring-Up.md). */
+ * called at. It is the floor under the input latency, before anything is drawn — see
+ * [M2 Board Bring-Up §5](../../../Docu/Design/M2-Board-Bring-Up.md). */
 #define JOYSTICK_DEBOUNCE_MS (SWITCH_DEBOUNCE_SAMPLES)
 
 typedef enum

@@ -13,7 +13,7 @@
  * the rate it actually held and what fraction of the frame budget it spent; the
  * operator says where the motion stops being smooth.
  *
- * This is the test NFR-002's **60 FPS** was chosen against — see
+ * This is the test the **60 FPS** frame rate was chosen against — see
  * [M2 Board Bring-Up §3.2](../../../../Docu/Design/M2-Board-Bring-Up.md). It now serves as
  * the regression check that the rate is still held, and reports the unpaced ceiling so the
  * headroom the game inherits is a number rather than a hope.

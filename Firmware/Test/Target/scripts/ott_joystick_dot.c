@@ -134,8 +134,8 @@ static void prv_draw_playfield(void)
     display_present(framebuffer);
 }
 
-/* One move is two regions — the cell vacated and the cell entered — and that is what
- * the input latency of NFR-003 has to fit into, on top of the debounce. */
+/* One move is two regions — the cell vacated and the cell entered — and that is the
+ * drawing half of the input latency, on top of the debounce. */
 static void prv_measure_step_cost(void)
 {
     const ott_joystick_dot_cell_t start = g_cell;
@@ -164,7 +164,7 @@ static void prv_measure_step_cost(void)
     cli_print("  %lu moves in %lu ms -> %d.%02d ms per move", (unsigned long)OTT_JOYSTICK_DOT_TIMED_STEPS,
               (unsigned long)elapsed_ms, (int)milliseconds_per_step,
               (int)((milliseconds_per_step - (int)milliseconds_per_step) * 100.0));
-    cli_print("  NFR-003 allows 30 ms: %u ms of it goes on debouncing the key, %d.%02d ms on drawing.",
+    cli_print("  input path: %u ms of it goes on debouncing the key, %d.%02d ms on drawing.",
               (unsigned)JOYSTICK_DEBOUNCE_MS, (int)milliseconds_per_step,
               (int)((milliseconds_per_step - (int)milliseconds_per_step) * 100.0));
 

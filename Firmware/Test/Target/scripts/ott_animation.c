@@ -57,7 +57,7 @@ static const uint16_t g_frame_rates[] = {10U, 15U, 30U, 60U};
  * verdict about smoothness would mean nothing. */
 #define OTT_ANIMATION_RATE_TOLERANCE_PERCENT (95U)
 
-#define OTT_ANIMATION_TARGET_RATE_INDEX      (3U) /* 60 FPS — NFR-002 */
+#define OTT_ANIMATION_TARGET_RATE_INDEX      (3U) /* 60 FPS — the chosen frame rate */
 
 /* Long enough for a stable average, short enough not to test anyone's patience. */
 #define OTT_ANIMATION_CEILING_MS             (2000U)

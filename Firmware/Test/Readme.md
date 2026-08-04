@@ -123,7 +123,7 @@ the USER button B1, and a safety cap returns the board to nominal mode regardles
   expectation it was checked against.
 - `ott_joystick_dot` — a dot the joystick moves, drawn with partial updates only. Input
   and display together, and the one scenario that fails if their coordinate systems
-  disagree. Measures the drawing half of NFR-003.
+  disagree. Measures the drawing half of the input path.
 - `ott_animation` — five actors at a constant speed with the frame rate varying under
   them, then the rate handed to the joystick. Answers whether motion *looks* smooth,
   which no throughput figure can.

@@ -361,8 +361,8 @@ run was taken against `main` before the change and against the branch after it, 
 300 frames in about 5.06 s. The derivation runs once per level, not per frame, and the number of
 items a frame carries did not change.
 
-That measurement turned up something the close-out had not stated: **59 fps is not the 60 that
-NFR-002 asks for**, and it never was. The frame timer is armed at 16 ms and re-armed inside its
+That measurement turned up something the close-out had not stated: **the achieved rate is 59 fps,
+not the 60 the design aimed at**, and it never was. The frame timer is armed at 16 ms and re-armed inside its
 own callback, so a period is 16 ms plus the callback path plus up to a millisecond of tick
 granularity — about 16.9 ms, which is 59 fps. It predates this milestone and is not caused by
 it; the unpaced ceiling of 175 fps that the earlier docs quote is a different measurement, of

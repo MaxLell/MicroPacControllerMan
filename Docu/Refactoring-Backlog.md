@@ -10,9 +10,9 @@
 > wrote down, and chose to live with.
 >
 > The two that matter most, because they are the ones a user could notice:
-> **[RF-014](#rf-014)** — the 32 ms debounce window puts the input path at ~34 ms against
-> NFR-003's 30 ms budget, so that requirement ends unmet — and **[RF-016](#rf-016)** — the
-> console drops characters from text pasted at full line rate, which no tool in the repo
+> **[RF-014](#rf-014)** — the 32 ms debounce window puts the input path at ~34 ms, sized by
+> the width of a `uint32_t` rather than by what a contact needs — and **[RF-016](#rf-016)** —
+> the console drops characters from text pasted at full line rate, which no tool in the repo
 > does but a terminal will.
 
 A living work list: things noticed in passing, deferred by decision, or blocked on something
@@ -41,7 +41,7 @@ They are left as written; the items they belong to are closed anyway.
 | [RF-009](#rf-009) | OTT console keeps partial input across a scenario | Low | **Never done.** Bites interactive poking only; `run_ott.py` steers around it. |
 | [RF-010](#rf-010) | `spi_bsp_write()` cannot report an error | Low | **Never done.** No project-wide return convention was ever decided, so a dead panel still looks like a black screen. |
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | **Never done.** A failed assertion on the target halts silently; under an OTT that is a bare harness timeout. |
-| [RF-014](#rf-014) | The 32 ms debounce window is the whole of the NFR-003 input budget | Medium | **Never done — and this is the one that leaves a requirement unmet.** ~34 ms against NFR-003's 30 ms. |
+| [RF-014](#rf-014) | The 32 ms debounce window is sized by a `uint32_t`, not by a contact | Medium | **Never done.** The input path is ~34 ms, 32 of it debounce. No requirement measures it any more ([DEC-036](PrePlanning/11-Decisions-and-As-Built.md)); it is still four times what a contact needs. |
 | [RF-016](#rf-016) | The console samples the UART on the tick instead of on an interrupt | Low | **Never done.** Characters must arrive >1 ms apart; typing and `run_ott.py` comply, a paste does not. |
 
 ---
@@ -218,26 +218,30 @@ symptoms into a one-line answer.
 
 ### RF-014
 
-**The 32 ms debounce window is the whole of the NFR-003 input budget.** Medium.
+**The 32 ms debounce window is sized by a `uint32_t`, not by a contact.** Medium.
 
 `switch_get_debounced_state()` reports a key only after `SWITCH_DEBOUNCE_SAMPLES` = **32**
 consecutive agreeing samples, and it is sampled from the 1 ms tick, so a settled contact
-takes 32 ms to reach the application. NFR-003 allows **30 ms** from press to movement, and
-`joystick_dot` measures the drawing half at 2.08 ms — so the path is 34 ms and the display
-is not what puts it over ([M2 Board Bring-Up §3.3](Design/M2-Board-Bring-Up.md)).
+takes 32 ms to reach the application. `joystick_dot` measures the drawing half at 2.08 ms, so
+the input path is ~34 ms and the display is not what dominates it
+([M2 Board Bring-Up §3.3](Design/M2-Board-Bring-Up.md)).
 
 The window is 32 because that is the width of the `uint32_t` the history shift register
 lives in, not because a contact needs it; the `_Static_assert` in `switch.c` ties the two
 together. Eight samples is the conventional figure and would bring the whole path to about
 10 ms.
 
-Left alone for now deliberately: the primitive is shared with `user_button`, where 32 ms is
-harmless, and the number should be chosen against a game loop that can be judged rather than
-against an OTT.
+This item used to be *the one that leaves a requirement unmet*, against NFR-003's 30 ms
+budget. That requirement is **withdrawn** ([DEC-036](PrePlanning/11-Decisions-and-As-Built.md)),
+so nothing measures the path any more — and the reason to fix it was never the budget: the
+number is arbitrary, and it was the 30 ms figure that made anyone look at it.
+
+Left alone deliberately: the primitive is shared with `user_button`, where 32 ms is harmless,
+and nobody playing the game has reported lag.
 
 *Done when* the debounce length is a per-instance parameter (history in a `uint8_t`, or a
-count carried in `switch_t`) and the joystick uses a window that leaves NFR-003 some room —
-with the input latency re-measured against the game loop to prove it.
+count carried in `switch_t`) and the joystick uses a window sized by what a contact needs,
+with the input latency re-measured against the game loop to show what it bought.
 
 ---
 

@@ -93,7 +93,7 @@ static void prv_report_progress(void)
               (unsigned long)game_session_get_score());
 }
 
-/* What a frame of the real game costs on this board — the on-target number behind NFR-002.
+/* What a frame of the real game costs on this board — the on-target frame-budget number.
  *
  * Measured over the first frames of an untouched run, which is the honest case: every actor
  * is moving and the view is redrawing all five of them plus the pellets they eat. The

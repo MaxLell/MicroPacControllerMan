@@ -35,8 +35,7 @@
  * game_session - public types
  * ========================================================================= */
 
-/*! \brief The frame period, in milliseconds — the 60 FPS of NFR-002 rounded to the 1 ms
- *         tick.
+/*! \brief The frame period, in milliseconds — 60 FPS rounded to the 1 ms tick.
  *
  * M2 measured five moving actors at 5.26 ms of this budget with 20 x 20 sprites, and they
  * are 16 x 16 now. Public because it is also the simulation's time step: a caller that
