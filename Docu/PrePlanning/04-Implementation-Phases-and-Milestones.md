@@ -6,7 +6,10 @@
 > the same day ([DEC-029](11-Decisions-and-As-Built.md))** when the owner asked for randomly
 > generated mazes. Milestones 0–3 are met; **Milestone 4 is met**, with one catalogued test never
 > built ([§4.2](#42-close-out) says which, and why nothing is owed for it); **Milestone 5
-> delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)).
+> delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)). **Milestone 6 — a
+> Pacman AI — was asked for on 2026-08-05 and is in progress**
+> ([DEC-038](11-Decisions-and-As-Built.md), [§4.4](#44-milestone-6--pacman-ai)): requirements and
+> design agreed, no code yet.
 
 This restates the phased roadmap from the original idea capture as a structured milestone table with entry/exit criteria. Test IDs link to [06 Verification & Validation](06-Verification-and-Validation.md).
 
@@ -19,6 +22,7 @@ This restates the phased roadmap from the original idea capture as a structured 
 | 4 | System Integration (Target) | Milestones 2 and 3 exit met. | All remaining integration tests pass on the physical target ([VT-INT-011..013](06-Verification-and-Validation.md), VT-INT-015, VT-INT-022). What was left for this milestone was the measurement M3 did not make automatic: input latency and the frame rate under a real run — both withdrawn with the requirements they served ([DEC-036](11-Decisions-and-As-Built.md)). **Partially met at close-out — see [§4.2](#42-close-out).** |
 
 | 5 | Random Mazes | Milestone 4 in substance; asked for after the project had been closed. | Every level plays a maze generated for it (FR-029), with the properties that requirement lists checked over many seeds; the maze's appearance derived from its walls rather than written down beside them; the whole thing playable on the target. **Met** — see [§4.3](#43-milestone-5--random-mazes). |
+| 6 | Pacman AI | Milestone 5 met; asked for on 2026-08-05 ([DEC-038](11-Decisions-and-As-Built.md)). | An agent trained on the host reaches FR-037's score on generated mazes ([VT-UNIT-010](06-Verification-and-Validation.md)); the player can hand over to it and take back control on the board, with the HUD saying so and the run locked out of the high-score table (FR-030..034, VT-INT-023); and the ported inference chooses the same direction as the host over a recorded state set (FR-039, VT-INT-024). **In progress** — see [§4.4](#44-milestone-6--pacman-ai). |
 
 ## 4.1 Notes
 
@@ -75,3 +79,36 @@ is nearer 16.9 ms; the 175 fps in the M2 documents is the *unpaced* ceiling and 
 measurement. Nothing is measured against it any more — the requirement that asked for 60 is
 withdrawn ([DEC-036](11-Decisions-and-As-Built.md)) — and the period is left alone because changing
 it would have changed what the before/after frame-cost comparison was comparing.
+
+## 4.4 Milestone 6 — Pacman AI
+
+Asked for on **2026-08-05**, after Milestone 5 ([DEC-038](11-Decisions-and-As-Built.md)): an agent
+that learns to play, trained on the host, ported to the board, and switched on and off by the
+player. The *how* is in [M6 Pacman AI](../Design/M6-Pacman-AI.md).
+
+**In progress.** The requirements ([02 §2.1.11](02-Requirements.md)) and the design are agreed;
+no code is written yet.
+
+What is settled, and why it is worth stating before any of it is built:
+
+- **The training environment is the shipped game** (FR-112), because `game_t` already is one.
+  Measured: no file-scope state, so environments are an array of structs; time is injected, so
+  nothing paces to real time; no `rand()` outside the seeded `maze_gen`, so an episode replays;
+  and **15,429 steps/s on one core** with the host library unoptimised.
+- **Neuroevolution (NEAT)**, not gradient RL — the owner's resources point there twice over, one
+  genome is one independent episode so FR-113 falls out of the algorithm, and the networks it
+  grows are three orders of magnitude inside NFR-007. Budget: about **12 s per generation on 8
+  cores**, so a Code-Bullet-length run of 73 generations is a quarter of an hour.
+- **Relative observations and relative actions** — forward/left/right/back rather than the
+  compass. This is the decision the milestone stands or falls on: every level's maze is generated
+  (FR-029), so a policy that has learned absolute cell positions has learned nothing
+  transferable.
+- **The two halves are tied together by measurement, not trust** (FR-039), the same way the maze
+  generator was checked against its original. Two traps are designed out rather than debugged:
+  the host's promotion of `float` to `double`, and transcendental activations that host libm and
+  newlib need not agree on to the last bit.
+
+**FR-037's bar is anchored on a measurement**: the mean score of a uniform-random policy is
+**464.3 points** (median 440, best 1,440, over 329 episodes), so the required 4,600 is ten times
+what flailing achieves — and, for scale, a cleared level 1 is worth about 2,600 before a single
+ghost is eaten.

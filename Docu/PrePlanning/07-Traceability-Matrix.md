@@ -47,6 +47,20 @@ A few items are structural/process requirements rather than automatically observ
 | CON-004 | Carrier Hardware | VT-INT-018, VT-INT-019 |
 | CON-005 | Debug Interface | VT-INT-001, VT-INT-002 |
 
+| FR-030 | AI Takeover Toggle | VT-INT-023 |
+| FR-031 | AI Control Exclusivity | VT-INT-023 |
+| FR-032 | AI Takeover Indication | VT-INT-023 |
+| FR-033 | AI Control Persistence | VT-INT-023 |
+| FR-034 | AI Run Not Recorded | VT-INT-025 |
+| FR-035 | Observation Bounded by the Display | VT-UNIT-009 |
+| FR-036 | Score as the AI's Objective | VT-UNIT-010 |
+| FR-037 | AI Play Strength | VT-UNIT-010 |
+| FR-038 | Inference Only on the Target | Code review (no training code is linked into the target build — see gap note above) |
+| FR-039 | Host / Target Inference Equivalence | VT-UNIT-011 (host half), VT-INT-024 (target half) |
+| NFR-006 | AI Inference Budget | VT-INT-023 |
+| NFR-007 | Model Footprint | Build tooling (the linker's size report against the stated limits) |
+| NFR-008 | No Heap for Inference | Code review (no allocator is linked; weights are `const`) |
+
 ## 7.2 Software & Test Requirements (FR-1xx / NFR-1xx / CON-1xx)
 
 | Requirement | Name | Verified by |
