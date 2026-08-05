@@ -1,0 +1,91 @@
+# The evolution's settings — see Docu/Design/M6-Pacman-AI.md §2 and §9.
+#
+# Population and mutation rates follow the two Pacman NEAT projects in Docu/Pacman AI Ressources;
+# what is specific to this project is everything that keeps a genome portable to the board, and
+# each of those is marked. `net.py` re-checks them per genome rather than trusting this file,
+# because a well-meant edit here would otherwise produce an agent that plays differently on the
+# target than it trained.
+
+[NEAT]
+fitness_criterion     = max
+# No threshold ends a run: it ends after the generations it was given. Stage promotion is the
+# harness's job (train.py) because a stage-2 score is not comparable with a stage-3 one, and the
+# final word belongs to VT-UNIT-010 on seeds this training never sees.
+no_fitness_termination = True
+# Required by neat-python even when it cannot fire, which `no_fitness_termination` above ensures.
+fitness_threshold     = 1000000
+pop_size              = 150
+reset_on_extinction   = True
+
+[DefaultGenome]
+# 23 features in, four relative actions out — asked of the firmware, never assumed: train.py
+# compares these two against env_feature_count() and env_action_count() before it starts.
+num_inputs            = 23
+num_outputs           = 4
+# NEAT's premise: start with no hidden node and add one only where it earns its place. It is also
+# what keeps the exported table small enough that NFR-007 never becomes a question.
+num_hidden            = 0
+feed_forward          = True
+initial_connection    = full_direct
+
+# --- portability, not taste (M6 §9) ---------------------------------------------
+# ReLU only, and no mutating away from it: it is exact in float32, so the host and the target
+# agree to the last bit. `tanh` out of glibc and `tanh` out of newlib are not required to.
+activation_default    = relu
+activation_mutate_rate = 0.0
+activation_options    = relu
+# The C evaluator sums, and does nothing else.
+aggregation_default   = sum
+aggregation_mutate_rate = 0.0
+aggregation_options   = sum
+# neat-python computes activation(bias + response * sum), the evaluator computes activation(bias +
+# sum). Pinning the response to exactly 1.0 is what makes those the same expression.
+response_init_mean    = 1.0
+response_init_stdev   = 0.0
+response_init_type    = gaussian
+response_max_value    = 1.0
+response_min_value    = 1.0
+response_mutate_power = 0.0
+response_mutate_rate  = 0.0
+response_replace_rate = 0.0
+
+bias_init_mean        = 0.0
+bias_init_stdev       = 1.0
+bias_init_type        = gaussian
+bias_max_value        = 30.0
+bias_min_value        = -30.0
+bias_mutate_power     = 0.5
+bias_mutate_rate      = 0.7
+bias_replace_rate     = 0.1
+
+weight_init_mean      = 0.0
+weight_init_stdev     = 1.0
+weight_init_type      = gaussian
+weight_max_value      = 30.0
+weight_min_value      = -30.0
+weight_mutate_power   = 0.5
+weight_mutate_rate    = 0.8
+weight_replace_rate   = 0.1
+
+enabled_default       = True
+enabled_mutate_rate   = 0.01
+
+conn_add_prob         = 0.5
+conn_delete_prob      = 0.5
+node_add_prob         = 0.2
+node_delete_prob      = 0.2
+
+compatibility_disjoint_coefficient = 1.0
+compatibility_weight_coefficient   = 0.5
+
+[DefaultSpeciesSet]
+compatibility_threshold = 3.0
+
+[DefaultStagnation]
+species_fitness_func = max
+max_stagnation       = 20
+species_elitism      = 2
+
+[DefaultReproduction]
+elitism            = 2
+survival_threshold = 0.2

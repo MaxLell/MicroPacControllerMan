@@ -22,6 +22,7 @@
 #ifndef ENV_API_H
 #define ENV_API_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* ==========================================================================
@@ -30,6 +31,14 @@
 
 /*! \brief A set of independent games, stepped together. Opaque to the caller. */
 typedef struct env_batch_s env_batch_t;
+
+/*! \brief Most decisions one episode may take before #env_run gives up on it.
+ *
+ * A backstop, not a budget: the idle rule ends a run that stops scoring, so only an agent that
+ * keeps eating just often enough to stay alive reaches this. Twenty thousand decisions is several
+ * cleared levels.
+ */
+#define ENV_MAX_DECISIONS (20000U)
 
 /*! \brief Which rules a run plays under — the curriculum of [M6 §6](../../Docu/Design/M6-Pacman-AI.md).
  *
@@ -54,6 +63,9 @@ uint32_t env_feature_count(void);
 
 /*! \brief How many actions there are, likewise. */
 uint32_t env_action_count(void);
+
+/*! \brief #ENV_MAX_DECISIONS, asked for rather than repeated on the Python side. */
+uint32_t env_max_decisions(void);
 
 /*! \brief Simulated milliseconds an episode may go without anything being eaten.
  *
@@ -106,5 +118,65 @@ void env_scores(const env_batch_t* in_batch, uint32_t* out_scores);
 
 /*! \brief Each game's level, for reporting how far a genome actually got. `count` long. */
 void env_levels(const env_batch_t* in_batch, uint8_t* out_levels);
+
+/* ==========================================================================
+ * env_api - playing a whole episode without leaving C
+ * ========================================================================= */
+
+/*! \brief Install the network the batch plays with.
+ *
+ * The arrays are the ones `Services/neural_net` evaluates and the ones `export_c.py` will emit;
+ * they are handed over flat rather than as a struct so that Python never has to mirror a C
+ * layout — the thing that would silently disagree after an innocent-looking edit to the header.
+ * They are **copied**, so the caller may free its own.
+ *
+ * The network is put through `neural_net_is_well_formed` and refused if it fails, which means
+ * every genome of every generation is checked by the same function the firmware trusts at
+ * start-up. A topology the port could not evaluate therefore cannot be trained in the first
+ * place.
+ *
+ * \param[in,out]   inout_batch: the batch
+ * \param[in]       in_connection_count: entries in the two connection arrays, which is also
+ *                  what the last offset must equal
+ * \return          `true` when the network was accepted and installed
+ */
+bool env_set_net(env_batch_t* inout_batch, uint16_t in_input_count, uint16_t in_node_count, uint16_t in_output_count,
+                 const uint16_t* in_output_nodes, const float* in_biases, const uint16_t* in_connection_offsets,
+                 const uint16_t* in_connection_sources, const float* in_connection_weights,
+                 uint32_t in_connection_count);
+
+/*! \brief Play uniformly at random instead of with a network — the baseline of VT-UNIT-010.
+ *
+ * Deliberately a *mode of the same runner* rather than a loop of its own in Python. FR-037 is a
+ * comparison against this baseline, so the two figures have to come out of one harness; if the
+ * baseline had its own episode loop, a difference between the loops would look like a difference
+ * between the policies.
+ *
+ * \param[in,out]   inout_batch: the batch
+ * \param[in]       in_rng_seed: reproducible — same seed, same episode (FR-114)
+ */
+void env_use_random_policy(env_batch_t* inout_batch, uint32_t in_rng_seed);
+
+/*! \brief Play every game to its end and report what happened.
+ *
+ * This is the call training spends its time in: one call per genome rather than one per decision,
+ * because the observation, the network and the choice of action are all C — the same C the
+ * firmware runs (FR-039). Nothing about the policy lives in Python, so there is no second
+ * implementation to keep in step, and the network that was trained is the network that was
+ * exported.
+ *
+ * A game runs until it is over, until the idle rule ends it, or until #ENV_MAX_DECISIONS have
+ * been taken — the last of which is reported through `out_steps` so that a run cut short is
+ * visible rather than looking like a policy that stopped scoring.
+ *
+ * \param[in,out]   inout_batch: the batch, with a policy already installed
+ * \param[in]       in_seeds: one maze seed per game, `count` long
+ * \param[in]       in_stage: a \ref env_stage_e
+ * \param[out]      out_scores: final score of each game, `count` long, may be `NULL`
+ * \param[out]      out_steps: decisions each game took, `count` long, may be `NULL`
+ * \param[out]      out_levels: level each game reached, `count` long, may be `NULL`
+ */
+void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint32_t* out_scores,
+             uint32_t* out_steps, uint8_t* out_levels);
 
 #endif /* ENV_API_H */

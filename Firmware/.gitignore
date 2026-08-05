@@ -19,3 +19,9 @@ __pycache__/
 
 # The trainer's virtual environment — recreated from Training/requirements.txt
 .venv/
+
+# What a training run leaves behind. `winner.json` is kept, because it is what the firmware's
+# weights were generated from; a checkpoint is a pickled population, only useful to resume the run
+# that wrote it, and a log is a log.
+Training/checkpoint-neat-*
+Training/train.log

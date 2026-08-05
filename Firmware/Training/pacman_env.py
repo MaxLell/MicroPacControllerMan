@@ -45,6 +45,7 @@ class PacmanEnv:
         self.feature_count = int(self._lib.env_feature_count())
         self.action_count = int(self._lib.env_action_count())
         self.idle_limit_ms = int(self._lib.env_idle_limit_ms())
+        self.max_decisions = int(self._lib.env_max_decisions())
 
         self._batch = self._lib.env_create(ctypes.c_uint32(count))
         if not self._batch:
@@ -56,6 +57,7 @@ class PacmanEnv:
         self._actions = (ctypes.c_uint8 * count)()
         self._seeds = (ctypes.c_uint32 * count)()
         self._scores = (ctypes.c_uint32 * count)()
+        self._steps = (ctypes.c_uint32 * count)()
         self._levels = (ctypes.c_uint8 * count)()
 
     def _declare(self) -> None:
@@ -63,6 +65,7 @@ class PacmanEnv:
         lib.env_feature_count.restype = ctypes.c_uint32
         lib.env_action_count.restype = ctypes.c_uint32
         lib.env_idle_limit_ms.restype = ctypes.c_uint32
+        lib.env_max_decisions.restype = ctypes.c_uint32
         lib.env_create.restype = ctypes.c_void_p
         lib.env_create.argtypes = [ctypes.c_uint32]
         lib.env_destroy.argtypes = [ctypes.c_void_p]
@@ -76,6 +79,28 @@ class PacmanEnv:
         ]
         lib.env_scores.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
         lib.env_levels.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint8)]
+        lib.env_set_net.restype = ctypes.c_bool
+        lib.env_set_net.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint16,
+            ctypes.c_uint16,
+            ctypes.c_uint16,
+            ctypes.POINTER(ctypes.c_uint16),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_uint16),
+            ctypes.POINTER(ctypes.c_uint16),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_uint32,
+        ]
+        lib.env_use_random_policy.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        lib.env_run.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.c_uint8,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint8),
+        ]
 
     def reset(self, seeds: Sequence[int], stage: int = STAGE_FULL) -> None:
         if len(seeds) != self.count:
@@ -108,6 +133,53 @@ class PacmanEnv:
         self._lib.env_step(self._batch, self._actions, self._reward, self._done)
 
         return list(self._reward), [bool(value) for value in self._done]
+
+    def set_net(self, net) -> None:
+        """Install a :class:`net.Net` as the policy every game plays with.
+
+        The library copies the arrays and checks the topology with the firmware's own
+        ``neural_net_is_well_formed``, so a genome the board could not evaluate raises here rather
+        than being given a fitness.
+        """
+        accepted = self._lib.env_set_net(
+            self._batch,
+            ctypes.c_uint16(net.input_count),
+            ctypes.c_uint16(net.node_count),
+            ctypes.c_uint16(net.output_count),
+            (ctypes.c_uint16 * len(net.output_nodes))(*net.output_nodes),
+            (ctypes.c_float * len(net.biases))(*net.biases),
+            (ctypes.c_uint16 * len(net.connection_offsets))(*net.connection_offsets),
+            (ctypes.c_uint16 * len(net.connection_sources))(*net.connection_sources),
+            (ctypes.c_float * len(net.connection_weights))(*net.connection_weights),
+            ctypes.c_uint32(net.connection_count),
+        )
+
+        if not accepted:
+            raise ValueError(
+                f"the library refused the network ({net.node_count} nodes, "
+                f"{net.connection_count} connections) — see neural_net_is_well_formed"
+            )
+
+    def use_random_policy(self, rng_seed: int = 1) -> None:
+        """Play uniformly at random — the baseline FR-037 is measured against."""
+        self._lib.env_use_random_policy(self._batch, ctypes.c_uint32(rng_seed & 0xFFFFFFFF))
+
+    def run(self, seeds: Sequence[int], stage: int = STAGE_FULL):
+        """Play every game to its end with the installed policy.
+
+        Returns ``(scores, steps, levels)``. This is the call training spends its time in: the
+        observation, the network and the choice of action are all C, so a whole episode costs one
+        crossing of the language boundary rather than one per decision.
+        """
+        if len(seeds) != self.count:
+            raise ValueError(f"expected {self.count} seeds, got {len(seeds)}")
+
+        for index, seed in enumerate(seeds):
+            self._seeds[index] = seed & 0xFFFFFFFF
+
+        self._lib.env_run(self._batch, self._seeds, ctypes.c_uint8(stage), self._scores, self._steps, self._levels)
+
+        return list(self._scores), list(self._steps), list(self._levels)
 
     def scores(self) -> List[int]:
         self._lib.env_scores(self._batch, self._scores)
