@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "high_score", "ai_equivalence"]
+AUTOMATIC = ["display_id", "high_score", "ai_equivalence", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
@@ -49,6 +49,10 @@ INTERACTIVE = set(MANUAL)
 # outlast it or it would report a timeout on a test that is still going.
 INTERACTIVE_TIMEOUT_S = 130.0
 LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
+
+# An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
+# because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0}
 
 
 def detect_port() -> str:
@@ -165,7 +169,8 @@ def wait_until_idle(fd: int, quiet: float = 0.3, timeout: float = 3.0) -> None:
 def run_single(port: str, baud: str, test: str, timeout: float) -> int:
     interactive = test in INTERACTIVE
     if timeout is None:
-        timeout = LONG_TIMEOUT_S.get(test, INTERACTIVE_TIMEOUT_S) if interactive else 8.0
+        timeout = (LONG_TIMEOUT_S.get(test, INTERACTIVE_TIMEOUT_S) if interactive
+                   else LONG_AUTOMATIC_TIMEOUT_S.get(test, 8.0))
 
     warn_if_port_is_busy(port)
     configure_tty(port, baud)
@@ -268,7 +273,10 @@ def run_suite(port: str, baud: str) -> int:
     results.append(("VT-INT-011 boot sequence", check_boot_sequence(port, baud)))
 
     for test in AUTOMATIC:
-        rc = run_single(port, baud, test, timeout=8.0)
+        # Eight seconds is right for a test that judges itself in a moment, and wrong for one that
+        # plays two runs to game over. The per-test override is looked up here as well as in
+        # run_single, because passing an explicit timeout is what skipped it the first time.
+        rc = run_single(port, baud, test, timeout=LONG_AUTOMATIC_TIMEOUT_S.get(test, 8.0))
         results.append((f"ott {test}", rc == 0))
 
     print("\n--- summary ---")

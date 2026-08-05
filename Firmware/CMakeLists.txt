@@ -260,6 +260,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
     Test/Target/scripts/ott_ai_equivalence.c
+    Test/Target/scripts/ott_ai_high_score.c
     Test/Target/scripts/ott_ai_equivalence_states.c
     Test/Target/scripts/ott_pacman_ai.c
     Test/Target/ott_framebuffer.c
