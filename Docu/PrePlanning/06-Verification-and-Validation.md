@@ -60,4 +60,6 @@ A third category, *manual one-time bring-up* — a continuity check with a multi
 
 `Firmware/Test/run_ott.py` drives every **Automatic** test above sequentially over the serial console (sending the OTT command, reading back PASS/FAIL) and reports a summary. **Manual, button-confirmed** tests are excluded from that run list — they have the same OTT command but are streamed live, with a long timeout, because they need a human in the loop.
 
+`ai_high_score` is automatic but **slow** — it plays two runs to game over, because FR-034 is about what a *finished* run does to NVM. The harness therefore has a per-test timeout for automatic tests as well as for interactive ones. Measured on the board, the whole automatic run — enumeration, banner, boot sequence, `display_id`, `high_score`, `ai_equivalence`, `ai_high_score` — takes **1 min 42 s**.
+
 One operational note, learned the hard way: the harness reads the ST-LINK's virtual COM port, and **a second reader on the same port makes a run look like failing hardware**. Two readers split the incoming bytes, so the output arrives with characters missing and the test times out or reports nonsense. `run_ott.py` therefore checks at start-up whether another process holds the port and names it.

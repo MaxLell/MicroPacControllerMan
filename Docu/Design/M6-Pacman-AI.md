@@ -7,9 +7,12 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
-> **Design, not as-built.** Nothing here is implemented yet. Figures marked **measured** were
-> taken on this machine against the shipped game; everything else is a budget or an estimate and
-> says so.
+> **As-built, with one thing outstanding.** Everything below is implemented and, where it touches
+> hardware, verified on the board: `Services/neural_net`, `App/pacman_ai`, `Firmware/Training/`,
+> the takeover in the game, and both automatic on-target tests. **What is not yet met is FR-037**,
+> the play-strength figure — the first full run of the curriculum reached a factor of 5.3 over a
+> random policy where the requirement asks for 10, and §14 records what was measured about why and
+> what is being done. Figures marked **measured** are real; anything still a budget says so.
 
 The naming follows the milestone: this is Milestone 6. (The random-maze design document is
 called `M4-Random-Mazes.md` although it delivered Milestone 5 — a pre-existing mismatch, left
@@ -85,6 +88,15 @@ down rather than hoping:
 That is a coffee break, not a GPU campaign — which is the whole reason the owner does not have to
 care about training this himself. The `-g` build was what got measured, so `-O2` on the
 environment can only improve it.
+
+**What it actually cost, measured.** The budget above was wrong in both directions and the errors
+cancelled. A generation of 150 genomes on four mazes takes **11 s on two cores**, not 12 s on
+eight — because the whole episode runs in C ([DEC-042](../PrePlanning/11-Decisions-and-As-Built.md))
+and a decision costs one function call rather than one crossing of the language boundary; the
+achieved rate is **6,500 decisions/s**, and a decision is on average about twelve simulation steps.
+But an episode is far shorter than 10,000 steps: the trained agent's runs end after **192 to 460
+decisions**, because three lives go quickly. Against that, stage 1 was promoted after **10
+generations** and stage 2 after **13**. Stage 3 is where the time goes, and §14 says why.
 
 **The rejected alternative, and why it is still useful.** The Stanford CS221 assignment in the
 resources is *not* learning at all — it is minimax, alpha-beta and expectimax over an evaluation
@@ -217,10 +229,22 @@ Python drives C over `ctypes` against a shared library built from the same sourc
 firmware:
 
 ```
-Firmware/Training/env_api.c      -> libpacman_env.so, links pacman_host
-Firmware/Training/train.py       -> neat-python, the evolution loop
-Firmware/Training/export_c.py    -> the evolved winner -> ai_weights.c
+Firmware/Training/env_api.c        -> libpacman_env.so, the game as a shared library
+Firmware/Training/pacman_env.py    -> the ctypes shim, and nothing else
+Firmware/Training/net.py           -> a genome flattened into what neural_net reads
+Firmware/Training/train.py         -> neat-python, the evolution loop, the curriculum
+Firmware/Training/evaluate.py      -> VT-UNIT-010: FR-037 and its baseline, one run
+Firmware/Training/export_c.py      -> the winner -> App/pacman_ai/ai_weights.[ch]
+Firmware/Training/record_states.c  -> pacman_ai_record: the FR-039 state set as C
+Firmware/Training/config-neat.txt  -> the evolution's settings
+Firmware/Training/requirements.txt -> neat-python 2.0.0, and that is all
 ```
+
+**The network is evaluated by the C side even during training**
+([DEC-042](../PrePlanning/11-Decisions-and-As-Built.md)) — `net.py` flattens a genome into the
+arrays `Services/neural_net` reads and the library plays the whole episode. neat-python's own
+`FeedForwardNetwork` never plays. That is what turns FR-039 from something to verify into
+something that cannot be violated: there is one implementation of inference in this project.
 
 `Firmware/Training/` is a new top-level folder in the firmware tree and therefore an amendment to
 [03 §3.9](../PrePlanning/03-Architecture.md#39-firmware-source-tree-layout) — recorded as
@@ -229,7 +253,9 @@ configuration and nothing in the target build refers to it.
 
 The API is **batched on purpose**: one call steps *every* environment, rather than one call per
 environment. At 150 genomes and ~15 k steps/s each, per-call FFI overhead would otherwise become
-the bottleneck rather than the simulation.
+the bottleneck rather than the simulation. `env_run` goes further and plays whole episodes without
+returning, which is what training uses; `env_step` and `env_observe` remain for a caller that wants
+to drive one decision at a time, which is what recording and debugging want.
 
 ```c
 env_batch_t* env_create(uint32_t count);
@@ -285,15 +311,35 @@ Even so, the comparison is on the **chosen action**, not on bit-identical activa
 tie-break defined as the lowest action index, so a tie cannot decide differently on two machines.
 
 The check itself: the host writes a set of recorded states and the actions it chose for them, and
-`ott ai_equivalence` replays them on the target and compares (VT-INT-024). The states must cover
+`ott ai_equivalence` replays them on the target and compares (VT-INT-024). The states cover
 ordinary play, frightened mode, a tunnel and a life just lost — the four places where the feature
 extractor has something interesting to do.
 
+**As built** ([DEC-043](../PrePlanning/11-Decisions-and-As-Built.md)): the recorder is
+`Training/record_states.c`, built as `pacman_ai_record`, and it is C rather than Python so that it
+calls the very `pacman_ai_decide` the target calls. It plays seeds in order until all four
+situations have turned up — they came from seeds 1 and 2 — and prints them as the C the target
+compiles in. A recorded case carries its **maze but not its pellets**: the state's own bitmaps
+already say where those are, and the target eats them back off a freshly loaded maze, so there is no
+second copy to disagree with the first. That step is not optional, because one of the 23 features is
+how much of the level is left and it comes from the playfield rather than from the state. The
+recording also carries the weight table's **digest**, and the test refuses to run when it does not
+match the firmware's — so re-exporting weights without re-recording says so instead of looking like
+a porting fault. **It passed on the board first time.**
+
 ## 10 Fitting the target
 
-The room available, **measured** on the current firmware: **419,804 bytes of flash free** (96,292
-of 516,096 used) and **83,900 bytes of RAM free** (178,244 of 262,144), plus the 16 kB SRAM4 that
-nothing uses. Of the 16 ms frame, about 8 ms is unused.
+The room available, **measured** before any of this was built: **419,804 bytes of flash free**
+(96,292 of 516,096 used) and **83,900 bytes of RAM free** (178,244 of 262,144), plus the 16 kB SRAM4
+that nothing uses. Of the 16 ms frame, about 8 ms is unused.
+
+**What it came to, measured after.** Flash **21.00 %** (108,380 of 516,096) and RAM **71.54 %**
+(187,528 of 262,144), from 18.7 % and 68.0 %. Broken down: the trained network's tables are **298
+bytes**, the feature extractor's search scratch is **4,340 bytes** of RAM, and the rest of the
+growth — about 7 kB of each — belongs to `ott ai_equivalence`, which carries four recorded states in
+flash and rebuilds a 7 kB playfield in RAM. So the *agent* costs well under a tenth of NFR-007's
+300 kB flash and an eighth of its 40 kB RAM; the *test* costs more than the agent does, which is a
+fair trade for an equivalence that is checked on silicon rather than assumed.
 
 Against NFR-007's 300 kB flash / 40 kB RAM, an evolved network is not a close call:
 
@@ -333,17 +379,19 @@ the live flag rather than the sticky one.
 
 ## 12 Open points
 
-1. **`-O2` for the training environment.** The 15,429 steps/s was measured against the `-g` host
-   library. The training build should optimise; how much that buys is unmeasured.
-2. **Whether 23 features are the right 23.** They are a considered starting point, not a result.
-   The linked projects got by with 8. The owner's position is that they will do; if the agent
-   plateaus, this is the second place to look after the curriculum.
-3. **Whether one policy can play *generated* mazes at all.** This is the real risk of the
-   milestone, and it is the reason §3 and §4 are built the way they are. The owner has authorised
-   a fallback if it cannot: **train on a single maze instead**, which `game_start_on_map` already
-   supports and which would reduce FR-029's role in this milestone to "the game still generates
-   them, the AI just is not asked to generalise". That fallback is not to be taken until
-   generalisation has actually been tried and measured.
+1. ~~**`-O2` for the training environment.**~~ **Closed.** The library is built a second time from
+   the same source list at `-O2` while `pacman_host` stays at `-g` for the debugger and the SDL
+   window; sharing the list is what stops the two drifting apart.
+2. **Whether 23 features are the right 23.** Still open, and now the *second* place to look rather
+   than the third: §14 shows the limit was fitness noise, and the features have not yet been given a
+   fair test against a policy that was selected on ability rather than on luck. The linked projects
+   got by with 8.
+3. **Whether one policy can play *generated* mazes at all.** Partly answered, and the answer so far
+   is encouraging rather than sufficient. A policy trained only on mazes it will never see again
+   reaches **2,270 points on twenty unseen mazes against 431 for a random policy** — so it does
+   generalise; it is simply not yet good enough (§14). The single-maze fallback the owner authorised
+   stays **unspent**, which is what this point asked for: it is not to be taken until generalisation
+   has been measured, and now it has been.
 
 ## 13 The acceptance seed set
 
@@ -364,3 +412,52 @@ another agent; a comparison that close needs a larger set and should say so at t
 The random-policy baseline is re-measured on the same seeds by the same harness (VT-UNIT-010)
 rather than quoted from this document — the 464.3-point figure here was taken over 329 episodes on
 other seeds and exists to justify the threshold, not to be compared against.
+
+## 14 Play strength: what was measured, and what is being done
+
+FR-037 is **not met yet**, and this section is the record of why rather than a promise about it.
+
+The first full run of the curriculum, 150 genomes on four mazes per generation:
+
+| | |
+|---|---|
+| stage 1 promoted after | **10** generations |
+| stage 2 promoted after | **13** generations |
+| stage 3, best fitness reached | ~3,500, at about generation 95 of 320, then flat |
+| **on the acceptance seeds, stage 3** | **2,270 mean** — max 3,080, min 1,290, level 2 reached |
+| the same harness's random baseline | **431 mean** |
+| factor over random | **5.3**, where FR-037 asks for 10 |
+
+The agent walks, eats and avoids ghosts. What it does not do is finish level 1 — it dies at
+something like 85–95 % of it, which is exactly what a mean of 2,270 against a 2,440-point level
+means.
+
+**The limit is fitness noise, not compute, and that is visible in the log rather than inferred.**
+Within one genome's four mazes the score ran from **1,180 to 5,570**. Fitness is the mean of four
+such numbers, so it carried an uncertainty of several hundred points, and selection was therefore
+deciding mostly on which mazes a genome happened to draw. Two things follow. Real ability is only
+weakly rewarded — and a *deletion* that costs real ability is invisible, which is why networks fell
+from their initial 92 connections to about a dozen while the score stopped moving. That is NEAT's
+complexity pressure working exactly as designed against a fitness signal that cannot tell it apart
+from luck.
+
+So the change is aimed at the signal, not at the search
+([DEC-044](../PrePlanning/11-Decisions-and-As-Built.md)):
+
+| | was | is |
+|---|---|---|
+| mazes per genome | 4 | **12** — cuts the spread by about √3 |
+| population | 150 | **250** |
+| `conn_delete_prob` | 0.5 | **0.2** |
+| `node_delete_prob` | 0.2 | **0.05** |
+| stage-3 generations | 320 | **400** |
+
+That is roughly seven times the work per generation, about ten hours on the two-core machine this
+was developed on, and it runs overnight. The owner was offered a faster machine and declined it, and
+was offered both cheaper alternatives — the single-maze fallback of §12 and lowering FR-037's
+threshold, which the requirement itself marks tunable — and chose to keep the approach and the
+requirement and pay for the run.
+
+**If the bigger run does not close the gap**, the order to look in is: the features (§12 point 2),
+then the expectimax reference agent §2 keeps in reserve as a teacher, then the single-maze fallback.
+Not the threshold — that is the owner's to move, not this document's.

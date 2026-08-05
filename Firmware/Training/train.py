@@ -44,7 +44,13 @@ ACCEPTANCE_SEEDS = range(1000, 1020)
 
 #: Mazes one genome is scored on per generation. A compromise: one maze makes fitness a lottery
 #: decided by which maze it was, and every extra maze costs a full episode per genome.
-MAZES_PER_GENOME = 4
+#:
+#: Twelve, not four. Four was measured and it was not enough: within one genome's four mazes the
+#: score ran from 1,180 to 5,570, so fitness carried an uncertainty of several hundred points and
+#: selection was deciding mostly on which mazes a genome happened to draw. Twelve cuts that spread
+#: by about √3 and costs three times the episodes — which is the trade this project can afford,
+#: because an episode is cheap and a generation spent selecting noise is not.
+MAZES_PER_GENOME = 12
 
 #: The curriculum of M6 §6. A stage ends when the best genome's fitness reaches `promote_at` or
 #: when `generations` are spent, whichever comes first — the cap is there so that a stage which
@@ -52,7 +58,7 @@ MAZES_PER_GENOME = 4
 CURRICULUM = [
     {"stage": STAGE_MAZE_ONLY, "generations": 60, "promote_at": 1800.0, "what": "walk and eat"},
     {"stage": STAGE_GHOSTS, "generations": 120, "promote_at": 1800.0, "what": "stay alive"},
-    {"stage": STAGE_FULL, "generations": 320, "promote_at": None, "what": "the whole game"},
+    {"stage": STAGE_FULL, "generations": 400, "promote_at": None, "what": "the whole game"},
 ]
 
 # One environment per worker process, created on first use. The C side keeps its search scratch and
@@ -105,7 +111,7 @@ class Trainer:
         """Fresh mazes for this generation, none of them an acceptance maze."""
         seeds = []
 
-        while len(seeds) < MAZES_PER_GENOME:
+        while len(seeds) < self.arguments.mazes:
             candidate = self.random.randrange(1, 1_000_000)
 
             if (candidate not in ACCEPTANCE_SEEDS) and (candidate not in seeds):
@@ -191,7 +197,7 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "connection_sources": flat_net.connection_sources,
         "connection_weights": flat_net.connection_weights,
         "node_keys": flat_net.node_keys,
-        "training": {**report, "population": arguments.population_size, "mazes_per_genome": MAZES_PER_GENOME},
+        "training": {**report, "population": arguments.population_size, "mazes_per_genome": arguments.mazes},
     }
 
     with open(path, "w") as handle:
@@ -203,6 +209,8 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--stage", type=int, choices=[1, 2, 3], help="train one stage only")
     parser.add_argument("--generations", type=int, help="override the stage's generation cap")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--mazes", type=int, default=MAZES_PER_GENOME,
+                        help="mazes each genome is scored on per generation")
     parser.add_argument("--seed", type=int, default=1, help="the draw of training mazes (FR-114)")
     parser.add_argument("--config", default=_DEFAULT_CONFIG)
     parser.add_argument("--out", default=os.path.join(_HERE, "winner.json"))

@@ -153,6 +153,44 @@ silently working around a wart.
   RAM 68.0 %, flash 18.7 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
+- **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
+  **NEAT**, ported to the target as `const` weights, switched on and off by the board button
+  mid-run. Everything is built and everything that touches hardware is verified there; **the one
+  requirement not yet met is FR-037**, the play strength — see
+  [M6 §14](Docu/Design/M6-Pacman-AI.md) for what was measured and what is being done about it.
+  - **The network that trains is the network that ships** (DEC-042). Training does *not* use
+    neat-python's evaluator: a genome is flattened into the arrays `Services/neural_net` reads and
+    the C side plays the whole episode, so there is exactly one implementation of inference in the
+    project and FR-039 cannot be violated rather than merely being checked. It is also why a
+    generation costs 11 s on two cores instead of the budgeted 12 s per core.
+  - **What the agent sees is Pacman's own frame** — forward/left/right/back, 23 features, distances
+    by breadth-first search over the open cells counting the tunnel wrap. Every level's maze is
+    generated, so a policy in compass coordinates would learn "wall to the north" four times over.
+    The **frightened timer is deliberately not an input**: the player has no countdown either, only
+    the flashing.
+  - **The curriculum is runtime configuration, not a training build** (DEC-041): `game_config_t`
+    turns ghosts and power pellets off so the agent learns to walk, then to fear, then to hunt.
+    Training therefore exercises the code that ships (FR-112).
+  - **In the game:** the board button toggles the AI during a run and still means start on the menu
+    and the score screen — `shell` decides, because `shell` knows the screen. The joystick is dead
+    while the AI plays, enforced in `game_session_set_direction` alone so it holds for all three
+    callers. Two flags, and the difference is FR-034: `game_session` knows whether the AI plays
+    *now*, `shell` latches whether it played *at any point*, and the high-score lockout reads the
+    latch — so handing control back before the last life does not launder the score.
+  - **Verified on the board:** `ott ai_equivalence` (VT-INT-024) replays four states recorded on the
+    host — ordinary play, frightened mode, a tunnel, a life just lost — and the target chose the same
+    direction for every one; `ott ai_high_score` (VT-INT-025) plays two whole runs and shows the AI's
+    stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
+    `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
+    its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
+  - RAM 71.5 %, flash 21.0 %. The trained tables are **298 bytes**; the search scratch is 4.3 kB of
+    RAM; the rest of the growth is the equivalence test's own recorded states and playfield.
+  - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves,
+    `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
+    `pacman_ai_record` writes the FR-039 state set. **Never train on seeds 1000..1019** — they are
+    the acceptance set, and a score on a maze the agent trained on answers nothing.
+    See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
+
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
@@ -180,7 +218,18 @@ cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build 
 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all
+
+# Train the AI (host only; needs the host build for libpacman_env.so — DEC-040)
+python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
+Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
+Training/.venv/bin/python Training/evaluate.py              # VT-UNIT-010: FR-037 and its baseline
+Training/.venv/bin/python Training/export_c.py              # winner.json -> App/pacman_ai/ai_weights.[ch]
+./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
 ```
+
+**Re-exporting weights means re-recording the FR-039 state set** — that last line, in that order.
+The recorded expectations belong to one weight table and carry its digest, so `ott ai_equivalence`
+refuses to run against a different one rather than reporting a stale recording as a porting fault.
 
 - **What gets a unit test: everything above the BSP.** The BSP is the *mocking*
   boundary — mock a `Bsp/` header to test the module above it; don't unit-test the BSP
