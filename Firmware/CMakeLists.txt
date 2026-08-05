@@ -85,7 +85,7 @@ endif()
 # with the target, only the .c differs. That is the pattern for every future port.
 # ==============================================================================
 if(PACMAN_HOST_BUILD)
-    add_library(pacman_host STATIC
+    set(PACMAN_HOST_SOURCES
         App/agent/agent.c
         App/difficulty/difficulty.c
         App/game/game.c
@@ -113,9 +113,12 @@ if(PACMAN_HOST_BUILD)
         Services/active_object/active_object.c
         Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
+        Services/neural_net/neural_net.c
         Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
         ThirdParty/embedded_utils/custom_assert.c)
+
+    add_library(pacman_host STATIC ${PACMAN_HOST_SOURCES})
 
     target_include_directories(pacman_host PUBLIC
         App/agent
@@ -146,6 +149,7 @@ if(PACMAN_HOST_BUILD)
         Services/circular_buffer
         Services/msg
         Services/msg_broker
+        Services/neural_net
         Services/msg_queue
         Services/sw_timer
         ThirdParty/embedded_utils)
@@ -171,6 +175,22 @@ if(PACMAN_HOST_BUILD)
         message(STATUS "SDL2 not found — skipping the host application. "
                        "Install it with: sudo apt-get install -y libsdl2-dev")
     endif()
+
+    # The AI's training environment (DEC-040): the same game again, as a shared library
+    # Python can open with ctypes. `Training/` is host-only and nothing in the target build
+    # refers to it.
+    #
+    # It compiles the game a *second* time rather than linking `pacman_host`, and that is
+    # deliberate: training is the one consumer that cares about speed over debuggability, so
+    # it gets -O2 while the library the SDL app and the debugger use stays at -g. The source
+    # list is shared, so the two cannot drift apart.
+    add_library(pacman_env SHARED ${PACMAN_HOST_SOURCES} Training/env_api.c)
+    target_include_directories(pacman_env PUBLIC
+        $<TARGET_PROPERTY:pacman_host,INTERFACE_INCLUDE_DIRECTORIES>
+        Training)
+    target_compile_definitions(pacman_env PUBLIC PACMAN_HOST_BUILD)
+    target_compile_options(pacman_env PRIVATE -Wall -Wextra -O2)
+    set_target_properties(pacman_env PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     return()
 endif()
@@ -226,6 +246,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/active_object/active_object.c
     Services/circular_buffer/circular_buffer.c
     Services/msg_broker/msg_broker.c
+    Services/neural_net/neural_net.c
     Services/msg_queue/msg_queue.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
@@ -284,6 +305,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Services/circular_buffer
     Services/msg
     Services/msg_broker
+    Services/neural_net
     Services/msg_queue
     Services/sprite
     Services/sw_timer
