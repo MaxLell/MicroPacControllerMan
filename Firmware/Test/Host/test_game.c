@@ -1180,3 +1180,192 @@ void test_a_null_game_asserts(void)
     ASSERT_PROBE_EXPECT((void)game_get_level(NULL), "in_game != NULL");
     ASSERT_PROBE_EXPECT((void)game_is_frightened_active(NULL), "in_game != NULL");
 }
+
+/* --- configurable rules, for the AI's training curriculum ---------------- */
+
+/* DEC-041. What these tests are really protecting is the *default*: the shipped firmware
+ * never sets a config, so the danger is not that the switches fail but that turning them on
+ * for training quietly changes the game everyone else plays. Hence the first test. */
+
+void test_the_default_rules_are_the_whole_game(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    TEST_ASSERT_TRUE(config.has_ghosts);
+    TEST_ASSERT_TRUE(config.has_power_pellets);
+}
+
+void test_starting_without_a_config_plays_under_the_defaults(void)
+{
+    game_init(&g_game);
+    game_start(&g_game, 7U);
+
+    TEST_ASSERT_TRUE(g_game.config.has_ghosts);
+    TEST_ASSERT_TRUE(g_game.config.has_power_pellets);
+}
+
+void test_an_idle_game_already_holds_the_defaults(void)
+{
+    /* game_init loads a level, and loading one reads the rules — so they must be set before
+     * that, not by the first game_start. */
+    game_init(&g_game);
+
+    TEST_ASSERT_TRUE(g_game.config.has_ghosts);
+    TEST_ASSERT_TRUE(g_game.config.has_power_pellets);
+}
+
+void test_a_run_without_power_pellets_has_none_but_the_same_pellet_count(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_init(&g_game);
+    game_start(&g_game, 21U);
+    const uint16_t with_power = playfield_get_total_pellet_count(&g_game.playfield);
+
+    config.has_power_pellets = false;
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Substituted, not removed: clearing the level still means the same thing. */
+    TEST_ASSERT_EQUAL_UINT16(with_power, playfield_get_total_pellet_count(&g_game.playfield));
+
+    uint16_t power_pellets = 0U;
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            if (g_game.playfield.pellets[row][column] == PLAYFIELD_PELLET_POWER)
+            {
+                power_pellets++;
+            }
+        }
+    }
+
+    TEST_ASSERT_EQUAL_UINT16(0U, power_pellets);
+}
+
+void test_without_power_pellets_the_snapshot_reports_none(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_power_pellets = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+    game_get_state_message(&g_game, &g_probe_state);
+
+    for (uint16_t index = 0U; index < MSG_CELL_BITMAP_BYTES; ++index)
+    {
+        TEST_ASSERT_EQUAL_UINT8(0U, g_probe_state.is_power[index]);
+    }
+}
+
+void test_a_run_without_power_pellets_never_frightens_a_ghost(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_power_pellets = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Eat everything reachable by walking a while in each direction; whatever gets eaten,
+     * none of it may be an energizer. */
+    static const direction_e k_directions[] = {DIRECTION_WEST, DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_SOUTH};
+
+    for (uint16_t step = 0U; step < 4000U; ++step)
+    {
+        game_set_direction(&g_game, k_directions[step % 4U]);
+        game_tick(&g_game, 16U);
+        TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
+    }
+}
+
+void test_a_run_without_ghosts_keeps_them_still(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_ghosts = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    cell_t before[GHOST_COUNT];
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        before[index] = ghost_get_cell(&g_game.ghosts[index]);
+    }
+
+    for (uint16_t step = 0U; step < 2000U; ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(playfield_are_cells_equal(before[index], ghost_get_cell(&g_game.ghosts[index])));
+    }
+}
+
+void test_a_run_without_ghosts_costs_no_lives_even_on_a_shared_cell(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_ghosts = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Placed straight onto Pacman, the way the collision tests above do it — under the real
+     * rules this is a caught Pacman on the next step. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index, pacman_get_cell(&g_game.pacman), false);
+    }
+
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_set_direction(&g_game, DIRECTION_WEST);
+    for (uint16_t step = 0U; step < 200U; ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(lives_before, game_get_lives(&g_game));
+    TEST_ASSERT_EQUAL_INT(GAME_STATE_RUNNING, game_get_state(&g_game));
+}
+
+void test_ghosts_still_hunt_under_the_default_rules(void)
+{
+    /* The counterweight to the two tests above: if `has_ghosts` were read the wrong way
+     * round, or defaulted to false, every one of them would still pass. */
+    game_init(&g_game);
+    game_start(&g_game, 21U);
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index, pacman_get_cell(&g_game.pacman), false);
+    }
+
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_set_direction(&g_game, DIRECTION_WEST);
+    for (uint16_t step = 0U; (step < 200U) && (game_get_lives(&g_game) == lives_before); ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    TEST_ASSERT_LESS_THAN_UINT8(lives_before, game_get_lives(&g_game));
+}
+
+void test_a_null_config_asserts(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    ASSERT_PROBE_EXPECT(game_get_default_config(NULL), "out_config != NULL");
+    ASSERT_PROBE_EXPECT(game_start_configured(NULL, 1U, &config), "inout_game != NULL");
+    ASSERT_PROBE_EXPECT(game_start_configured(&g_game, 1U, NULL), "in_config != NULL");
+}

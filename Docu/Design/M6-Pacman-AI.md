@@ -166,22 +166,50 @@ Our game has `dots_idle_ms`, but it only releases ghosts from the house — it d
 The **training harness** therefore ends an episode when no pellet has been eaten for a set
 interval. That is a harness rule, not a game rule: nothing about the shipped firmware changes.
 
-The transcript's other lesson is a three-stage curriculum — first no ghosts and no power pellets,
-then ghosts, then power pellets — the point being that "sometimes I may eat a ghost and sometimes
-it kills me" is an ambiguity a fresh network cannot resolve while it is still learning to walk.
+The transcript's other lesson is a three-stage curriculum, and it is the plan
+([DEC-041](../PrePlanning/11-Decisions-and-As-Built.md)):
 
-That staging changes the *rules*, and the rules are the shipped game (FR-112). So the plan is:
+| Stage | Ghosts | Power pellets | What the agent is learning |
+|---|---|---|---|
+| 1 | inert | demoted to ordinary pellets | navigate the maze and eat |
+| 2 | hunting | demoted to ordinary pellets | stay alive; a ghost is *only* death |
+| 3 | hunting | as generated | a ghost is sometimes food |
 
-1. **First attempt: shape the fitness, not the rules.** Early generations score pellets and
-   ignore death; later ones penalise it; finally fitness is the score. No game code changes.
-2. **If that stalls: stage the rules.** Removing the power pellets needs no new code at all —
-   `game_start_on_map` already takes a map, so the harness can hand one with the power pellets
-   turned into ordinary pellets. Removing the *ghosts* has no such route and would need a small,
-   explicitly training-only seam in `game`. That is deliberately deferred until it is proven
-   necessary, because it is the one change here that touches shipped logic.
+The point of stage 2 is the one the transcript is emphatic about: *"sometimes I may eat a ghost
+and sometimes it kills me"* is an ambiguity a fresh network cannot resolve while it is still
+learning to walk. Removing the energizers removes the ambiguity rather than merely reducing the
+pressure to resolve it — which is why this is the plan and **fitness shaping is not**. Shaping the
+reward (score pellets, ignore death, then penalise it) would leave the contradictory rule in
+place; staging removes it and puts it back once the agent can walk.
 
-Honest about the difference: fitness shaping does not remove the rule ambiguity, only the
-pressure to resolve it early. If step 1 plateaus well under FR-037, step 2 is the reason.
+Staging changes the *rules*, and the rules are the shipped game (FR-112), so the switches are
+**runtime** configuration and not a training-only build:
+
+```c
+game_config_t config;
+game_get_default_config(&config);      /* everything on: the game FR-001..029 describe */
+config.has_ghosts = false;             /* stage 1 */
+config.has_power_pellets = false;      /* stages 1 and 2 */
+game_start_configured(&game, seed, &config);
+```
+
+`game_start` and `game_start_on_map` pass the defaults, so the firmware neither sets a config nor
+is affected by one existing. **Measured** after the change: flash **+288 bytes**, RAM **+0** (the
+two flags fit in padding `game_t` already had), 381 host unit tests green, both builds
+warning-free.
+
+Two honest limitations of the seam as built:
+
+- **The ghosts are inert, not absent.** They are still placed and still appear in a snapshot, so
+  a stage-1 agent sees four stationary ghosts — three parked in the house it cannot enter anyway,
+  and Blinky standing above the gate forever. It will learn to avoid that one cell for no reason.
+  Making them genuinely absent would need an "absent" encoding in `msg_actor_t` that nothing else
+  wants, and the cost of the wart is one cell.
+- **Demotion is substitution, not removal.** A power pellet becomes an ordinary one, so the pellet
+  counts are unchanged and "the level is cleared" keeps its meaning and its code path. The score
+  is lower by what the four energizers and any eaten ghost would have paid — which matters when
+  comparing a stage-2 fitness against a stage-3 one, and is why FR-037 is only ever measured at
+  stage 3.
 
 ## 7 The training harness
 
@@ -305,14 +333,34 @@ the live flag rather than the sticky one.
 
 ## 12 Open points
 
-1. **FR-037's absolute threshold is set, its seed set is not.** The floor is 4,600 points — ten
-   times the **measured** random-policy mean of 464.3 (median 440, best 1,440, over 329 episodes).
-   For scale, clearing level 1 is about 2,600 points before any ghost is eaten. Which seeds the
-   acceptance set uses, and how many, is still open; it must be fixed and written down before
-   training starts, or the number can be gamed by choosing kind mazes.
-2. **Whether fitness shaping is enough**, or the rule-staged curriculum of §6 is needed — and with
-   it a training-only seam in `game`. Unknown until the first campaign runs.
-3. **`-O2` for the training environment.** The 15,429 steps/s was measured against the `-g` host
+1. **`-O2` for the training environment.** The 15,429 steps/s was measured against the `-g` host
    library. The training build should optimise; how much that buys is unmeasured.
-4. **Whether 23 features are the right 23.** They are a considered starting point, not a result.
-   The linked projects got by with 8.
+2. **Whether 23 features are the right 23.** They are a considered starting point, not a result.
+   The linked projects got by with 8. The owner's position is that they will do; if the agent
+   plateaus, this is the second place to look after the curriculum.
+3. **Whether one policy can play *generated* mazes at all.** This is the real risk of the
+   milestone, and it is the reason §3 and §4 are built the way they are. The owner has authorised
+   a fallback if it cannot: **train on a single maze instead**, which `game_start_on_map` already
+   supports and which would reduce FR-029's role in this milestone to "the game still generates
+   them, the AI just is not asked to generalise". That fallback is not to be taken until
+   generalisation has actually been tried and measured.
+
+## 13 The acceptance seed set
+
+FR-037 is measured over **20 full runs on the generated mazes of seeds 1000 to 1019**, and the
+figure is the mean of their final scores.
+
+A contiguous range rather than a hand-picked list, deliberately. The maze generator decorrelates
+neighbouring seeds — `test_maze_gen.c` asserts exactly that — so a range is as varied as a list,
+and unlike a list it cannot be quietly tuned: changing the offset or the count is one visible line
+in a diff, whereas swapping seed 7 for seed 8 because seed 7 is unkind looks like nothing at all.
+The range starts at 1000 to stay clear of the low seeds the maze tests already use, so a
+regression in the generator cannot be masked by a policy that has over-fitted to the same mazes.
+
+Twenty runs is enough for the comparison FR-037 asks for, since the bar is a factor of ten over a
+random policy rather than a few per cent. It is **not** enough to claim a small improvement over
+another agent; a comparison that close needs a larger set and should say so at the time.
+
+The random-policy baseline is re-measured on the same seeds by the same harness (VT-UNIT-010)
+rather than quoted from this document — the 464.3-point figure here was taken over 329 episodes on
+other seeds and exists to justify the threshold, not to be compared against.

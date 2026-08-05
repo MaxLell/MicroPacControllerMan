@@ -119,6 +119,26 @@ static uint32_t prv_get_level_maze_seed(uint32_t in_run_seed, uint8_t in_level)
     return seed;
 }
 
+/* Turn every power pellet into an ordinary one, for a run configured without them.
+ *
+ * A substitution rather than a removal: the pellet counts stay as they were, so "the level is
+ * cleared" keeps meaning what it meant and the level-clear path is the same code. Writes the
+ * cells directly because that is what a `playfield_t` is — the type publishes its grid, and a
+ * demotion is not an event anything needs to hear about. */
+static void prv_demote_power_pellets(game_t* const inout_game)
+{
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            if (inout_game->playfield.pellets[row][column] == PLAYFIELD_PELLET_POWER)
+            {
+                inout_game->playfield.pellets[row][column] = PLAYFIELD_PELLET_NORMAL;
+            }
+        }
+    }
+}
+
 static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 {
     inout_game->level = in_level;
@@ -133,6 +153,12 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
     }
 
     playfield_load_from_map(&inout_game->playfield, &inout_game->maze);
+
+    if (!inout_game->config.has_power_pellets)
+    {
+        prv_demote_power_pellets(inout_game);
+    }
+
     prv_place_entities(inout_game);
 
     /* A new level starts the personal counters over and puts the global one away (§10.4).
@@ -463,6 +489,13 @@ static bool prv_have_met(cell_t in_pacman_cell, cell_t in_pacman_previous_cell, 
 static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_previous_cell,
                                  const cell_t* const in_ghost_previous_cells)
 {
+    /* One guard for both callers — Pacman's step and a ghost's — so a run without ghosts
+     * cannot lose a life down a path this function does not own. */
+    if (!inout_game->config.has_ghosts)
+    {
+        return true;
+    }
+
     const cell_t pacman_cell = pacman_get_cell(&inout_game->pacman);
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
@@ -686,6 +719,9 @@ void game_init(game_t* inout_game)
     inout_game->maze_seed = 1U;
     inout_game->is_maze_fixed = false;
 
+    /* Before the level loads, because loading one reads the rules. */
+    game_get_default_config(&inout_game->config);
+
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
@@ -702,10 +738,30 @@ static void prv_begin_run(game_t* const inout_game)
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
+void game_get_default_config(game_config_t* out_config)
+{
+    ASSERT(out_config != NULL);
+
+    out_config->has_ghosts = true;
+    out_config->has_power_pellets = true;
+}
+
 void game_start(game_t* inout_game, uint32_t in_maze_seed)
 {
     ASSERT(inout_game != NULL);
 
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_start_configured(inout_game, in_maze_seed, &config);
+}
+
+void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game_config_t* in_config)
+{
+    ASSERT(inout_game != NULL);
+    ASSERT(in_config != NULL);
+
+    inout_game->config = *in_config;
     inout_game->maze_seed = in_maze_seed;
     inout_game->is_maze_fixed = false;
 
@@ -719,6 +775,9 @@ void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map)
 
     inout_game->maze = *in_map;
     inout_game->is_maze_fixed = true;
+
+    /* A given map is for the arcade's maze and for tests, both of which want the real rules. */
+    game_get_default_config(&inout_game->config);
 
     prv_begin_run(inout_game);
 }
@@ -778,7 +837,8 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
         }
     }
 
-    for (uint8_t index = 0U; (index < GHOST_COUNT) && (inout_game->state == GAME_STATE_RUNNING); ++index)
+    for (uint8_t index = 0U;
+         inout_game->config.has_ghosts && (index < GHOST_COUNT) && (inout_game->state == GAME_STATE_RUNNING); ++index)
     {
         /* Likewise per ghost: a step can carry it into or out of the tunnel, and Blinky's
          * own step can be the one that empties the maze far enough to wake Elroy. */

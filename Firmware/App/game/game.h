@@ -58,6 +58,43 @@ typedef enum
     GAME_STATE_WON   /*!< Final level cleared (FR-027)       */
 } game_state_e;
 
+/*! \brief Which of the game's rules are in force.
+ *
+ * Everything here defaults to *on*, which is the game FR-001..029 describe; #game_start and
+ * #game_start_on_map use those defaults, so the shipped firmware neither sets this nor is
+ * affected by it. It exists for the AI's training curriculum
+ * ([M6 §6](../../../Docu/Design/M6-Pacman-AI.md), [DEC-041](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)):
+ * a network that is still learning to walk cannot also work out that a ghost is sometimes
+ * food and sometimes death, so it is taught the maze first and the rest afterwards.
+ *
+ * These are *runtime* switches on purpose rather than a training-only build. Training must
+ * exercise the code that ships (FR-112), and a second set of rules behind an `#ifdef` would
+ * be a second game to keep in step — the first thing to diverge silently.
+ */
+typedef struct
+{
+    /*! \brief When `false`, the ghosts neither move nor catch Pacman.
+     *
+     * They are still placed, so a snapshot still describes four of them and they still sit
+     * where a level begins — Blinky above the gate, the rest in the house. Making them
+     * *absent* would need an "absent" encoding in \ref msg_actor_t that nothing else wants,
+     * so they are inert instead of gone. */
+    bool has_ghosts;
+
+    /*! \brief When `false`, the level's power pellets are ordinary pellets.
+     *
+     * The pellet *counts* do not change, so clearing the level still means the same thing
+     * and the score is lower only by what the four power pellets and any eaten ghost would
+     * have paid. Frightened mode therefore never starts. */
+    bool has_power_pellets;
+} game_config_t;
+
+/*! \brief The rules as the game is meant to be played: everything on.
+ *
+ * \param[out]      out_config: filled with the defaults, must not be `NULL`
+ */
+void game_get_default_config(game_config_t* out_config);
+
 typedef struct
 {
     /* --- the Model --- */
@@ -84,6 +121,9 @@ typedef struct
     game_state_e state;
     uint8_t level;
     uint8_t lives;
+
+    /*! \brief Which rules this run plays under. Defaults to all of them. */
+    game_config_t config;
 
     /*! \brief What this level plays like, looked up once when it loads (§10.9). */
     difficulty_t difficulty;
@@ -156,6 +196,18 @@ void game_init(game_t* inout_game);
  * \param[in]       in_maze_seed: any value; caller's job to make it vary between runs
  */
 void game_start(game_t* inout_game, uint32_t in_maze_seed);
+
+/*! \brief Begin a run under rules of the caller's choosing.
+ *
+ * Identical to #game_start except that the caller says which rules are in force. Only the
+ * AI's training harness has a reason to (\ref game_config_t); passing the defaults is
+ * exactly #game_start.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_maze_seed: any value; caller's job to make it vary between runs
+ * \param[in]       in_config: the rules to play under, must not be `NULL`
+ */
+void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game_config_t* in_config);
 
 /*! \brief Begin a run on one maze, given rather than generated.
  *
