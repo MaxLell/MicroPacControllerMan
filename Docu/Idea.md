@@ -67,3 +67,9 @@ Get the blinky LED on the board running. I want to see the output.
 - Pacman should be runnable on the host computer at this stage
 ## 3.5 System Integration - Pacman Game on Hardware
 - Here the Pacman game should be integrated onto the hardware.
+
+## Pacman AI
+- This is about training a Machine Learning Algorithm on the Host-Computer on how to win the game with the existing pacman implementation (and the random maze generation). The ressources, that inspired me for the project can be found at the following folder: "Pacman AI Ressources"
+- Then this trained algorithm and its weights shall be ported to the embedded target. There is no training happening on the Embedded Target. This only inferences the ported weigths.
+- When the user plays the game, the the user can press a switch (this would be the user_button) which enables / disables the previously trained AI. The user joystick controls then do not work anymore. The enabling of the AI shall be visually displayed in the HUD (AI has taken over.)
+- When the AI took over (even if only once for a short time), then the resulting high score of the session may no longer be stored in the non-volatile memory.
