@@ -74,9 +74,30 @@ void game_session_start_on_map(const playfield_map_t* in_map);
  * A request rather than a move: the turn happens at the first cell where it becomes
  * possible (§10.1), which is why a held stick has to keep asking.
  *
+ * **Ignored while the AI is playing** (FR-031). Exclusivity lives here rather than in each of the
+ * three callers, because this is the one door a direction comes through — so it holds however many
+ * devices are wired to it.
+ *
  * \param[in]       in_direction: the way the player is pushing
  */
 void game_session_set_direction(direction_e in_direction);
+
+/*! \brief Hand Pacman to the trained agent, or take him back (FR-030).
+ *
+ * Refused, and reported as refused, when the generated weight table cannot be evaluated: better a
+ * run that stays under the player's control than one where the stick is dead and nothing plays.
+ *
+ * The flag is the *run's*, so it survives a level change and a lost life (FR-033) — neither of
+ * those goes near it. #game_session_start clears it, which is what makes every new run start under
+ * player control.
+ *
+ * \param[in]       in_is_enabled: `true` to let the AI play
+ * \return          `true` when control is now where the caller asked for it
+ */
+bool game_session_set_ai_enabled(bool in_is_enabled);
+
+/*! \brief Whether the AI is playing right now. */
+bool game_session_is_ai_enabled(void);
 
 /*! \brief Advance and draw the game if the frame is due.
  *
@@ -104,5 +125,16 @@ uint8_t game_session_get_lives(void);
 
 /*! \brief The level being played, counting from 1. */
 uint8_t game_session_get_level(void);
+
+/*! \brief What the run currently looks like — the same message the view is drawn from.
+ *
+ * For a caller that has to *report* or *record* the run rather than draw it: the on-target AI test
+ * says where Pacman is and which way the agent sent him, and a recorded state is what FR-039's
+ * equivalence check replays. The four scalar getters above answer the common questions more
+ * cheaply; this is the whole picture.
+ *
+ * \param[out]      out_state: filled in, must not be `NULL`
+ */
+void game_session_get_state_message(msg_game_state_t* out_state);
 
 #endif /* GAME_SESSION_H */

@@ -88,4 +88,24 @@ void shell_set_direction(direction_e in_direction);
 /*! \brief Which screen is up. */
 shell_screen_e shell_get_screen(void);
 
+/*! \brief Hand Pacman between the player and the trained agent (FR-030).
+ *
+ * Does nothing unless a run is in progress: on the menu and the score screen the same button means
+ * start (FR-003). Also does nothing when the weight table cannot be evaluated, which is reported
+ * rather than swallowed so a caller can say so on the console.
+ *
+ * \return          `true` when control actually changed hands
+ */
+bool shell_toggle_ai(void);
+
+/*! \brief Whether the agent is playing right now, for a caller that reports what the board does. */
+bool shell_is_ai_playing(void);
+
+/*! \brief Whether the AI played at any point in the current run — the FR-034 lockout.
+ *
+ * Sticky: handing control back does not clear it, only a new run does. Public so that an on-target
+ * test can see the reason a high score was refused rather than having to infer it.
+ */
+bool shell_has_ai_played(void);
+
 #endif /* SHELL_H */

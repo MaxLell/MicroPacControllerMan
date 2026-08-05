@@ -16,7 +16,10 @@
  * out in a fixed order.
  *
  * Not this module's job: evaluating a network (that is `Services/neural_net`) or deciding when
- * to ask (that is the caller's frame).
+ * to ask (that is the caller's frame). What *is* its job, besides the observation and the action
+ * set, is owning the one trained network the firmware carries — #pacman_ai_decide puts the three
+ * steps together, and `ai_weights.c` beside this file is the table it reads. The target evaluates
+ * and never learns (FR-038): there is nothing here that writes a weight.
  */
 
 #ifndef PACMAN_AI_H
@@ -128,5 +131,27 @@ direction_e pacman_ai_action_to_direction(pacman_ai_action_e in_action, directio
  * \return          Member of \ref pacman_ai_action_e
  */
 pacman_ai_action_e pacman_ai_choose_action(const float* in_scores);
+
+/*! \brief Whether the trained network can be evaluated at all.
+ *
+ * The table in `ai_weights.c` is generated, and a generator can be wrong; this asks
+ * `neural_net_is_well_formed` about it and also that its shape matches this module's observation
+ * and action set. Meant to be called once when a run takes the AI on, so that a bad table is
+ * reported where a report is possible instead of showing up as an agent that plays badly.
+ *
+ * \return          `true` when #pacman_ai_decide may be called
+ */
+bool pacman_ai_is_available(void);
+
+/*! \brief What the trained agent would do about this state — observation, network, action, in one.
+ *
+ * The whole decision, so that the target and the host take exactly the same path through it: this
+ * is the function VT-INT-024 replays a recorded state set through (FR-039).
+ *
+ * \param[in]       in_state: the game state, must not be `NULL`
+ * \param[in]       in_playfield: the maze it is being played on, must not be `NULL`
+ * \return          The absolute direction to hand to `game_set_direction`
+ */
+direction_e pacman_ai_decide(const msg_game_state_t* in_state, const playfield_t* in_playfield);
 
 #endif /* PACMAN_AI_H */

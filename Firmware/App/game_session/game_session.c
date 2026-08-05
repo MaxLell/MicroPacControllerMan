@@ -7,6 +7,7 @@
 #include "game.h"
 #include "game_view.h"
 #include "msg.h"
+#include "pacman_ai.h"
 #include "render.h"
 #include "sw_timer.h"
 
@@ -29,6 +30,17 @@ static uint8_t g_drawn_maze_level;
  * every run the player starts. */
 static bool g_is_timer_created;
 
+/* Whether the agent is playing, and where it last asked for something.
+ *
+ * The cell is remembered because a decision belongs to a *cell*, not to a frame: Pacman can only
+ * turn on a cell boundary (§10.1), so a decision taken inside one would be thrown away. At level-1
+ * speed a cell lasts about ten frames, which makes deciding per cell ten times cheaper than
+ * deciding per frame and costs nothing at all in play. */
+static bool g_is_ai_enabled;
+static uint8_t g_ai_decided_column;
+static uint8_t g_ai_decided_row;
+static bool g_has_ai_decided;
+
 static void prv_on_frame_due(void)
 {
     g_is_frame_due = true;
@@ -38,6 +50,32 @@ static void prv_on_frame_due(void)
      * handover, which deliberately draws no actors, so the panel showed a maze and then
      * nothing at all, for ever. */
     sw_timer_start(&g_frame_timer, GAME_SESSION_FRAME_PERIOD_MS, prv_on_frame_due);
+}
+
+/* Let the agent choose, if it is playing and Pacman has reached a cell it has not answered for.
+ *
+ * Asking `game` for the direction rather than going through #game_session_set_direction on
+ * purpose: that door is shut while the AI plays (FR-031), and the AI must not be shut out of it. */
+static void prv_service_ai(const msg_game_state_t* const in_state)
+{
+    if (!g_is_ai_enabled)
+    {
+        return;
+    }
+
+    const bool is_new_cell = !g_has_ai_decided || (in_state->pacman.column != g_ai_decided_column)
+                             || (in_state->pacman.row != g_ai_decided_row);
+
+    if (!is_new_cell)
+    {
+        return;
+    }
+
+    g_has_ai_decided = true;
+    g_ai_decided_column = in_state->pacman.column;
+    g_ai_decided_row = in_state->pacman.row;
+
+    game_set_direction(&g_game, pacman_ai_decide(in_state, game_get_playfield(&g_game)));
 }
 
 /* ==========================================================================
@@ -64,12 +102,24 @@ void game_session_init(void)
     sw_timer_start(&g_frame_timer, GAME_SESSION_FRAME_PERIOD_MS, prv_on_frame_due);
 }
 
+/* Every run begins under player control (FR-033), and neither the AI's last decision nor the HUD's
+ * last word about it carries over. */
+static void prv_start_under_player_control(void)
+{
+    g_is_ai_enabled = false;
+    g_has_ai_decided = false;
+
+    game_view_set_ai_active(&g_view, false);
+}
+
 void game_session_start(uint32_t in_maze_seed)
 {
     game_start(&g_game, in_maze_seed);
 
     /* The run's mazes are new, so nothing the view holds applies to them. */
     g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
+
+    prv_start_under_player_control();
 }
 
 void game_session_start_on_map(const playfield_map_t* in_map)
@@ -77,11 +127,42 @@ void game_session_start_on_map(const playfield_map_t* in_map)
     game_start_on_map(&g_game, in_map);
 
     g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
+
+    prv_start_under_player_control();
 }
 
 void game_session_set_direction(direction_e in_direction)
 {
+    /* FR-031: while the AI plays, the stick is dead. One place, so every caller is covered. */
+    if (g_is_ai_enabled)
+    {
+        return;
+    }
+
     game_set_direction(&g_game, in_direction);
+}
+
+bool game_session_set_ai_enabled(bool in_is_enabled)
+{
+    if (in_is_enabled && !pacman_ai_is_available())
+    {
+        return false;
+    }
+
+    g_is_ai_enabled = in_is_enabled;
+
+    /* So that taking over acts at the next boundary rather than waiting for Pacman to leave the
+     * cell he was already in when the button was pressed. */
+    g_has_ai_decided = false;
+
+    game_view_set_ai_active(&g_view, in_is_enabled);
+
+    return true;
+}
+
+bool game_session_is_ai_enabled(void)
+{
+    return g_is_ai_enabled;
 }
 
 bool game_session_service(void)
@@ -99,6 +180,8 @@ bool game_session_service(void)
     game_tick(&g_game, GAME_SESSION_FRAME_PERIOD_MS);
 
     game_get_state_message(&g_game, &state);
+
+    prv_service_ai(&state);
 
     /* A level's maze reaches the view here, and only when it changes. It cannot ride along
      * inside the state message: the state is 246 bytes of a 256-byte payload and a maze does
@@ -146,6 +229,11 @@ uint8_t game_session_get_lives(void)
 uint8_t game_session_get_level(void)
 {
     return game_get_level(&g_game);
+}
+
+void game_session_get_state_message(msg_game_state_t* out_state)
+{
+    game_get_state_message(&g_game, out_state);
 }
 
 #if defined(TEST)

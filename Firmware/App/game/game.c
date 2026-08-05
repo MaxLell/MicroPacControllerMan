@@ -789,6 +789,13 @@ const playfield_map_t* game_get_maze(const game_t* in_game)
     return &in_game->maze;
 }
 
+const playfield_t* game_get_playfield(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return &in_game->playfield;
+}
+
 void game_set_direction(game_t* inout_game, direction_e in_direction)
 {
     ASSERT(inout_game != NULL);

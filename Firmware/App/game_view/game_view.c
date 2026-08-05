@@ -449,6 +449,7 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_LABEL_INDEX   (HUD_SCORE_INDEX + GAME_VIEW_HUD_SCORE_DIGITS)
 #define HUD_LEVEL_INDEX         (HUD_LEVEL_LABEL_INDEX + 5U)
 #define HUD_LIVES_INDEX         (HUD_LEVEL_INDEX + GAME_VIEW_HUD_LEVEL_DIGITS)
+#define HUD_AI_INDEX            (HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS)
 
 /* The maze columns each part sits on. The score runs to column 6 and the level to 26, so
  * both read outward from the edge they belong to, as the arcade's do. */
@@ -458,10 +459,15 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_LAST_COLUMN   (26U)
 #define HUD_LIVES_FIRST_COLUMN  (2U)
 
+/* Centred in the label row's own free space: `1UP` ends at column 5 and `LEVEL` starts at 22, so
+ * 13 and 14 are the middle of what is left of a 28-column row. */
+#define HUD_AI_FIRST_COLUMN     (13U)
+
 static const char* const g_hud_player_label = "1UP";
 static const char* const g_hud_level_label = "LEVEL";
+static const char* const g_hud_ai_label = "AI";
 
-_Static_assert(HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
+_Static_assert(HUD_AI_INDEX + GAME_VIEW_HUD_AI_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
 
 /* One digit of a number, counting places from the units up, or a space where a leading
  * zero would be. Place zero always gives a digit, so a score of nothing reads `0` rather
@@ -492,16 +498,18 @@ static void prv_set_hud_text_item(char in_character, uint8_t in_column, int16_t 
     *out_y = in_y;
 }
 
-/* What one slot of the HUD should show, for a given state.
+/* What one slot of the HUD should show, for a given view.
  *
- * A pure function of the state, which is the whole trick: the same call against the state
- * last drawn says what is on the panel, and the difference between the two is exactly what
- * has to be sent. */
-static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_t in_index,
-                                  sprite_set_id_e* const out_sprite, sprite_set_palette_e* const out_palette,
-                                  int16_t* const out_x, int16_t* const out_y)
+ * A pure function of what the view holds, which is the whole trick: what it says is compared
+ * against the sprite the slot last actually showed, and the difference is exactly what has to be
+ * sent. Reading the view rather than only the state is what lets the AI indication join in
+ * without the game having to know that an AI exists. */
+static void prv_describe_hud_item(const game_view_t* const in_view, uint8_t in_index, sprite_set_id_e* const out_sprite,
+                                  sprite_set_palette_e* const out_palette, int16_t* const out_x, int16_t* const out_y)
 {
     ASSERT(in_index < GAME_VIEW_HUD_ITEM_COUNT);
+
+    const msg_game_state_t* const in_state = &in_view->state;
 
     if (in_index < HUD_SCORE_INDEX)
     {
@@ -535,7 +543,7 @@ static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_
         prv_set_hud_text_item(prv_get_digit_character(in_state->level, place), column, GAME_VIEW_HUD_VALUE_ROW_Y,
                               out_sprite, out_palette, out_x, out_y);
     }
-    else
+    else if (in_index < HUD_AI_INDEX)
     {
         /* A life slot: a little Pacman, or a blank the same size once it is spent. Both
          * are drawn, never merely skipped — a slot that stopped being sent would leave the
@@ -548,6 +556,16 @@ static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_
         *out_x =
             (int16_t)(GAME_VIEW_ORIGIN_X + ((int16_t)(HUD_LIVES_FIRST_COLUMN + (slot * 2U)) * GAME_VIEW_TILE_SIZE));
         *out_y = GAME_VIEW_HUD_LIVES_Y;
+    }
+    else
+    {
+        /* The AI indication (FR-032): `AI` while the agent plays, the font's space while the
+         * player does. A space rather than nothing, for the same reason a spent life is a blank. */
+        const uint8_t offset = (uint8_t)(in_index - HUD_AI_INDEX);
+
+        prv_set_hud_text_item(in_view->is_ai_active ? g_hud_ai_label[offset] : ' ',
+                              (uint8_t)(HUD_AI_FIRST_COLUMN + offset), GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite,
+                              out_palette, out_x, out_y);
     }
 }
 
@@ -570,7 +588,7 @@ static void prv_fill_changed_hud(game_view_t* const inout_view, msg_display_list
         int16_t x;
         int16_t y;
 
-        prv_describe_hud_item(&inout_view->state, index, &sprite, &palette, &x, &y);
+        prv_describe_hud_item(inout_view, index, &sprite, &palette, &x, &y);
 
         if ((uint8_t)sprite == inout_view->drawn_hud[index])
         {
@@ -729,6 +747,13 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
          * may be showing anything at all. */
         prv_forget_hud(inout_view);
     }
+}
+
+void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active)
+{
+    ASSERT(inout_view != NULL);
+
+    inout_view->is_ai_active = in_is_active;
 }
 
 bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out_list)

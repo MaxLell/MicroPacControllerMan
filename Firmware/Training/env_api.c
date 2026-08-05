@@ -221,7 +221,7 @@ static pacman_ai_action_e prv_choose_action(env_batch_t* const inout_batch, cons
     float outputs[PACMAN_AI_ACTION_COUNT];
 
     game_get_state_message(&in_entry->game, &state);
-    pacman_ai_get_features(&state, &in_entry->game.playfield, features);
+    pacman_ai_get_features(&state, game_get_playfield(&in_entry->game), features);
     neural_net_evaluate(&inout_batch->policy.net, features, outputs);
 
     return pacman_ai_choose_action(outputs);
@@ -324,7 +324,7 @@ void env_observe(const env_batch_t* in_batch, float* out_features)
         msg_game_state_t state;
 
         game_get_state_message(&entry->game, &state);
-        pacman_ai_get_features(&state, &entry->game.playfield, &out_features[index * stride]);
+        pacman_ai_get_features(&state, game_get_playfield(&entry->game), &out_features[index * stride]);
     }
 }
 

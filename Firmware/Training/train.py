@@ -154,6 +154,13 @@ class Trainer:
                 "seeds": list(seeds),
             }
 
+            # Written the moment it improves, not at the end of the stage. A stage-3 run is hours,
+            # and writing only at the end meant the file held the *previous* stage's winner for all
+            # of it — so measuring or exporting mid-flight silently used the wrong network, and an
+            # interrupted run kept nothing. A few kilobytes of JSON per improvement is nothing
+            # against a generation.
+            _write_winner(self.arguments.out, self.best_net, self.best_report, self.arguments)
+
         self.generation += 1
 
         print(

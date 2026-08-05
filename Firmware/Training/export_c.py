@@ -16,7 +16,9 @@ agree on.
 import argparse
 import json
 import os
+import shutil
 import struct
+import subprocess
 import sys
 from typing import Sequence
 
@@ -46,8 +48,15 @@ def _float_literal(value: float) -> str:
     float32.
     """
     single = struct.unpack("<f", struct.pack("<f", value))[0]
+    text = single.hex()
 
-    return f"{single.hex()}f"
+    # `float.hex()` writes a double's 13 hex mantissa digits; a float32 uses six of them and the
+    # rest are zeros that say nothing. Trimmed for the reader, not for the compiler.
+    mantissa, _, exponent = text.partition("p")
+    if "." in mantissa:
+        mantissa = mantissa.rstrip("0").rstrip(".")
+
+    return f"{mantissa}p{exponent}f"
 
 
 def _array(kind: str, name: str, values: Sequence, formatter, per_line: int) -> str:
@@ -137,6 +146,15 @@ def _write_header(path: str, flat_net: net.Net, source_name: str) -> None:
         handle.write(text)
 
 
+def _format(*paths: str) -> None:
+    """Run the repository's clang-format over the generated files, if it is installed."""
+    if shutil.which("clang-format") is None:
+        print("clang-format not found — run ./dev.sh format before committing", file=sys.stderr)
+        return
+
+    subprocess.run(["clang-format", "-i", *paths], check=True)
+
+
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--winner", default=os.path.join(_HERE, "winner.json"))
@@ -161,12 +179,22 @@ def main(argv: Sequence[str]) -> int:
         print(f"{flat_net.node_count} nodes, but the evaluator holds {net.MAX_NODES}", file=sys.stderr)
         return 1
 
+    # Named relative to the firmware tree when it lives there, and by its bare name when it does
+    # not: a generated file with six `..` in its provenance line tells the reader nothing.
     source_name = os.path.relpath(arguments.winner, os.path.dirname(_HERE))
+    if source_name.startswith(".."):
+        source_name = os.path.basename(arguments.winner)
     source_path = os.path.join(arguments.out_dir, "ai_weights.c")
     header_path = os.path.join(arguments.out_dir, "ai_weights.h")
 
     _write_source(source_path, flat_net, payload, source_name)
     _write_header(header_path, flat_net, source_name)
+
+    # Handed to the project's own formatter rather than formatted by hand here. A generated file is
+    # still a file `./dev.sh check` looks at, and guessing what clang-format wants would mean two
+    # descriptions of the coding standard — one of them in a Python script nobody would think to
+    # update.
+    _format(source_path, header_path)
 
     # What the tables cost in flash, worked out here rather than guessed: it is the figure NFR-007
     # is about, and `arm-none-eabi-size` would only show it mixed in with everything else.

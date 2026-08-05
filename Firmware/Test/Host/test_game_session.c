@@ -17,6 +17,7 @@
  * path has to be named even where this file calls none of it directly. */
 #include "active_object.h"
 #include "agent.h"
+#include "ai_weights.h"
 #include "assert_probe.h"
 #include "circular_buffer.h"
 #include "custom_assert.h"
@@ -34,7 +35,9 @@
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
+#include "neural_net.h"
 #include "pacman.h"
+#include "pacman_ai.h"
 #include "playfield.h"
 #include "render.h"
 #include "score.h"
@@ -249,4 +252,122 @@ void test_the_direction_reaches_the_game(void)
     }
 
     TEST_ASSERT_GREATER_THAN_UINT32(0U, game_session_get_score());
+}
+
+/* --- the AI takeover (FR-030/031/033) ------------------------------------- */
+
+/* The generated weight table has to be one this build can actually evaluate. Cheap here, and it is
+ * the check that catches an `ai_weights.c` exported against a different observation — which would
+ * otherwise show up as an agent that plays badly for no visible reason. */
+void test_the_shipped_weight_table_can_be_taken_on(void)
+{
+    prv_start_run();
+
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(true));
+    TEST_ASSERT_TRUE(game_session_is_ai_enabled());
+}
+
+/* FR-031. Exclusivity is here rather than in each caller because this is the one door a direction
+ * comes through, so it holds however many devices are wired to it. */
+void test_the_stick_is_dead_while_the_ai_plays(void)
+{
+    msg_game_state_t state;
+
+    prv_start_run();
+    (void)prv_run_one_frame();
+
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(true));
+
+    /* West is open from Pacman's start on the arcade map, so a request that got through would
+     * show up as a heading. */
+    game_session_set_direction(DIRECTION_EAST);
+    game_session_set_direction(DIRECTION_WEST);
+
+    for (uint8_t frame = 0U; frame < 20U; ++frame)
+    {
+        (void)prv_run_one_frame();
+    }
+
+    game_session_get_state_message(&state);
+
+    /* Not "he is not going west" — the AI may well have chosen west itself. What must not happen is
+     * that the *request* survived, so the check is that the AI kept deciding: handing it back and
+     * pushing a direction has to work again. */
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(false));
+
+    game_session_set_direction(DIRECTION_WEST);
+
+    for (uint8_t frame = 0U; frame < 20U; ++frame)
+    {
+        (void)prv_run_one_frame();
+    }
+
+    game_session_get_state_message(&state);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)DIRECTION_WEST, state.pacman.direction);
+}
+
+/* The AI has to actually steer: a decision that never reached `game` would look like a player who
+ * is not touching the stick, and Pacman would sit still. */
+void test_the_ai_gets_pacman_moving(void)
+{
+    msg_game_state_t state;
+
+    prv_start_run();
+    (void)prv_run_one_frame();
+
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(true));
+
+    for (uint8_t frame = 0U; frame < 40U; ++frame)
+    {
+        (void)prv_run_one_frame();
+    }
+
+    game_session_get_state_message(&state);
+
+    TEST_ASSERT_NOT_EQUAL_UINT8((uint8_t)DIRECTION_NONE, state.pacman.direction);
+}
+
+/* The tick as a stub rather than as an expectation, for the one test that needs thousands of
+ * frames: `IgnoreAndReturn` records a call each time and CMock runs out of memory long before a
+ * ghost has caught anybody. */
+static uint32_t prv_get_tick_from_the_clock(int in_call_count)
+{
+    (void)in_call_count;
+
+    return g_now_ms;
+}
+
+/* FR-033: the flag belongs to the run, so losing a life must not touch it. */
+void test_the_ai_keeps_playing_after_a_life_is_lost(void)
+{
+    prv_start_run();
+    (void)prv_run_one_frame();
+
+    const uint8_t lives_at_the_start = game_session_get_lives();
+
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(true));
+
+    systick_bsp_get_tick_Stub(prv_get_tick_from_the_clock);
+
+    for (uint32_t frame = 0U; (frame < 4000U) && (game_session_get_lives() == lives_at_the_start); ++frame)
+    {
+        g_now_ms += GAME_SESSION_FRAME_PERIOD_MS;
+        sw_timer_process();
+        (void)game_session_service();
+    }
+
+    TEST_ASSERT_LESS_THAN_UINT8(lives_at_the_start, game_session_get_lives());
+    TEST_ASSERT_TRUE(game_session_is_ai_enabled());
+}
+
+/* FR-033's other half. Cleared by starting, not by anything the run does. */
+void test_a_new_run_takes_pacman_back_from_the_ai(void)
+{
+    prv_start_run();
+
+    TEST_ASSERT_TRUE(game_session_set_ai_enabled(true));
+
+    prv_start_run();
+
+    TEST_ASSERT_FALSE(game_session_is_ai_enabled());
 }

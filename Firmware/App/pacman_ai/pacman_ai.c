@@ -6,7 +6,9 @@
 
 #include <stddef.h>
 
+#include "ai_weights.h"
 #include "custom_assert.h"
+#include "neural_net.h"
 
 /* ==========================================================================
  * pacman_ai - private types and data
@@ -344,4 +346,28 @@ void pacman_ai_get_features(const msg_game_state_t* in_state, const playfield_t*
     out_features[global] = (in_state->frightened_ghosts != 0U) ? 1.0F : 0.0F;
     out_features[global + 1U] = in_state->are_frightened_ghosts_flashing ? 1.0F : 0.0F;
     out_features[global + 2U] = (total > 0U) ? ((float)remaining / (float)total) : 0.0F;
+}
+
+bool pacman_ai_is_available(void)
+{
+    /* Both halves matter. The table could be malformed, which `neural_net` can tell; or it could
+     * be well formed but shaped for a different observation — a table exported before a feature
+     * was added would evaluate happily and read garbage past the end of the 23 it was given. */
+    return neural_net_is_well_formed(&g_ai_weights_network)
+           && (g_ai_weights_network.input_count == (uint16_t)PACMAN_AI_FEATURE_COUNT)
+           && (g_ai_weights_network.output_count == (uint16_t)PACMAN_AI_ACTION_COUNT);
+}
+
+direction_e pacman_ai_decide(const msg_game_state_t* in_state, const playfield_t* in_playfield)
+{
+    ASSERT(in_state != NULL);
+    ASSERT(in_playfield != NULL);
+
+    float features[PACMAN_AI_FEATURE_COUNT];
+    float scores[PACMAN_AI_ACTION_COUNT];
+
+    pacman_ai_get_features(in_state, in_playfield, features);
+    neural_net_evaluate(&g_ai_weights_network, features, scores);
+
+    return pacman_ai_action_to_direction(pacman_ai_choose_action(scores), (direction_e)in_state->pacman.direction);
 }

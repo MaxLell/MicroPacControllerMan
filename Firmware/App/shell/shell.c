@@ -64,6 +64,13 @@ static bool g_has_logo_appeared;
 static uint32_t g_last_score;
 static bool g_was_last_score_a_high_score;
 
+/* Whether the AI played at any point in the run that is in progress (FR-034).
+ *
+ * A latch, not a state: the requirement is "was on at some point", so handing control back does not
+ * clear it and only a new run does. `game_session` owns whether the AI is playing *now* — this is
+ * the run's memory of it, and the run belongs to the shell. */
+static bool g_has_ai_played;
+
 static void prv_on_timeout(void)
 {
     /* Nothing to do: #shell_service watches sw_timer_is_active(). */
@@ -243,7 +250,11 @@ static void prv_enter(shell_screen_e in_screen, uint32_t in_duration_ms)
 static void prv_finish_run(void)
 {
     g_last_score = game_session_get_score();
-    g_was_last_score_a_high_score = high_score_offer(g_last_score);
+
+    /* FR-034: a run the AI touched is not the player's run, so it is not offered at all — however
+     * high it scored. The sticky flag rather than the live one, because handing control back just
+     * before the last life would otherwise launder the score. */
+    g_was_last_score_a_high_score = g_has_ai_played ? false : high_score_offer(g_last_score);
 
     prv_enter(SHELL_SCREEN_SCORE, SHELL_SCORE_MS);
 }
@@ -362,6 +373,8 @@ void shell_press_start(void)
          * replayed exactly. */
         game_session_start(systick_bsp_get_tick());
 
+        g_has_ai_played = false;
+
         prv_enter(SHELL_SCREEN_GAME, 0U);
     }
     else if (g_screen == SHELL_SCREEN_SCORE)
@@ -380,6 +393,37 @@ void shell_set_direction(direction_e in_direction)
     {
         game_session_set_direction(in_direction);
     }
+}
+
+bool shell_toggle_ai(void)
+{
+    /* Only during a run: on the menu and the score screen the same button means start (FR-003), and
+     * a toggle with no run to toggle would have to invent one. */
+    if (g_screen != SHELL_SCREEN_GAME)
+    {
+        return false;
+    }
+
+    if (!game_session_set_ai_enabled(!game_session_is_ai_enabled()))
+    {
+        return false;
+    }
+
+    /* Latched here rather than where the AI is switched off, so that the run remembers what it
+     * cannot be told again. */
+    g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
+
+    return true;
+}
+
+bool shell_is_ai_playing(void)
+{
+    return (g_screen == SHELL_SCREEN_GAME) && game_session_is_ai_enabled();
+}
+
+bool shell_has_ai_played(void)
+{
+    return g_has_ai_played;
 }
 
 shell_screen_e shell_get_screen(void)

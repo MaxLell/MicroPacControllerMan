@@ -227,6 +227,16 @@ void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map);
  */
 const playfield_map_t* game_get_maze(const game_t* in_game);
 
+/*! \brief The playfield the run is being played on, for a caller that has to reason about routes.
+ *
+ * The maze plus what has been eaten off it, which is what a route search needs and
+ * #game_get_maze does not carry. Read-only: the pellets are the game's to remove.
+ *
+ * \param[in]       in_game: the game, must not be `NULL`
+ * \return          The live playfield, owned by the game
+ */
+const playfield_t* game_get_playfield(const game_t* in_game);
+
 /*! \brief Record the player's intended direction (FR-004).
  *
  * Ignored unless a run is in progress. Takes effect at Pacman's next move, not now.

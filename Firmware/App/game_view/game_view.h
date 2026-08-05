@@ -88,11 +88,21 @@
  *         is drawn as this many — the number is the model's, the picture is ours. */
 #define GAME_VIEW_HUD_LIFE_SLOTS   (3U)
 
+/*! \brief The `AI` the HUD shows while the agent has taken over (FR-032), in the gap the label
+ *         row leaves between `1UP` and `LEVEL`.
+ *
+ * Always two slots, whether or not the AI is playing: while it is not, they draw the font's space.
+ * A slot that stopped being described would leave the last thing it drew on the panel for the rest
+ * of the run — the same reason a spent life is drawn as a blank rather than skipped.
+ */
+#define GAME_VIEW_HUD_AI_SLOTS     (2U)
+
 /*! \brief Everything the HUD draws, as a fixed list: `1UP`, the score, `LEVEL`, the level,
- *         and the life slots. Fixed on purpose — a list that never changes length can be
- *         compared against what was last drawn item by item. */
+ *         the life slots and the AI indication. Fixed on purpose — a list that never changes
+ *         length can be compared against what was last drawn item by item. */
 #define GAME_VIEW_HUD_ITEM_COUNT                                                                                       \
-    (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS)
+    (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS                      \
+     + GAME_VIEW_HUD_AI_SLOTS)
 
 /*! \brief The `drawn_hud` entry for a slot that has never been drawn. Above every
  *         `sprite_set_id_e`, so the first comparison always reports a change. */
@@ -131,6 +141,13 @@ typedef struct
      *   once is the handover after a new maze. */
     playfield_map_t maze;
     bool has_maze;
+
+    /*!< Whether the HUD says the AI has taken over (FR-032). Told to the view rather than read
+     *   out of the state message: taking over is not something the *game* knows about, and
+     *   `msg_game_state_t` describes the game. The diffing needs no help with it — a slot is
+     *   compared against the sprite that was last drawn there, not against an older state, so
+     *   flipping this redraws the two slots on the next frame and nothing else. */
+    bool is_ai_active;
 } game_view_t;
 
 /* ==========================================================================
@@ -170,6 +187,13 @@ void game_view_set_maze(game_view_t* inout_view, const playfield_map_t* in_map);
  * \param[in]       in_state: the state, copied in; must not be `NULL`
  */
 void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_state);
+
+/*! \brief Say whether the HUD should show that the AI has taken over (FR-032).
+ *
+ * \param[in,out]   inout_view: the view, must not be `NULL`
+ * \param[in]       in_is_active: `true` while the agent is playing
+ */
+void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active);
 
 /*! \brief Fill in the next display list.
  *

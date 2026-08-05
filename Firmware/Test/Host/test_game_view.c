@@ -1064,3 +1064,108 @@ void test_null_arguments_assert(void)
     ASSERT_PROBE_EXPECT(game_view_set_maze(&g_view, NULL), "in_map != NULL");
     ASSERT_PROBE_EXPECT((void)game_view_is_wall_drawn_at(NULL, 0U, 0U), "in_view != NULL");
 }
+
+/* --- the AI indication (FR-032) ------------------------------------------- */
+
+/* Where the two `AI` slots land. Column 13 of the label row, which is the middle of what `1UP` and
+ * `LEVEL` leave free. */
+static void prv_get_ai_slot_pixel(uint8_t in_offset, int16_t* const out_x, int16_t* const out_y)
+{
+    game_view_get_cell_pixel((uint8_t)(13U + in_offset), 0U, out_x, out_y);
+
+    *out_y = GAME_VIEW_HUD_LABEL_ROW_Y;
+}
+
+void test_the_hud_says_nothing_about_the_ai_until_it_takes_over(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    int16_t x;
+    int16_t y;
+
+    game_view_set_state(&g_view, &g_state);
+    while (game_view_is_field_pending(&g_view))
+    {
+        msg_display_list_t list;
+        (void)game_view_get_display_list(&g_view, &list);
+    }
+
+    const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    /* Drawn, not skipped: the slots have to be *something*, or whatever the panel showed there
+     * before would stay. A space is that something. */
+    for (uint8_t offset = 0U; offset < GAME_VIEW_HUD_AI_SLOTS; ++offset)
+    {
+        prv_get_ai_slot_pixel(offset, &x, &y);
+
+        const msg_display_item_t* const item = prv_find_at(items, count, x, y);
+
+        TEST_ASSERT_NOT_NULL(item);
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(' '), item->drawing.sprite);
+    }
+}
+
+void test_the_hud_spells_out_ai_while_the_agent_plays(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    int16_t x;
+    int16_t y;
+
+    game_view_set_state(&g_view, &g_state);
+    (void)prv_settle();
+
+    game_view_set_ai_active(&g_view, true);
+
+    const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    /* Two slots and nothing else: flipping the flag is not a reason to re-send the score. */
+    TEST_ASSERT_EQUAL_UINT8(GAME_VIEW_HUD_AI_SLOTS, count);
+
+    static const char k_expected[GAME_VIEW_HUD_AI_SLOTS] = {'A', 'I'};
+
+    for (uint8_t offset = 0U; offset < GAME_VIEW_HUD_AI_SLOTS; ++offset)
+    {
+        prv_get_ai_slot_pixel(offset, &x, &y);
+
+        const msg_display_item_t* const item = prv_find_at(items, count, x, y);
+
+        TEST_ASSERT_NOT_NULL(item);
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(k_expected[offset]), item->drawing.sprite);
+    }
+}
+
+/* Handing control back has to wipe it again, for the same reason a spent life is wiped. */
+void test_the_ai_indication_is_wiped_when_the_player_takes_over(void)
+{
+    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
+    int16_t x;
+    int16_t y;
+
+    game_view_set_state(&g_view, &g_state);
+    game_view_set_ai_active(&g_view, true);
+    (void)prv_settle();
+
+    game_view_set_ai_active(&g_view, false);
+
+    const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
+
+    prv_get_ai_slot_pixel(0U, &x, &y);
+
+    const msg_display_item_t* const item = prv_find_at(items, count, x, y);
+
+    TEST_ASSERT_NOT_NULL(item);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(' '), item->drawing.sprite);
+}
+
+/* The HUD may not touch the maze, and two more slots is two more chances to. */
+void test_the_ai_slots_stay_off_the_maze(void)
+{
+    int16_t x;
+    int16_t y;
+
+    for (uint8_t offset = 0U; offset < GAME_VIEW_HUD_AI_SLOTS; ++offset)
+    {
+        prv_get_ai_slot_pixel(offset, &x, &y);
+
+        TEST_ASSERT_LESS_THAN_INT16(GAME_VIEW_ORIGIN_Y, y + GAME_VIEW_TILE_SIZE);
+    }
+}

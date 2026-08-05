@@ -18,10 +18,12 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "ai_weights.h"
 #include "assert_probe.h"
 #include "custom_assert.h"
 #include "maze_gen.h"
 #include "msg.h"
+#include "neural_net.h"
 #include "pacman_ai.h"
 #include "playfield.h"
 #include "unity.h"
@@ -508,4 +510,66 @@ void test_a_null_argument_asserts(void)
     ASSERT_PROBE_EXPECT(pacman_ai_get_features(&g_state, NULL, g_features), "in_playfield != NULL");
     ASSERT_PROBE_EXPECT(pacman_ai_get_features(&g_state, &g_playfield, NULL), "out_features != NULL");
     ASSERT_PROBE_EXPECT((void)pacman_ai_choose_action(NULL), "in_scores != NULL");
+}
+
+/* --- the trained network the firmware carries ------------------------------ */
+
+/* The generated table has to be one this build can evaluate, and shaped for *this* observation.
+ * Both halves matter: a table exported before a feature was added is well formed and would read
+ * past the end of the 23 numbers it is given, which is a bug that looks like bad training. */
+void test_the_generated_weight_table_fits_this_firmware(void)
+{
+    TEST_ASSERT_TRUE(pacman_ai_is_available());
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)PACMAN_AI_FEATURE_COUNT, g_ai_weights_network.input_count);
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)PACMAN_AI_ACTION_COUNT, g_ai_weights_network.output_count);
+}
+
+/* VT-UNIT-011, the host half of FR-039: no state between calls, so the same state always decides
+ * the same way. If this ever failed, the target would disagree with the host and the on-target
+ * check would report it as a porting fault. */
+void test_the_same_state_always_decides_the_same_way(void)
+{
+    prv_build_state(prv_make_cell(13, 23), DIRECTION_WEST);
+
+    const direction_e first = pacman_ai_decide(&g_state, &g_playfield);
+
+    for (uint8_t attempt = 0U; attempt < 8U; ++attempt)
+    {
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)first, (uint8_t)pacman_ai_decide(&g_state, &g_playfield));
+    }
+}
+
+/* `pacman_ai_decide` is the three steps put together, and this is what says it put them together in
+ * the right order — in particular that the winning *relative* action was read against Pacman's own
+ * facing, which is the one place a plausible-looking wrong answer could come from. */
+void test_the_decision_is_the_observation_the_network_and_the_facing(void)
+{
+    static const direction_e k_facings[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
+
+    for (uint8_t index = 0U; index < (sizeof(k_facings) / sizeof(k_facings[0])); ++index)
+    {
+        float scores[PACMAN_AI_ACTION_COUNT];
+
+        prv_build_state(prv_make_cell(13, 23), k_facings[index]);
+
+        pacman_ai_get_features(&g_state, &g_playfield, g_features);
+        neural_net_evaluate(&g_ai_weights_network, g_features, scores);
+
+        const pacman_ai_action_e expected_action = pacman_ai_choose_action(scores);
+        const direction_e expected = pacman_ai_action_to_direction(expected_action, k_facings[index]);
+
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)expected, (uint8_t)pacman_ai_decide(&g_state, &g_playfield));
+    }
+}
+
+/* The tie-break is part of the interface (FR-039), so it is asserted rather than left to whichever
+ * comparison the compiler emits: two equal outputs must not be free to decide differently on two
+ * machines. */
+void test_an_exact_tie_goes_to_the_lowest_action(void)
+{
+    static const float k_all_equal[PACMAN_AI_ACTION_COUNT] = {0.0F, 0.0F, 0.0F, 0.0F};
+    static const float k_two_equal[PACMAN_AI_ACTION_COUNT] = {1.0F, 2.0F, 2.0F, 1.0F};
+
+    TEST_ASSERT_EQUAL_UINT(PACMAN_AI_ACTION_FORWARD, pacman_ai_choose_action(k_all_equal));
+    TEST_ASSERT_EQUAL_UINT(PACMAN_AI_ACTION_LEFT, pacman_ai_choose_action(k_two_equal));
 }

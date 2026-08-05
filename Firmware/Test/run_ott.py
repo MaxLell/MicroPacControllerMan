@@ -37,8 +37,8 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "high_score"]
-MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman"]
+AUTOMATIC = ["display_id", "high_score", "ai_equivalence"]
+MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
 
@@ -48,7 +48,7 @@ INTERACTIVE = set(MANUAL)
 # minutes at the arcade's own pace. The scenario itself allows 600 s, so the harness has to
 # outlast it or it would report a timeout on a test that is still going.
 INTERACTIVE_TIMEOUT_S = 130.0
-LONG_TIMEOUT_S = {"pacman": 620.0}
+LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
 
 
 def detect_port() -> str:
@@ -309,7 +309,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button/pacman); omit to run the suite")
+                    help="test name (display_id/ai_equivalence/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--manual", action="store_true",
                     help="run every test that needs a human at the board, in sequence")

@@ -97,6 +97,7 @@ if(PACMAN_HOST_BUILD)
         App/maze_gen/maze_gen.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
+        App/pacman_ai/ai_weights.c
         App/pacman_ai/pacman_ai.c
         App/playfield/playfield.c
         App/score/score.c
@@ -184,6 +185,13 @@ if(PACMAN_HOST_BUILD)
     # deliberate: training is the one consumer that cares about speed over debuggability, so
     # it gets -O2 while the library the SDL app and the debugger use stays at -g. The source
     # list is shared, so the two cannot drift apart.
+    # The FR-039 recorder: plays the trained network on the host and prints the states, with the
+    # host's own decisions about them, as the C the on-target test replays. C rather than Python so
+    # that it calls the very `pacman_ai_decide` the target calls, on the very same structs.
+    add_executable(pacman_ai_record Training/record_states.c)
+    target_link_libraries(pacman_ai_record PRIVATE pacman_host)
+    target_include_directories(pacman_ai_record PRIVATE Training)
+
     add_library(pacman_env SHARED ${PACMAN_HOST_SOURCES} Training/env_api.c)
     target_include_directories(pacman_env PUBLIC
         $<TARGET_PROPERTY:pacman_host,INTERFACE_INCLUDE_DIRECTORIES>
@@ -220,6 +228,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/high_score/high_score.c
     App/maze_gen/maze_gen.c
     App/pacman/pacman.c
+    App/pacman_ai/ai_weights.c
     App/pacman_ai/pacman_ai.c
     App/playfield/playfield.c
     App/render/render.c
@@ -250,6 +259,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/msg_queue/msg_queue.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
+    Test/Target/scripts/ott_ai_equivalence.c
+    Test/Target/scripts/ott_ai_equivalence_states.c
+    Test/Target/scripts/ott_pacman_ai.c
     Test/Target/ott_framebuffer.c
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_animation.c

@@ -135,7 +135,18 @@ static void prv_poll_input(void)
     /* Start comes from either key, and both are taken as an *edge* so a thumb resting on
      * one does not keep pressing it. FR-003 names the Nucleo's own button; the centre of
      * the stick is where a player's hand already is, and having both costs one line. */
-    if (joystick_take_press(JOYSTICK_KEY_CENTER) || user_button_take_press())
+    if (joystick_take_press(JOYSTICK_KEY_CENTER))
+    {
+        shell_press_start();
+    }
+
+    /* The board button means two things now, and which one depends on the screen: start on the
+     * menu and the score screen (FR-003), hand Pacman to the AI and back during a run (FR-030).
+     * The stick's centre keeps meaning start only — a player reaching for it mid-run is asking to
+     * play, not to stop playing. The shell decides, because the shell is what knows the screen;
+     * `shell_toggle_ai` says whether it did anything, so the fall-through here is one condition
+     * and not a copy of the screen logic. */
+    if (user_button_take_press() && !shell_toggle_ai())
     {
         shell_press_start();
     }
