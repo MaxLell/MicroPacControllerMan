@@ -150,7 +150,7 @@ silently working around a wart.
   lands on a cell boundary — including the ghost house's, which needed a second drawing cell to get
   there (a one-cell ring can have the 6 px stroke, the grid, or a roomy inside: any two, and the
   owner chose the grid).
-  RAM 68.0 %, flash 18.6 %; frame cost unchanged at 8 ms of 16.
+  RAM 68.0 %, flash 18.7 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 ## Build · flash · test (all from `Firmware/`)

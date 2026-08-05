@@ -5,7 +5,7 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeProgrammer** over ST-LINK V3E.
 
 > The game is complete and plays on the board, with a **randomly generated maze per level**
-> (FR-029) — RAM **68.0 %** (178,248 of 256 kB), flash **18.7 %** (96,320 of the 504 kB left
+> (FR-029) — RAM **68.0 %** (178,244 of 256 kB), flash **18.7 %** (96,292 of the 504 kB left
 > after the high-score page), both builds warning-free, **371** host unit tests green. Every
 > requirement in the spec has a passing test; the two timing budgets that used to sit here as
 > unmet are **withdrawn** rather than satisfied
@@ -253,41 +253,53 @@ chip select is **active LOW** where UM2750 says high, and register reads carry a
 dummy, so a byte-aligned read comes back looking like plausible garbage. The map and the
 measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 
-## M1 verification — done on hardware
+## Verification — done on hardware
 
 **`./dev.sh all`** builds, flashes and walks both OTT suites. Set the port with
 `PORT=/dev/ttyACMx ./dev.sh ...`. What has actually been confirmed on this board:
 
-1. **Build** — target and host, warning-free. Flash 38.9 kB (7.4%), RAM 3.5 kB (1.3%).
-2. **`.noinit` present** in the ELF at `0x20000768`, right after `.bss`, so the OTT
-   reset flow has its retained RAM.
+1. **Build** — target and host, warning-free. Flash 96,292 B (18.7 % of the 504 kB left
+   after the high-score page), RAM 178,244 B (68.0 % of 256 kB).
+2. **`.noinit` present** in the ELF right after `.bss`, so the OTT reset flow has its
+   retained RAM.
 3. **Flash + verify** with `STM32_Programmer_CLI` — it reports device ID `0x455`,
    "STM32U535/STM32U545", and verifies the download.
-4. **Boot banner** over the VCP: `MicroPacControllerMan booted (M1 U545RE bring-up)`.
-5. **CLI answers**: `help` lists `help` / `ott` / `reset`; `ott` lists the scenarios.
-6. **`ott user_button` passes** with B1 pressed three times.
+4. **Boot banner** over the VCP:
+   `MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game.`
+5. **CLI answers**: `help` lists its commands; `ott` lists the scenarios.
+6. **The suites pass** — `run_ott.py --suite` unattended, `--manual` with an operator at
+   the board, including `ott pacman`, which plays a real run and reports the frame cost.
+7. **371 host unit tests green** under `ceedling test:all`.
 
 ## Milestone history
 
 - **M1 — Toolchain Bring-Up.** Proved build/flash/run end-to-end and stood up the OTT
   framework with its retained-RAM/reset flow. Init was register-level against
   vendored CMSIS at that point.
-- **M2 — Board Bring-Up.** Added the mikroBUS peripherals: LCD Mono Click (SPI1, slot
-  1) and Touchpad Click (I2C1, slot 2), plus the user button. Partway through, init
-  moved from register-level to **STM32CubeMX + the STM32 HAL** (DEC-012 in
+- **M2 — Board Bring-Up (first board).** Added the mikroBUS peripherals: LCD Mono Click
+  (SPI1, slot 1) and Touchpad Click (I2C1, slot 2), plus the user button. Partway through,
+  init moved from register-level to **STM32CubeMX + the STM32 HAL** (DEC-012 in
   [11 Decisions & As-Built](../Docu/PrePlanning/11-Decisions-and-As-Built.md)), which
   also retired the register-level `blinky` OTT. The `lacheck` / `dispdiag`
   logic-analyzer diagnostics were removed once R-001 closed and the regular tests
   covered the same ground.
-- **M3 — Game (host only).** The broker, the Active-Object base and the Pacman modules
-  under `App/`, playable on the host via SDL. Open as PR #10 and **parked**.
+- **M3 — Game (host only), first attempt.** The broker, the Active-Object base and the
+  Pacman modules under `App/`, playable on the host via SDL. Opened as PR #10 and
+  **parked**; `host_main.c` was the last thing salvaged from it.
 - **Restart on new hardware.** After the PR #10 review the project went back to M1 on the
   **STM32U545RE-Q**, with the mikroBUS Clicks replaced by the X-NUCLEO-GFX01M2 and Pacman
   going colour. The drivers and OTTs for the old parts are gone, and so are the acceptance
   tests that described them — a test naming hardware nobody has misleads more than it
   documents.
-- **M2 on the new board (current).** The panel turned out to be an **ST7789V**, not the
+- **M2 — Board Bring-Up (this board).** The panel turned out to be an **ST7789V**, not the
   ILI9341 this project had been assuming. Display, joystick, the RGB565 frame buffer and
-  partial updates are in, and the two halves are verified against each other by
-  `joystick_dot`. The frame-rate target was raised from 30 to **60 FPS** on the strength of
-  the `animation` measurements.
+  partial updates went in, and the two halves are verified against each other by
+  `joystick_dot`. Measurement set the frame period at 16 ms rather than 33.
+- **M3 — Game.** The rules, the Dossier's ghosts, the arcade's per-level difficulty to
+  level 21, the 1980 sprite ROMs, the HUD, and the shell around the run — on the board and
+  on the host from one set of sources.
+- **M4 — System Integration.** The game on the target, three high scores in a
+  linker-reserved flash page, and `ott pacman` as the test that plays it.
+- **M5 — Random Mazes.** A maze generated per level (FR-029), its appearance derived from
+  its walls as geometry. See
+  [the Random Mazes design doc](../Docu/Design/M4-Random-Mazes.md).
