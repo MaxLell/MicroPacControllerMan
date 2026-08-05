@@ -99,6 +99,32 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 |---|---|---|
 | FR-111 | Fatal-Error Halt | When the firmware detects a fatal, unrecoverable error, its error handler shall halt execution at a debugger breakpoint (`bkpt`) so the fault can be inspected. *(minimal handling for now; may be extended in later phases)* |
 
+### 2.1.11 Pacman AI
+
+A trained agent that can take over from the player. The **training happens on the host and only
+there**; the target evaluates fixed weights and never learns. The two halves are therefore held
+together by an equivalence requirement (FR-039) rather than by hope — the same trick that made
+the maze generator checkable ([DEC-029](11-Decisions-and-As-Built.md)).
+
+Requirements about *how* the agent is built — what it observes, its architecture, the reward and
+the export format — belong in the design document, not here.
+
+| Unique-ID | Name | Description |
+|---|---|---|
+| FR-030 | AI Takeover Toggle | While a game is in progress, when the user presses the Nucleo board user button, the system shall toggle Pacman's control between the player and the trained AI. |
+| FR-031 | AI Control Exclusivity | While AI control is active, the system shall take Pacman's direction from the AI and shall ignore the joystick's directional keys (FR-004). |
+| FR-032 | AI Takeover Indication | While AI control is active, the system shall indicate in the HUD that the AI has taken over. |
+| FR-033 | AI Control Persistence | While a run is in progress, the system shall preserve the AI control state across a level change (FR-021) and across the loss of a life (FR-024). Every new run shall begin under player control. |
+| FR-034 | AI Run Not Recorded | If AI control was active at any point during a run, then the system shall not store that run's score in NVM (FR-008), however high the score. |
+| FR-035 | Observation Bounded by the Display | The AI shall decide from no information beyond what the display shows the player: the maze, the remaining pellets, Pacman, the four ghosts and which of them are frightened, the score, the level and the remaining lives. |
+| FR-036 | Score as the AI's Objective | The AI shall be trained to maximise the score a run reaches, across levels rather than within one. |
+| FR-037 | AI Play Strength | Over a fixed set of seeded runs on generated mazes (FR-029), the AI's mean score shall exceed that of a uniform-random policy by at least a factor of ten, and shall reach at least *TBD* points. *(the absolute threshold is set from the first training campaign and is tunable; the random-policy baseline is measured, not assumed)* |
+| FR-038 | Inference Only on the Target | The target shall evaluate the trained weights only. No training, weight update or exploration shall run on the target. |
+| FR-039 | Host / Target Inference Equivalence | Given the same game state and the same weights, the target shall choose the same direction as the host build, over a recorded set of states covering ordinary play, frightened mode, the tunnels and a life just lost. |
+| FR-112 | Training on the Shipped Game | The training environment shall be the firmware's own game modules built for the host — the same sources the target runs — and not a re-implementation of the game. |
+| FR-113 | Headless Parallel Training Sessions | The training harness shall advance multiple independent game sessions concurrently, with no rendering and no display. |
+| FR-114 | Reproducible Episodes | Given the same seed and the same sequence of chosen directions, the training environment shall replay an identical episode. |
+
 ## 2.2 Non-Functional Requirements
 
 ### 2.2.1 Timing & Performance
@@ -107,6 +133,7 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 |---|---|---|
 | NFR-001 | Loading Screen Duration | The loading screen shall be displayed for no more than 3 seconds before the menu is shown. *(default value — see [A-001](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-005 | Logo Display Delay | Upon power-on, the system shall wait 200 ms before displaying the Pacman logo of the loading screen (FR-001). |
+| NFR-006 | AI Inference Budget | While AI control is active, one inference shall complete within 2 ms, so that it fits inside the frame alongside the simulation and the drawing. *(default — the frame is 16 ms and about 8 ms of it is currently unused)* |
 
 ### 2.2.2 Persistence
 
@@ -129,6 +156,13 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 |---|---|---|
 | NFR-104 | OTT Harness Compatibility | Every on-target test classified as automatable in [06 Verification & Validation](06-Verification-and-Validation.md) shall be triggerable via the OTT CLI (FR-106) and have its PASS/FAIL result parseable by an external test-runner script, without manual intervention beyond flashing. |
 
+### 2.2.5 AI Model
+
+| Unique-ID | Name | Description |
+|---|---|---|
+| NFR-007 | Model Footprint | The trained weights and every buffer inference needs shall fit the target's remaining memory: at most 300 kB of flash for the weights and at most 40 kB of RAM for the inference buffers. *(measured headroom when this was written: ~410 kB flash and ~82 kB RAM free; the limits leave the firmware room to keep growing)* |
+| NFR-008 | No Heap for Inference | Inference shall not allocate memory at runtime. The weights shall be `const` data in flash and every intermediate buffer shall be reserved statically. |
+
 ## 2.3 Constraints
 
 ### 2.3.1 Hardware
@@ -149,3 +183,4 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 | CON-101 | Language | The firmware and game logic shall be written in C. |
 | CON-102 | Test Framework | Unit tests shall run under Ceedling/Unity. |
 | CON-103 | Host View Library | The host build's View shall use SDL. |
+| CON-105 | Training Toolchain | The training harness may depend on third-party Python packages, unlike the OTT harness of NFR-104, which is standard-library only. The trained weights shall be exported as a C source file, so that neither the firmware build nor the unit tests depend on Python or on a machine-learning framework. |
