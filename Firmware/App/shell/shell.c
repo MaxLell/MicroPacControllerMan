@@ -12,9 +12,9 @@
 #include "msg.h"
 #include "playfield.h"
 #include "render.h"
+#include "rng_bsp.h"
 #include "sprite_set.h"
 #include "sw_timer.h"
-#include "systick_bsp.h"
 
 /* ==========================================================================
  * shell - private
@@ -412,13 +412,13 @@ static bool prv_start_run(void)
 
     if (g_selected_mode == SHELL_MODE_RANDOM_MAZE)
     {
-        /* The run's mazes are seeded with **the moment start was pressed** (FR-029). The tick
-         * is read here as a source of entropy and not as a time — which is why this is not the
-         * `millis()` the coding standard rules out: nothing is being measured, and no two
-         * values of it are ever compared. A player cannot press a key on a chosen
-         * millisecond, so two runs get different mazes, and a run whose seed is known can be
-         * replayed exactly. */
-        game_session_start(systick_bsp_get_tick());
+        /* The run's mazes are seeded from the random source (FR-029/FR-045), which on the board is
+         * the MCU's own RNG peripheral. It used to be the tick at the moment start was pressed —
+         * entropy read off a clock, which worked because a player cannot press a key on a chosen
+         * millisecond, but which is a weak source next to a peripheral built to be one. The seed is
+         * still a *seed*: `maze_gen` remains reproducible from it, which is what lets a maze be
+         * replayed. */
+        game_session_start(rng_bsp_get_u32());
     }
     else
     {

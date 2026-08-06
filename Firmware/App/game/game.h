@@ -81,6 +81,14 @@ typedef struct
      * so they are inert instead of gone. */
     bool has_ghosts;
 
+    /*! \brief When `false`, the game's timings are exactly the table's (FR-044).
+     *
+     * Defaults to *on*, because a little variation from run to run is the game as it is played. A
+     * test that asserts when a phase ends, or which tick a ghost leaves the house on, has to turn it
+     * off — those tests are about the rules, and a rule checked against a moving timing is not
+     * checked. */
+    bool has_timing_jitter;
+
     /*! \brief When `false`, the level's power pellets are ordinary pellets.
      *
      * The pellet *counts* do not change, so clearing the level still means the same thing
@@ -127,6 +135,21 @@ typedef struct
 
     /*! \brief What this level plays like, looked up once when it loads (§10.9). */
     difficulty_t difficulty;
+
+    /*! \brief This level's own timings, which are the table's moved by the jitter of FR-044 — drawn
+     *         when the level loads, so they hold for as long as a player is in it.
+     *
+     * The phase durations and the frightened window are not here because they are drawn as each one
+     * *starts*; these two are asked for repeatedly, so they have to be decided once. */
+    uint32_t house_idle_limit_ms;
+    uint16_t ghost_dot_limit[GHOST_COUNT];
+
+    /*! \brief Ghosts eaten in this run, for a caller that has to reward it.
+     *
+     * A statistic about the run, like the score, and the score already pays the arcade's own
+     * 200/400/800/1600 for these. It is counted separately because the AI's training pays *more*
+     * for a ghost than the game does (FR-036), and it cannot pay for something it cannot count. */
+    uint16_t ghosts_eaten;
 
     /* --- timing, all in milliseconds --- */
     uint32_t pacman_move_elapsed_ms;
@@ -297,6 +320,13 @@ game_state_e game_get_state(const game_t* in_game);
 
 /*! \brief The score so far, cumulative across levels (§10.9). */
 uint32_t game_get_score(const game_t* in_game);
+
+/*! \brief Ghosts eaten in this run, across levels.
+ *
+ * For the training harness, which pays more for one than the game's score does (FR-036). The game
+ * itself has no use for the figure — the points are already in the score.
+ */
+uint16_t game_get_ghosts_eaten(const game_t* in_game);
 
 /*! \brief Lives left (FR-024). */
 uint8_t game_get_lives(const game_t* in_game);

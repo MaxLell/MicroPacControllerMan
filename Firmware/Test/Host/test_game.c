@@ -33,6 +33,7 @@
 #include "ghost.h"
 #include "ghost_path.h"
 #include "maze_gen.h"
+#include "mock_rng_bsp.h"
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
@@ -118,12 +119,23 @@ static void prv_eat_every_pellet_except(cell_t in_kept_cell)
  * definition not that. `game_start_on_map` is the seam that exists for this. The generator is
  * tested in `test_maze_gen.c`; these are the game's rules, on the one layout whose corridors
  * are documented outside this codebase. */
+/* The rules, on the table's own timings.
+ *
+ * The jitter of FR-044 is **off** for every test in this file, and that is not a convenience: these
+ * tests say things like "the frightened window ends after exactly this long" and "Inky comes out on
+ * his dot", which are statements about the rule. A rule checked against a timing that moved is not
+ * checked — the test would either pass for the wrong reason or fail depending on a random draw. The
+ * jitter has tests of its own further down, which are about the variation and nothing else. */
 static void prv_start_run(void)
 {
     playfield_map_t map;
+    game_config_t config;
+
+    game_get_default_config(&config);
+    config.has_timing_jitter = false;
 
     playfield_get_arcade_map(&map);
-    game_start_on_map(&g_game, &map);
+    game_start_on_map_configured(&g_game, &map, &config);
 }
 
 /* Move Pacman one cell off his start, onto whatever is on the cell beside him. */
@@ -298,6 +310,13 @@ static void prv_leave_this_many_pellets(uint16_t in_count)
 
 void setUp(void)
 {
+    /* The random source is the mocking boundary, and zero is the useful answer: `game` asks it for
+     * an offset inside a span, so zero means "the shortest timing the jitter allows" — a value, not a
+     * variation, which is what a test wants. A test that needs the *nominal* timing switches the
+     * jitter off in `game_config_t` instead; one that is about the jitter itself says what it
+     * returns. */
+    rng_bsp_get_below_IgnoreAndReturn(0U);
+    rng_bsp_get_u32_IgnoreAndReturn(0U);
     assert_probe_begin();
 
     memset(&g_game, 0, sizeof(g_game));
@@ -931,6 +950,115 @@ void test_inky_comes_out_at_his_dot_limit_and_clyde_later(void)
     TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
     prv_eat_pellets(difficulty.clyde_dot_limit);
     TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
+}
+
+/* --- the timing jitter (FR-044) ------------------------------------------- */
+
+/* Start a run with the jitter on and the generator answering `in_span - 1`, which is the *longest*
+ * timing the jitter allows. Paired with the mock's default of 0 — the shortest — that brackets the
+ * whole range without the test having to know the arithmetic inside `game`. */
+/* Put a power pellet under Pacman's next step and take it, which is what starts a frightened
+ * window — the timing this section measures. */
+static void prv_eat_the_power_pellet(void)
+{
+    g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
+
+    prv_step_onto_the_pellet();
+}
+
+static uint32_t prv_return_the_top_of_the_span(uint32_t in_span, int in_call_count)
+{
+    (void)in_call_count;
+
+    return (in_span == 0U) ? 0U : (in_span - 1U);
+}
+
+static void prv_start_run_with_jitter(void)
+{
+    playfield_map_t map;
+    game_config_t config;
+
+    game_get_default_config(&config);
+
+    /* The default *is* on, and this test says so out loud rather than relying on it. */
+    TEST_ASSERT_TRUE(config.has_timing_jitter);
+
+    playfield_get_arcade_map(&map);
+    game_start_on_map_configured(&g_game, &map, &config);
+}
+
+/* The two ends of the range, in one test, because a jitter that moved a timing the same way every
+ * time would pass either half alone. */
+void test_the_jitter_moves_a_timing_both_ways_and_never_past_its_bounds(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    /* The generator at the bottom of every span: the shortest allowed frightened window. */
+    prv_start_run_with_jitter();
+    prv_eat_the_power_pellet();
+
+    const uint32_t shortest = g_game.frightened_remaining_ms;
+
+    /* And at the top: the longest. */
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run_with_jitter();
+    prv_eat_the_power_pellet();
+
+    const uint32_t longest = g_game.frightened_remaining_ms;
+
+    TEST_ASSERT_GREATER_THAN_UINT32(shortest, longest);
+
+    /* Never zero and never doubled: a window of nothing would make a power pellet points only,
+     * which is level 17's rule and not something a random draw may impose. */
+    TEST_ASSERT_GREATER_THAN_UINT32(0U, shortest);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2U * difficulty.frightened_duration_ms, longest);
+
+    /* The nominal value is inside the range it was drawn around, so the jitter is a variation of the
+     * table rather than a replacement for it. */
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(difficulty.frightened_duration_ms, shortest);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(difficulty.frightened_duration_ms, longest);
+}
+
+/* The house is the one the owner asked for by name, and it counts dots rather than milliseconds. */
+void test_the_jitter_moves_how_many_dots_a_ghost_waits_for(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    prv_start_run_with_jitter();
+
+    const uint16_t shortest = g_game.ghost_dot_limit[GHOST_INKY];
+
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run_with_jitter();
+
+    const uint16_t longest = g_game.ghost_dot_limit[GHOST_INKY];
+
+    TEST_ASSERT_GREATER_THAN_UINT16(shortest, longest);
+    TEST_ASSERT_GREATER_THAN_UINT16(0U, shortest);
+
+    /* Pinky's limit is nothing — he leaves as a level begins — and the jitter must not hand him a
+     * wait, which is the one way it could change a rule rather than a timing. */
+    TEST_ASSERT_EQUAL_UINT16(0U, g_game.ghost_dot_limit[GHOST_PINKY]);
+}
+
+/* Switching it off has to actually switch it off, or the tests above this section are checking
+ * nothing at all. */
+void test_the_jitter_can_be_switched_off(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run();
+    prv_eat_the_power_pellet();
+
+    TEST_ASSERT_EQUAL_UINT32(difficulty.frightened_duration_ms, g_game.frightened_remaining_ms);
+    TEST_ASSERT_EQUAL_UINT16(difficulty.inky_dot_limit, g_game.ghost_dot_limit[GHOST_INKY]);
 }
 
 void test_standing_still_cannot_keep_the_ghosts_locked_up(void)

@@ -36,6 +36,7 @@
 #include "maze_gen.h"
 #include "mock_display.h"
 #include "mock_flash_bsp.h"
+#include "mock_rng_bsp.h"
 #include "mock_systick_bsp.h"
 #include "msg.h"
 #include "msg_broker.h"
@@ -202,6 +203,13 @@ void setUp(void)
     g_region_count = 0U;
     (void)memset(g_page, TEST_ERASED_BYTE, sizeof(g_page));
 
+    /* The random source is the mocking boundary, and zero is the useful answer: `game` asks it for
+     * an offset inside a span, so zero means "the shortest timing the jitter allows" — a value, not a
+     * variation, which is what a test wants. A test that needs the *nominal* timing switches the
+     * jitter off in `game_config_t` instead; one that is about the jitter itself says what it
+     * returns. */
+    rng_bsp_get_below_IgnoreAndReturn(0U);
+    rng_bsp_get_u32_IgnoreAndReturn(0U);
     display_init_Ignore();
     display_present_Ignore();
     display_service_Ignore();

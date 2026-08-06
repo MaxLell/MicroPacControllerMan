@@ -15,6 +15,7 @@
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
+#include "rng_bsp.h"
 #include "shell.h"
 #include "spi_bsp.h"
 #include "sw_timer.h"
@@ -157,6 +158,13 @@ static void prv_init_platform(void)
 {
     systick_bsp_init();
     dio_bsp_init();
+
+    /* Before anything that plays: the game draws its timing jitter when a level loads (FR-044), and
+     * the maze seed of a run comes from here too. A generator that failed to come up hands out zero,
+     * which the game reads as "no jitter" — a playable game rather than a refusal. Whether it came
+     * up is reported after the console exists, which is not yet. */
+    (void)rng_bsp_init();
+
     console_init();
     flash_bsp_init();
     spi_bsp_init();
@@ -343,6 +351,14 @@ void app_main(void)
     high_score_init();
 
     cli_print(APP_MAIN_BOOT_BANNER);
+
+    if (!rng_bsp_is_available())
+    {
+        /* Said rather than swallowed: the game is still playable, but every run of a level would be
+         * paced identically and the ghosts would leave the house on the same dot every time — which
+         * looks like a design and is a fault. */
+        cli_print("the hardware RNG did not come up: timings will not vary (FR-044/FR-045)");
+    }
 
     if (ott_execute_pending())
     {

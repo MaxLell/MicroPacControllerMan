@@ -46,6 +46,7 @@
 #include "high_score.h"
 #include "msg.h"
 #include "playfield.h"
+#include "rng_bsp.h"
 #include "shell.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
@@ -337,6 +338,7 @@ int main(int in_argument_count, char** in_arguments)
     (void)in_arguments;
 
     systick_bsp_init();
+    (void)rng_bsp_init();
     sw_timer_init();
     flash_bsp_init();
     high_score_init();

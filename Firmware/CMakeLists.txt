@@ -104,6 +104,7 @@ if(PACMAN_HOST_BUILD)
         App/shell/shell.c
         App/sprite_set/sprite_set.c
         Bsp/flash_bsp/flash_bsp_host.c
+        Bsp/rng_bsp/rng_bsp_host.c
         Bsp/systick_bsp/systick_bsp_host.c
         Drivers/display/display_host.c
         Services/crc/crc.c
@@ -139,6 +140,7 @@ if(PACMAN_HOST_BUILD)
         App/shell
         App/sprite_set
         Bsp/flash_bsp
+        Bsp/rng_bsp
         Bsp/systick_bsp
         Drivers/display
         Services/crc
@@ -240,6 +242,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/flash_bsp/flash_bsp.c
     Bsp/joystick/joystick.c
     Bsp/retain_ram/retain_ram.c
+    Bsp/rng_bsp/rng_bsp.c
     Bsp/spi_bsp/spi_bsp.c
     Bsp/switch/switch.c
     Bsp/systick_bsp/systick_bsp.c
@@ -267,6 +270,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/ott_scenarios.c
     Test/Target/scripts/ott_animation.c
     Test/Target/scripts/ott_display_id.c
+    Test/Target/scripts/ott_rng.c
     Test/Target/scripts/ott_display_test.c
     Test/Target/scripts/ott_high_score.c
     Test/Target/scripts/ott_joystick.c
@@ -302,6 +306,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Bsp/flash_bsp
     Bsp/joystick
     Bsp/retain_ram
+    Bsp/rng_bsp
     Bsp/spi_bsp
     Bsp/switch
     Bsp/systick_bsp

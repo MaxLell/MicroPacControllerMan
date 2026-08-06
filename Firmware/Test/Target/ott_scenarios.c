@@ -15,6 +15,7 @@
 #include "ott_joystick_dot.h"
 #include "ott_pacman.h"
 #include "ott_pacman_ai.h"
+#include "ott_rng.h"
 #include "ott_user_button.h"
 
 /* ==========================================================================
@@ -28,6 +29,7 @@ static const ott_scenario_t g_scenarios[] = {
     {"ai_high_score", NULL, ott_ai_high_score_run},
     {"animation", NULL, ott_animation_run},
     {"display_id", NULL, ott_display_id_run},
+    {"rng", NULL, ott_rng_run},
     {"display_test", NULL, ott_display_test_run},
     {"high_score", NULL, ott_high_score_run},
     {"joystick", NULL, ott_joystick_run},

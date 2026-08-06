@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "high_score", "ai_equivalence", "ai_high_score"]
+AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)

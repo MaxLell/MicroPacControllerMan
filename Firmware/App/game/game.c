@@ -14,6 +14,7 @@
 #include "msg_broker.h"
 #include "pacman.h"
 #include "playfield.h"
+#include "rng_bsp.h"
 #include "score.h"
 
 /* ==========================================================================
@@ -71,6 +72,61 @@ static void prv_deliver_events(game_t* const inout_game)
     (void)score_process(&inout_game->score);
 }
 
+/* --- the jitter (FR-044) ---------------------------------------------------
+ *
+ * Every timing the ghosts are paced by moves a little from run to run, so two runs of the same
+ * level are not the same level: the scatter/chase plan, the frightened window, the idle timer that
+ * pushes a ghost out when nobody is eating, and how many dots each ghost waits for.
+ *
+ * **Two bounds, and the second is the one that matters.** The owner asked for about two seconds. Two
+ * seconds is also longer than several of the arcade's own phases — at level 5 the plan has scatter
+ * phases of a twentieth of a second (§10.9) — so a flat two seconds would not vary those, it would
+ * *replace* them, and the schedule's character is the thing worth keeping. So the jitter is also
+ * capped at half the nominal value: a 20 s phase moves by 2 s, a 5 s phase by 2 s, a 1/20 s phase by
+ * a millisecond nobody will notice. Nothing can reach zero, and nothing can double.
+ *
+ * A jitter is drawn when a timing *starts*, not when it is read — reading is per tick, and a
+ * duration that changed under the timer counting it down would never expire. */
+#define TIMING_JITTER_MS      (2000U)
+#define TIMING_JITTER_DIVISOR (2U)
+
+/* How many dots either way a ghost's wait may move. In dots rather than milliseconds because that
+ * is the unit the house counts in; three is about a second and a half of eating. */
+#define HOUSE_DOT_JITTER      (3U)
+
+static uint32_t prv_jitter_ms(const game_t* const in_game, uint32_t in_nominal_ms)
+{
+    if (!in_game->config.has_timing_jitter || (in_nominal_ms == 0U))
+    {
+        return in_nominal_ms;
+    }
+
+    const uint32_t bound = (in_nominal_ms / TIMING_JITTER_DIVISOR) < TIMING_JITTER_MS
+                               ? (in_nominal_ms / TIMING_JITTER_DIVISOR)
+                               : TIMING_JITTER_MS;
+
+    if (bound == 0U)
+    {
+        return in_nominal_ms;
+    }
+
+    /* `[nominal - bound, nominal + bound]`, so the mean is the nominal value and a level is neither
+     * systematically easier nor harder than the table says. */
+    return (in_nominal_ms - bound) + rng_bsp_get_below((2U * bound) + 1U);
+}
+
+/* What the table says a ghost waits for, in pellets eaten. Pinky's is always nothing, so he
+ * leaves the moment a level begins; Blinky is never in there to ask. */
+static uint16_t prv_get_nominal_dot_limit(const game_t* const in_game, uint8_t in_index)
+{
+    switch ((ghost_personality_e)in_index)
+    {
+        case GHOST_INKY: return in_game->difficulty.inky_dot_limit;
+        case GHOST_CLYDE: return in_game->difficulty.clyde_dot_limit;
+        default: return 0U;
+    }
+}
+
 /* --- placement ----------------------------------------------------------- */
 
 /* Put everyone back where the level starts, keeping score, lives and eaten pellets. Used
@@ -97,7 +153,27 @@ static void prv_place_entities(game_t* const inout_game)
     inout_game->dots_idle_ms = 0U;
     inout_game->frightened_remaining_ms = 0U;
     inout_game->phase_index = 0U;
-    inout_game->phase_remaining_ms = inout_game->difficulty.phase_durations_ms[0];
+    inout_game->phase_remaining_ms = prv_jitter_ms(inout_game, inout_game->difficulty.phase_durations_ms[0]);
+    inout_game->house_idle_limit_ms = prv_jitter_ms(inout_game, inout_game->difficulty.house_idle_limit_ms);
+
+    /* Drawn once per level rather than per ghost release, so a ghost's wait is a property of the
+     * level a player is in and not something that changes while they are watching the house. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        const uint16_t nominal = prv_get_nominal_dot_limit(inout_game, index);
+
+        inout_game->ghost_dot_limit[index] = nominal;
+
+        if (inout_game->config.has_timing_jitter && (nominal > 0U))
+        {
+            /* Never below one: a limit of zero means "leaves at once", which is Pinky's rule and
+             * not something the jitter may hand to Inky or Clyde by accident. */
+            const uint16_t span = (uint16_t)((2U * HOUSE_DOT_JITTER) + 1U);
+            const int32_t moved = (int32_t)nominal - (int32_t)HOUSE_DOT_JITTER + (int32_t)rng_bsp_get_below(span);
+
+            inout_game->ghost_dot_limit[index] = (uint16_t)((moved < 1) ? 1 : moved);
+        }
+    }
 }
 
 static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index);
@@ -183,16 +259,11 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
     }
 }
 
-/* The dot limit that lets a ghost out, in pellets eaten. Pinky's is always nothing, so he
- * leaves the moment a level begins; Blinky is never in there to ask. */
+/* What this level's ghost actually waits for: the table's figure, moved by the jitter drawn when the
+ * level loaded (FR-044). */
 static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index)
 {
-    switch ((ghost_personality_e)in_index)
-    {
-        case GHOST_INKY: return in_game->difficulty.inky_dot_limit;
-        case GHOST_CLYDE: return in_game->difficulty.clyde_dot_limit;
-        default: return 0U;
-    }
+    return in_game->ghost_dot_limit[in_index];
 }
 
 /* Which ghost's counter is running: the most-preferred one still shut in, in the order
@@ -286,7 +357,7 @@ static void prv_advance_house_idle_timer(game_t* const inout_game, uint32_t in_e
 
     inout_game->dots_idle_ms += in_elapsed_ms;
 
-    if (inout_game->dots_idle_ms >= inout_game->difficulty.house_idle_limit_ms)
+    if (inout_game->dots_idle_ms >= inout_game->house_idle_limit_ms)
     {
         prv_release_from_house(inout_game, waiting);
         inout_game->dots_idle_ms = 0U;
@@ -391,12 +462,12 @@ static void prv_advance_timers(game_t* const inout_game, uint32_t in_elapsed_ms)
     }
 
     ++inout_game->phase_index;
-    inout_game->phase_remaining_ms = prv_get_phase_duration(inout_game);
+    inout_game->phase_remaining_ms = prv_jitter_ms(inout_game, prv_get_phase_duration(inout_game));
 }
 
 static void prv_start_frightened(game_t* const inout_game)
 {
-    const uint32_t duration = inout_game->difficulty.frightened_duration_ms;
+    const uint32_t duration = prv_jitter_ms(inout_game, inout_game->difficulty.frightened_duration_ms);
 
     if (duration == 0U)
     {
@@ -509,6 +580,8 @@ static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_prev
 
         if (ghost_is_frightened(ghost))
         {
+            ++inout_game->ghosts_eaten;
+
             prv_publish(inout_game, MSG_GAME_GHOST_EATEN, NULL, 0U);
             /* Revived in the middle of the house, which is Pinky's starting cell, and it
              * has to walk out through the gate like the others. */
@@ -734,6 +807,7 @@ static void prv_begin_run(game_t* const inout_game)
 
     inout_game->lives = GAME_STARTING_LIVES;
     inout_game->state = GAME_STATE_RUNNING;
+    inout_game->ghosts_eaten = 0U;
 
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
@@ -743,6 +817,7 @@ void game_get_default_config(game_config_t* out_config)
     ASSERT(out_config != NULL);
 
     out_config->has_ghosts = true;
+    out_config->has_timing_jitter = true;
     out_config->has_power_pellets = true;
 }
 
@@ -959,6 +1034,13 @@ game_state_e game_get_state(const game_t* in_game)
     ASSERT(in_game != NULL);
 
     return in_game->state;
+}
+
+uint16_t game_get_ghosts_eaten(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return in_game->ghosts_eaten;
 }
 
 uint32_t game_get_score(const game_t* in_game)
