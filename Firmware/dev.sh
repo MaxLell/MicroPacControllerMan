@@ -14,6 +14,11 @@
 #     ./dev.sh docker check # run any of the commands above inside it
 #     ./dev.sh docker-build # rebuild the image after editing docker/Dockerfile
 #
+#   After training — take a winner into the firmware
+#     ./dev.sh adopt-weights                    # Training/winner.json
+#     ./dev.sh adopt-weights path/to/other.json # a campaign run's winner
+#     ./dev.sh adopt-weights --force ...        # adopt one that does not meet FR-037
+#
 #   Commit gate
 #     ./dev.sh install-hook # pre-commit: format the staged files, then run the unit tests
 #     ./dev.sh remove-hook  # take it back out
@@ -65,6 +70,7 @@ HOOK_PATH="../.git/hooks/pre-commit"
 
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; }
+done_message() { printf '\033[1;32m%s\033[0m\n' "$*"; }
 
 # A build directory belongs to the path it was configured at.
 #
@@ -207,6 +213,87 @@ run_test() {
 
 cmd="${1:-all}"
 shift || true
+
+# Take a trained network into the firmware.
+#
+# This exists because the order matters and getting it wrong is silent. Exporting weights changes
+# what the target computes, so the FR-039 state set recorded against the *old* weights becomes a
+# recording of a different network — and `ott ai_equivalence` would then report a porting fault that
+# is really a stale file. It refuses instead, on the digest, which is the safety net; this is the
+# thing that keeps you off it.
+#
+# It also gates on VT-UNIT-010: a winner that does not meet FR-037 is not adopted unless you say
+# --force. Training produces a winner every time, including a bad one, and the one thing that must
+# not happen quietly is a worse agent replacing a better one in the firmware.
+do_adopt_weights() {
+    local force=""
+    local winner=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --force) force=yes ;;
+            *) winner=$1 ;;
+        esac
+        shift
+    done
+
+    winner=${winner:-Training/winner.json}
+
+    if [ ! -f "$winner" ]; then
+        fail "$winner does not exist."
+        exit 2
+    fi
+
+    local python=Training/.venv/bin/python
+    [ -x "$python" ] || python=python3
+
+    step "Measuring $winner (VT-UNIT-010)"
+
+    # The host library first: evaluate.py and the recorder both load it, and a stale one measures a
+    # different game than the sources describe.
+    do_host_build
+
+    if "$python" Training/evaluate.py --winner "$winner"; then
+        echo ""
+    elif [ "$force" = yes ]; then
+        fail "It does not meet FR-037 — adopting anyway, because --force."
+    else
+        fail "$winner does not meet FR-037, so it is not being adopted."
+        {
+            echo "  Train longer, or adopt it deliberately with:"
+            echo ""
+            echo "    ./dev.sh adopt-weights --force $winner"
+        } >&2
+        exit 1
+    fi
+
+    # Tracked, and the one the exporter reads: a campaign's own winner files are not in git.
+    if [ "$winner" != "Training/winner.json" ]; then
+        step "Copying $winner over Training/winner.json"
+        cp "$winner" Training/winner.json
+    fi
+
+    step "Exporting App/pacman_ai/ai_weights.[ch]"
+    "$python" Training/export_c.py
+
+    # Rebuilt *after* the export, because the recorder must run the new weights.
+    do_host_build
+
+    step "Re-recording the FR-039 state set"
+    ./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
+
+    step "Formatting what was generated"
+    ./format.sh Test/Target/scripts/ott_ai_equivalence_states.c App/pacman_ai
+
+    done_message "Adopted. Four files changed — commit them together:"
+    echo "  Training/winner.json"
+    echo "  App/pacman_ai/ai_weights.c"
+    echo "  App/pacman_ai/ai_weights.h"
+    echo "  Test/Target/scripts/ott_ai_equivalence_states.c"
+    echo ""
+    echo "Then, on the machine with the board: ./dev.sh suite"
+    echo "ott ai_equivalence is what proves the port agrees with the host about the new weights."
+}
 
 # --- Docker -----------------------------------------------------------------
 #
@@ -361,6 +448,7 @@ case "$cmd" in
     test) do_test ;;
     check) do_check ;;
     format) ./format.sh "$@" ;;
+    adopt-weights) do_adopt_weights "$@" ;;
     docker) run_in_docker "$@" ;;
     docker-build) build_docker_image --force ;;
     pre-commit) do_pre_commit ;;
@@ -383,7 +471,7 @@ case "$cmd" in
     *)
         fail "Unknown command: $cmd"
         echo "Try: test | format | check | host | build | flash | install-hook |" >&2
-        echo "     docker | docker-build |" >&2
+        echo "     docker | docker-build | adopt-weights |" >&2
         echo "     all | suite | manual | display_id | display_test | joystick |" >&2
         echo "     joystick_dot | animation | user_button" >&2
         exit 2

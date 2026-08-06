@@ -289,6 +289,9 @@ Training/.venv/bin/python Training/export_c.py              # winner.json -> App
 **Re-exporting weights means re-recording the FR-039 state set** — that last line, in that order.
 The recorded expectations belong to one weight table and carry its digest, so `ott ai_equivalence`
 refuses to run against a different one rather than reporting a stale recording as a porting fault.
+**`./dev.sh adopt-weights [winner.json]` does the whole sequence**, and refuses a winner that fails
+VT-UNIT-010 unless given `--force` — training produces a winner every time, including one worse than
+what is already shipped.
 
 - **What gets a unit test: everything above the BSP.** The BSP is the *mocking*
   boundary — mock a `Bsp/` header to test the module above it; don't unit-test the BSP

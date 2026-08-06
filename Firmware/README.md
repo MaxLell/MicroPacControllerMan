@@ -197,6 +197,38 @@ need no display at all.
 > fails, the likely places are the two the author could not exercise: the `gem install` and the
 > `pip install`, both of which want a network at build time.
 
+## After training: taking a winner into the firmware
+
+Training produces `Training/winner.json` (or a file per run under `Training/campaign/`, which is not
+in git). Getting one of those into the firmware is four files and one **order that matters**, so it
+is a command rather than a recipe:
+
+```
+./dev.sh adopt-weights                        # Training/winner.json
+./dev.sh adopt-weights Training/campaign/normal-seed1.json
+./dev.sh adopt-weights --force <file>         # one that does not meet FR-037
+```
+
+It measures the winner first and **refuses to adopt one that fails VT-UNIT-010**, because training
+produces a winner every time including a bad one, and the thing that must not happen quietly is a
+worse agent replacing a better one. Then it exports `App/pacman_ai/ai_weights.[ch]`, rebuilds the
+host library and **re-records the FR-039 state set** — in that order. Exporting weights changes what
+the target computes, so a state set recorded against the old ones is a recording of a different
+network; `ott ai_equivalence` refuses to run on a digest mismatch, which is the safety net, and this
+is what keeps you off it.
+
+Commit the four files together:
+
+```
+Training/winner.json
+App/pacman_ai/ai_weights.c
+App/pacman_ai/ai_weights.h
+Test/Target/scripts/ott_ai_equivalence_states.c
+```
+
+Then, on the machine with the board, `./dev.sh suite`. `ott ai_equivalence` is what proves the port
+agrees with the host about the *new* weights, and it is the only thing that can.
+
 ## On-Target Tests (OTT)
 
 The firmware serves a command line on the ST-LINK virtual COM port (**USART1,
