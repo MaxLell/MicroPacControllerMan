@@ -315,6 +315,18 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms);
  */
 void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state);
 
+/*! \brief Which cell Pacman is standing in.
+ *
+ * Exists for a caller that needs *only* that, which is the training harness: it ticks the game until
+ * Pacman reaches a new cell, and asking #game_get_state_message that question costs 41 us because
+ * the message carries a pellet bitmap for all 868 cells. Measured over a whole decision, that was
+ * **79 % of the training time** — twelve ticks of the game itself are 3 us. A question this cheap
+ * deserves a way to ask it cheaply.
+ *
+ * \param[in]       in_game: the game, must not be `NULL`
+ */
+cell_t game_get_pacman_cell(const game_t* in_game);
+
 /*! \brief How the run stands. */
 game_state_e game_get_state(const game_t* in_game);
 

@@ -1036,6 +1036,13 @@ game_state_e game_get_state(const game_t* in_game)
     return in_game->state;
 }
 
+cell_t game_get_pacman_cell(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return pacman_get_cell(&in_game->pacman);
+}
+
 uint16_t game_get_ghosts_eaten(const game_t* in_game)
 {
     ASSERT(in_game != NULL);

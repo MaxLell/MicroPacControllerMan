@@ -128,8 +128,7 @@ static uint32_t prv_step_one(env_game_t* const inout_entry, pacman_ai_action_e i
     game_get_state_message(&inout_entry->game, &state);
 
     const uint32_t score_before = game_get_score(&inout_entry->game);
-    const uint8_t cell_column_before = state.pacman.column;
-    const uint8_t cell_row_before = state.pacman.row;
+    const cell_t cell_before = game_get_pacman_cell(&inout_entry->game);
 
     /* The action is relative, so it only means anything alongside the way Pacman is facing.
      * Turning it into a compass direction here is what keeps `game` unaware that an AI exists. */
@@ -150,8 +149,12 @@ static uint32_t prv_step_one(env_game_t* const inout_entry, pacman_ai_action_e i
             break;
         }
 
-        game_get_state_message(&inout_entry->game, &state);
-        has_arrived = (state.pacman.column != cell_column_before) || (state.pacman.row != cell_row_before);
+        /* Asked of the game directly rather than by building a state message: the message carries a
+         * pellet bitmap for all 868 cells and costs 41 us, and this loop runs about twelve times per
+         * decision. It was 79 % of the training time, for one comparison of two integers. */
+        const cell_t cell = game_get_pacman_cell(&inout_entry->game);
+
+        has_arrived = (cell.x != cell_before.x) || (cell.y != cell_before.y);
     }
 
     const uint32_t gained = game_get_score(&inout_entry->game) - score_before;
