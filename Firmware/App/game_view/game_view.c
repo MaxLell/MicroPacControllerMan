@@ -450,6 +450,7 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_INDEX         (HUD_LEVEL_LABEL_INDEX + 5U)
 #define HUD_LIVES_INDEX         (HUD_LEVEL_INDEX + GAME_VIEW_HUD_LEVEL_DIGITS)
 #define HUD_AI_INDEX            (HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS)
+#define HUD_LOOP_INDEX          (HUD_AI_INDEX + GAME_VIEW_HUD_AI_SLOTS)
 
 /* The maze columns each part sits on. The score runs to column 6 and the level to 26, so
  * both read outward from the edge they belong to, as the arcade's do. */
@@ -463,11 +464,16 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
  * 13 and 14 are the middle of what is left of a 28-column row. */
 #define HUD_AI_FIRST_COLUMN     (13U)
 
+/* Right-aligned under `LEVEL`, on the lives row: the lives themselves run from column 2 and take
+ * six, so the far end of that row is empty and reads as a second place for a status word. */
+#define HUD_LOOP_FIRST_COLUMN   (22U)
+
 static const char* const g_hud_player_label = "1UP";
 static const char* const g_hud_level_label = "LEVEL";
 static const char* const g_hud_ai_label = "AI";
+static const char* const g_hud_loop_label = "LOOP";
 
-_Static_assert(HUD_AI_INDEX + GAME_VIEW_HUD_AI_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
+_Static_assert(HUD_LOOP_INDEX + GAME_VIEW_HUD_LOOP_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
 
 /* One digit of a number, counting places from the units up, or a space where a leading
  * zero would be. Place zero always gives a digit, so a score of nothing reads `0` rather
@@ -557,7 +563,7 @@ static void prv_describe_hud_item(const game_view_t* const in_view, uint8_t in_i
             (int16_t)(GAME_VIEW_ORIGIN_X + ((int16_t)(HUD_LIVES_FIRST_COLUMN + (slot * 2U)) * GAME_VIEW_TILE_SIZE));
         *out_y = GAME_VIEW_HUD_LIVES_Y;
     }
-    else
+    else if (in_index < HUD_LOOP_INDEX)
     {
         /* The AI indication (FR-032): `AI` while the agent plays, the font's space while the
          * player does. A space rather than nothing, for the same reason a spent life is a blank. */
@@ -566,6 +572,17 @@ static void prv_describe_hud_item(const game_view_t* const in_view, uint8_t in_i
         prv_set_hud_text_item(in_view->is_ai_active ? g_hud_ai_label[offset] : ' ',
                               (uint8_t)(HUD_AI_FIRST_COLUMN + offset), GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite,
                               out_palette, out_x, out_y);
+    }
+    else
+    {
+        /* The loop indication (FR-043): `LOOP` while a finished run will be followed by another. On
+         * the lives row rather than beside `AI`, because "who is playing" and "what happens when
+         * this run ends" are two different facts and a player reads them at different moments. */
+        const uint8_t offset = (uint8_t)(in_index - HUD_LOOP_INDEX);
+
+        prv_set_hud_text_item(in_view->is_infinite ? g_hud_loop_label[offset] : ' ',
+                              (uint8_t)(HUD_LOOP_FIRST_COLUMN + offset), GAME_VIEW_HUD_LIVES_Y, out_sprite, out_palette,
+                              out_x, out_y);
     }
 }
 
@@ -690,12 +707,17 @@ static void prv_fill_actor_items(const game_view_t* const in_view, msg_display_l
     }
 
     /* Pacman last, so he is on top where he and a ghost share a cell — which is exactly
-     * the moment the player is looking at. */
+     * the moment the player is looking at.
+     *
+     * Green while the agent has him, yellow while the player does (FR-032). The HUD's three letters
+     * say the same thing, and this says it about the thing the eye is already following — which is
+     * the difference between knowing and having to look. The *lives* in the HUD stay yellow: they
+     * are a count of what is left, not the figure somebody is steering. */
     prv_get_actor_pixel(&in_view->state.pacman, &x, &y);
     prv_add_item(
         inout_list, DISPLAY_ITEM_ACTOR,
         sprite_set_get_pacman_sprite((direction_e)in_view->state.pacman.direction, in_view->state.pacman.progress),
-        SPRITE_SET_PALETTE_PACMAN, x, y);
+        in_view->is_ai_active ? SPRITE_SET_PALETTE_PACMAN_AI : SPRITE_SET_PALETTE_PACMAN, x, y);
 }
 
 /* ==========================================================================
@@ -747,6 +769,13 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
          * may be showing anything at all. */
         prv_forget_hud(inout_view);
     }
+}
+
+void game_view_set_infinite(game_view_t* inout_view, bool in_is_infinite)
+{
+    ASSERT(inout_view != NULL);
+
+    inout_view->is_infinite = in_is_infinite;
 }
 
 void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active)

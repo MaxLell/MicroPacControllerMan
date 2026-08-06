@@ -7,9 +7,10 @@
 > generated mazes. Milestones 0–3 are met; **Milestone 4 is met**, with one catalogued test never
 > built ([§4.2](#42-close-out) says which, and why nothing is owed for it); **Milestone 5
 > delivered the generated mazes** ([§4.3](#43-milestone-5--random-mazes)). **Milestone 6 — a
-> Pacman AI — was asked for on 2026-08-05 and is in progress**
-> ([DEC-038](11-Decisions-and-As-Built.md), [§4.4](#44-milestone-6--pacman-ai)): requirements and
-> design agreed, no code yet.
+> Pacman AI — was asked for on 2026-08-05 and is delivered**
+> ([DEC-038](11-Decisions-and-As-Built.md), [§4.4](#44-milestone-6--pacman-ai)), including the three
+> games the menu now offers ([DEC-045](11-Decisions-and-As-Built.md),
+> [DEC-046](11-Decisions-and-As-Built.md)). Every requirement in the spec has a passing test.
 
 This restates the phased roadmap from the original idea capture as a structured milestone table with entry/exit criteria. Test IDs link to [06 Verification & Validation](06-Verification-and-Validation.md).
 
@@ -22,7 +23,7 @@ This restates the phased roadmap from the original idea capture as a structured 
 | 4 | System Integration (Target) | Milestones 2 and 3 exit met. | All remaining integration tests pass on the physical target ([VT-INT-011..013](06-Verification-and-Validation.md), VT-INT-015, VT-INT-022). What was left for this milestone was the measurement M3 did not make automatic: input latency and the frame rate under a real run — both withdrawn with the requirements they served ([DEC-036](11-Decisions-and-As-Built.md)). **Partially met at close-out — see [§4.2](#42-close-out).** |
 
 | 5 | Random Mazes | Milestone 4 in substance; asked for after the project had been closed. | Every level plays a maze generated for it (FR-029), with the properties that requirement lists checked over many seeds; the maze's appearance derived from its walls rather than written down beside them; the whole thing playable on the target. **Met** — see [§4.3](#43-milestone-5--random-mazes). |
-| 6 | Pacman AI | Milestone 5 met; asked for on 2026-08-05 ([DEC-038](11-Decisions-and-As-Built.md)). | An agent trained on the host reaches FR-037's score on generated mazes ([VT-UNIT-010](06-Verification-and-Validation.md)); the player can hand over to it and take back control on the board, with the HUD saying so and the run locked out of the high-score table (FR-030..034, VT-INT-023); and the ported inference chooses the same direction as the host over a recorded state set (FR-039, VT-INT-024). **In progress** — see [§4.4](#44-milestone-6--pacman-ai). |
+| 6 | Pacman AI | Milestone 5 met; asked for on 2026-08-05 ([DEC-038](11-Decisions-and-As-Built.md)). | An agent trained on the host reaches FR-037's score on the normal maze ([VT-UNIT-010](06-Verification-and-Validation.md)); the player can hand over to it and take back control on the board, with the HUD saying so and the run locked out of that game's high-score table (FR-030..034, VT-INT-023, VT-INT-025); the agent has a game of its own that it plays alone and can be left looping (FR-040..043, VT-INT-026, VT-INT-027); and the ported inference chooses the same direction as the host over a recorded state set (FR-039, VT-INT-024). **Met** — see [§4.4](#44-milestone-6--pacman-ai). |
 
 ## 4.1 Notes
 
@@ -86,8 +87,23 @@ Asked for on **2026-08-05**, after Milestone 5 ([DEC-038](11-Decisions-and-As-Bu
 that learns to play, trained on the host, ported to the board, and switched on and off by the
 player. The *how* is in [M6 Pacman AI](../Design/M6-Pacman-AI.md).
 
-**In progress.** The requirements ([02 §2.1.11](02-Requirements.md)) and the design are agreed;
-no code is written yet.
+**Delivered, and FR-037 is met.** Everything is built and everything that touches hardware is
+verified there — the takeover, the joystick lock-out, the HUD, the ported inference (VT-INT-024), the
+high-score lockout (VT-INT-025), the choice of game (VT-INT-026) and the agent's own game with its
+endless mode (VT-INT-027). The play strength was the last thing outstanding: **4,980 points on the
+normal maze against 433.5 for a random policy, a factor of 11.5** where the requirement asks for 10.
+[M6 §14](../Design/M6-Pacman-AI.md) also records what that does *not* settle — a second run of the
+same configuration reached 4,260, so the margin is luck as much as method.
+
+**Amended on 2026-08-06 by [DEC-045](11-Decisions-and-As-Built.md) and
+[DEC-046](11-Decisions-and-As-Built.md)**, at the owner's request: the menu now asks which of three
+games to play (FR-040..043) — the arcade's maze, the same maze played by the agent alone, or
+generated mazes — each keeps its own high scores, the agent's game can be left looping for ever, and
+the AI is offered in the arcade's layout only — which is also the maze it is trained on and the maze FR-037 is now measured on. The
+paragraph below about generated mazes being the reason for relative observations therefore reads
+differently than it did: the relative frame is no longer *load-bearing* for the AI, since the maze
+it plays is fixed. It stays, because it costs nothing and because a policy in compass coordinates
+would have to learn "wall to the north" four times over even on one maze.
 
 What is settled, and why it is worth stating before any of it is built:
 
@@ -109,6 +125,7 @@ What is settled, and why it is worth stating before any of it is built:
   newlib need not agree on to the last bit.
 
 **FR-037's bar is anchored on a measurement**: the mean score of a uniform-random policy is
-**464.3 points** (median 440, best 1,440, over 329 episodes), so the required 4,600 is ten times
-what flailing achieves — and, for scale, a cleared level 1 is worth about 2,600 before a single
+**464.3 points** (median 440, best 1,440, over 329 episodes on generated mazes) and **433.5** over
+twenty episodes of the normal maze it is now measured on, so the required 4,600 is ten times what
+flailing achieves either way — and, for scale, a cleared level 1 is worth 2,600 before a single
 ghost is eaten.

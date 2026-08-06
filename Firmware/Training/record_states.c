@@ -13,8 +13,10 @@
  *
  * Four situations, because they are the four places the feature extractor has something
  * interesting to do: ordinary play, frightened mode, inside a tunnel, and the step after a life
- * was lost. Seeds are tried in order until all four have been seen, so the set is whatever the
- * game actually produced rather than a set of states hand-built to be convenient.
+ * was lost. The **normal maze** is played first, since that is the only maze the AI may be handed
+ * control in (FR-040); generated mazes are then tried in seed order for any situation that one
+ * episode of it did not happen to contain. Either way the set is whatever the game actually
+ * produced rather than a set of states hand-built to be convenient.
  *
  * What is emitted per case is the maze, the state, and the direction this build chose. The maze is
  * needed because the observation asks the playfield about walls and about how much of the level is
@@ -58,17 +60,23 @@ static const char* const g_case_names[CASE_COUNT] = {
 typedef struct
 {
     bool is_recorded;
-    uint32_t seed;
     uint8_t level;
     playfield_map_t map;
     msg_game_state_t state;
     direction_e chosen;
+
+    /*! \brief Which episode this came out of, for the comment above it in the generated file. */
+    char source[32];
 } recorded_case_t;
 
 static recorded_case_t g_cases[CASE_COUNT];
 static game_t g_game;
 
-static void prv_record(recorded_case_e in_which, uint32_t in_seed, const msg_game_state_t* const in_state)
+/*! \brief What the episode being played is, in words. Written once per episode and copied into
+ *         every case it produces, so the two cannot disagree. */
+static char g_episode_source[32];
+
+static void prv_record(recorded_case_e in_which, const msg_game_state_t* const in_state)
 {
     recorded_case_t* const entry = &g_cases[in_which];
 
@@ -78,7 +86,7 @@ static void prv_record(recorded_case_e in_which, uint32_t in_seed, const msg_gam
     }
 
     entry->is_recorded = true;
-    entry->seed = in_seed;
+    (void)snprintf(entry->source, sizeof(entry->source), "%s", g_episode_source);
     entry->level = in_state->level;
     entry->map = *game_get_maze(&g_game);
     entry->state = *in_state;
@@ -132,13 +140,31 @@ static bool prv_have_every_case(void)
     return true;
 }
 
-/* Play one episode with the trained network, recording whatever situations turn up in it. */
+/* Play one episode with the trained network, recording whatever situations turn up in it.
+ *
+ * `in_seed` of `0` means the normal maze — the one the AI is actually allowed to play (FR-040), and
+ * therefore where these states should come from. A generated maze is still a legitimate source for
+ * a case the normal one did not produce: FR-039 is about the *port* agreeing with the host, and a
+ * state is a state whichever maze it arose in. */
 static void prv_play_one_episode(uint32_t in_seed)
 {
     msg_game_state_t state;
 
     game_init(&g_game);
-    game_start(&g_game, in_seed);
+
+    if (in_seed == 0U)
+    {
+        playfield_map_t normal_maze;
+
+        playfield_get_arcade_map(&normal_maze);
+        game_start_on_map(&g_game, &normal_maze);
+        (void)snprintf(g_episode_source, sizeof(g_episode_source), "the normal maze");
+    }
+    else
+    {
+        game_start(&g_game, in_seed);
+        (void)snprintf(g_episode_source, sizeof(g_episode_source), "generated maze, seed %lu", (unsigned long)in_seed);
+    }
 
     for (uint32_t decision = 0U; decision < MAX_DECISIONS; ++decision)
     {
@@ -151,7 +177,7 @@ static void prv_play_one_episode(uint32_t in_seed)
 
         if (which != CASE_COUNT)
         {
-            prv_record(which, in_seed, &state);
+            prv_record(which, &state);
         }
 
         game_set_direction(&g_game, pacman_ai_decide(&state, game_get_playfield(&g_game)));
@@ -177,7 +203,7 @@ static void prv_play_one_episode(uint32_t in_seed)
          * rather than at the top of the loop. */
         if (state.lives < lives_before)
         {
-            prv_record(CASE_LIFE_JUST_LOST, in_seed, &state);
+            prv_record(CASE_LIFE_JUST_LOST, &state);
         }
 
         if (prv_have_every_case())
@@ -217,8 +243,8 @@ static void prv_print_actor(const char* const in_prefix, const msg_actor_t* cons
 
 static void prv_print_case(const recorded_case_t* const in_entry, uint8_t in_index)
 {
-    printf("    /* --- %s: seed %lu, level %u ------------------------------------- */\n", g_case_names[in_index],
-           (unsigned long)in_entry->seed, (unsigned)in_entry->level);
+    printf("    /* --- %s: %s, level %u ------------------------------------- */\n", g_case_names[in_index],
+           in_entry->source, (unsigned)in_entry->level);
     printf("    {\n        .what = \"%s\",\n", g_case_names[in_index]);
 
     printf("        .map = {.rows = {");
@@ -258,6 +284,11 @@ int main(void)
         return 1;
     }
 
+    /* The normal maze first, because that is the maze the agent plays. One episode of it is one
+     * trajectory, so it may not contain all four situations; generated mazes then fill in whatever
+     * is missing rather than the set being left short. */
+    prv_play_one_episode(0U);
+
     for (uint32_t seed = 1U; (seed <= MAX_SEEDS) && !prv_have_every_case(); ++seed)
     {
         prv_play_one_episode(seed);
@@ -267,7 +298,8 @@ int main(void)
     {
         if (!g_cases[index].is_recorded)
         {
-            fprintf(stderr, "no episode in %u seeds produced \"%s\"\n", (unsigned)MAX_SEEDS, g_case_names[index]);
+            fprintf(stderr, "no episode in the normal maze or %u seeds produced \"%s\"\n", (unsigned)MAX_SEEDS,
+                    g_case_names[index]);
 
             return 1;
         }

@@ -4,11 +4,14 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
 **STM32CubeProgrammer** over ST-LINK V3E.
 
-> The game is complete and plays on the board, with a **randomly generated maze per level**
-> (FR-029) — RAM **68.0 %** (178,244 of 256 kB), flash **18.7 %** (96,292 of the 504 kB left
-> after the high-score page), both builds warning-free, **371** host unit tests green. Every
-> requirement in the spec has a passing test; the two timing budgets that used to sit here as
-> unmet are **withdrawn** rather than satisfied
+> The game is complete and plays on the board, and the menu offers **three games**: the arcade's own
+> maze, the same maze played by the trained agent alone, or a **randomly generated maze per level**
+> (FR-029/FR-040..043), each with its own high scores — RAM **71.6 %**
+> (187,584 of 256 kB), flash **21.6 %** (111,504 of the 504 kB left
+> after the high-score page), both builds warning-free, **449** host unit tests green. **Every
+> requirement in the spec has a passing test**, FR-037's play strength included, though
+> [M6 §14](../Docu/Design/M6-Pacman-AI.md) records how narrow that margin is; the two timing budgets
+> that used to sit here as unmet are **withdrawn** rather than satisfied
 > ([DEC-036](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The known edges are recorded in
 > the [Refactoring Backlog](../Docu/Refactoring-Backlog.md); the milestone record is
 > [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out) and
@@ -307,3 +310,7 @@ measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 - **M5 — Random Mazes.** A maze generated per level (FR-029), its appearance derived from
   its walls as geometry. See
   [the Random Mazes design doc](../Docu/Design/M4-Random-Mazes.md).
+- **M6 — Pacman AI.** An agent evolved on the host with NEAT and shipped as `const` weights, and
+  the menu that now asks which of the two mazes to play (FR-040) — the AI is offered in the
+  arcade's own one, which is what it was trained on. See
+  [the Pacman AI design doc](../Docu/Design/M6-Pacman-AI.md).

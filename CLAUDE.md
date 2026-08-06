@@ -93,13 +93,15 @@ silently working around a wart.
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
-- **The game sits inside a shell** (DEC-026): loading screen, menu with the three high
-  scores, the run, the score screen, back to the menu (FR-001/002/003/023). The title is set
-  in the tile ROM's own font — `PACMAN`, because the decoded font has no hyphen. `start` on
-  the console presses the start key, so the whole flow is walkable from `run_ott.py`
+- **The game sits inside a shell** (DEC-026): loading screen, menu, the run, the score screen, back
+  to the menu (FR-001/002/003/023) — and since DEC-045/046 the menu is where one of three games is
+  chosen. The title is set in the tile ROM's own font, plus **one glyph that was drawn and not
+  decoded**: the hyphen of `PAC-MAN`, because the ROM extract is letters, digits and a space.
+  `start` on the console presses the start key, so the whole flow is walkable from `run_ott.py`
   (VT-INT-011 is now automatic).
-- **The high scores are in flash** (DEC-025): three of them, behind a magic word, a version
-  and a CRC, in one 8 KB page the **linker** reserves so the firmware cannot grow into it.
+- **The high scores are in flash** (DEC-025, DEC-046): three tables of three, one per game the menu
+  offers, behind a magic word, a version and a CRC, in one 8 KB page the **linker** reserves so the
+  firmware cannot grow into it.
   `highscore` on the console prints them, `highscore reset` clears them, and `ott high_score`
   proves the round trip on real silicon — which is how the ICACHE was caught answering
   reads with what the page used to hold.
@@ -113,8 +115,9 @@ silently working around a wart.
   target and takes effect from the next junction. Only a dead-end stub still forces the way
   back, and no generated maze has one. Measured either side: 86 reversals over 25 runs became 0.
 
-- **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level plays
-  a maze **generated** for it (FR-029) instead of the arcade's one layout. `App/maze_gen` is a
+- **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level of a
+  **random-maze** game plays a maze **generated** for it (FR-029); since DEC-045 the arcade's one
+  layout is the other game the menu offers rather than a retired fixture. `App/maze_gen` is a
   faithful port of the tetris-stacking generator from
   [shaunlebron/pacman-mazegen](https://github.com/shaunlebron/pacman-mazegen) — 9 × 5 grid of
   stacked pieces, upscaled by three, mirrored, which *is* 28 × 31. Faithful on purpose, JavaScript
@@ -154,10 +157,11 @@ silently working around a wart.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
 - **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
-  **NEAT**, ported to the target as `const` weights, switched on and off by the board button
-  mid-run. Everything is built and everything that touches hardware is verified there; **the one
-  requirement not yet met is FR-037**, the play strength — see
-  [M6 §14](Docu/Design/M6-Pacman-AI.md) for what was measured and what is being done about it.
+  **NEAT**, ported to the target as `const` weights, and offered in two of the three games the menu
+  now lists. Everything is built and everything that touches hardware is verified there. **FR-037 is
+  met**: 4,980 points on the normal maze against 433.5 for a random policy, a factor of 11.5 where
+  the requirement asks for 10. The margin is not comfortable, and [M6 §14](Docu/Design/M6-Pacman-AI.md)
+  says so — a second training run from a different starting population reached only 4,260.
   - **The network that trains is the network that ships** (DEC-042). Training does *not* use
     neat-python's evaluator: a genome is flattened into the arrays `Services/neural_net` reads and
     the C side plays the whole episode, so there is exactly one implementation of inference in the
@@ -187,9 +191,35 @@ silently working around a wart.
     RAM; the rest of the growth is the equivalence test's own recorded states and playfield.
   - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves,
     `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
-    `pacman_ai_record` writes the FR-039 state set. **Never train on seeds 1000..1019** — they are
-    the acceptance set, and a score on a maze the agent trained on answers nothing.
+    `pacman_ai_record` writes the FR-039 state set, `campaign.py` runs several time-budgeted
+    trainings unattended and writes one summary to read afterwards.
+    **Everything trains and is measured on the normal maze** (DEC-045) — one episode per genome,
+    because that maze is fixed and the game has nothing random in it, so a score is a measurement
+    rather than a draw. The acceptance seed set 1000..1019 and the rule against training on it are
+    retired; `evaluate.py --maze generated` still asks the generalisation question and says out loud
+    that the answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
+
+- **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
+  and the high scores of the selected one, and nothing else: the title and the row of actors are the
+  loading screen's, which has just shown them. The joystick's up/down keys move a **Pac-Man cursor**
+  (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
+  screen) and start plays what is selected.
+  - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
+    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 hands Pac-Man to the
+    agent and takes him back** (FR-030); Pac-Man is **green** while it plays.
+  - `PAC-MAN AI` — the same maze, the agent from the first frame, and no way to take over (FR-042).
+    **B1 here toggles the endless mode** (FR-043): a finished run starts the next one instead of
+    returning to the menu, and the HUD says `LOOP`. It refuses to start at all if the weight table
+    cannot be evaluated, rather than starting a game that plays itself with nobody playing it.
+  - `RANDOM MAZE` — the generated mazes of FR-029, and no AI at all.
+  - **Three high-score tables, one per game** (FR-041), in the same flash page at layout version 2.
+    FR-034's lockout narrowed with them: an AI-touched run of a *person's* game reaches no table,
+    not even the agent's, and the agent's own game files into its own.
+  - **The button has one owner.** `shell_press_user_button` decides what B1 means from the screen
+    and the game; `app_main` only reports the press. `select` and `button` on the console push the
+    stick and the button the way `start` presses start, which is what makes VT-INT-026/027
+    unattended.
 
 ## Build · flash · test (all from `Firmware/`)
 
@@ -214,7 +244,8 @@ python3 Test/run_ott.py pacman --port /dev/ttyACM0        # one by name; exit 0 
 
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
-./build-host/pacman_host_app                             # play it: arrows/WASD, space, esc
+./build-host/pacman_host_app                             # play it: arrows/WASD pick the game and steer,
+                                                         # space starts it, esc quits
 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all
@@ -223,6 +254,7 @@ ceedling test:all
 python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
 Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
 Training/.venv/bin/python Training/evaluate.py              # VT-UNIT-010: FR-037 and its baseline
+Training/.venv/bin/python Training/campaign.py               # several runs unattended -> campaign/summary.md
 Training/.venv/bin/python Training/export_c.py              # winner.json -> App/pacman_ai/ai_weights.[ch]
 ./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
 ```

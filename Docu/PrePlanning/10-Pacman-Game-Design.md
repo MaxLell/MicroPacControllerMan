@@ -19,9 +19,9 @@ This document pins down the concrete game rules that [02 Requirements](02-Requir
 
 ## 10.2 The Maze (Playfield)
 
-**Every level plays its own generated maze** (FR-029), on a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD. How one is generated is [M4 Random Mazes](../Design/M4-Random-Mazes.md); what one is guaranteed to be true of is FR-029.
+**The player picks the game on the menu** (FR-040): the arcade's own maze at every level, or a maze generated for each one (FR-029). Either way the maze is on a 28 × 31 grid at 8 × 8 px per cell (FR-022) — 224 × 248 px of a 240 × 320 panel, centred, with three rows above and below for the HUD. How one is generated is [M4 Random Mazes](../Design/M4-Random-Mazes.md); what one is guaranteed to be true of is FR-029.
 
-The arcade's own layout is below and is **still in the code**, as the reference: it is the one maze whose properties are known from outside this codebase — 244 pellets, the corridors the Dossier's ghost behaviour is described against, the hand-drawn tile map the appearance rules are checked against. It is what the generated mazes are judged by, and what a unit test plays when it needs a corridor it can name.
+The arcade's own layout is below. It is one of the two games a player can start, and it is also the reference: it is the one maze whose properties are known from outside this codebase — 244 pellets, the corridors the Dossier's ghost behaviour is described against, the hand-drawn tile map the appearance rules are checked against. It is what the generated mazes are judged by, and what a unit test plays when it needs a corridor it can name.
 
 What every maze shares, generated or not, is the furniture: the ghost house and its gate, the four ghost starting cells and Pacman's, all at the coordinates below. That is what lets §10.4's release order, §10.5's revival and the scatter targets mean the same thing in a maze nobody has seen.
 

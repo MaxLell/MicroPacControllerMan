@@ -131,6 +131,15 @@ void game_session_start_on_map(const playfield_map_t* in_map)
     prv_start_under_player_control();
 }
 
+void game_session_start_on_normal_maze(void)
+{
+    game_start_on_normal_maze(&g_game);
+
+    g_drawn_maze_level = GAME_SESSION_NO_LEVEL;
+
+    prv_start_under_player_control();
+}
+
 void game_session_set_direction(direction_e in_direction)
 {
     /* FR-031: while the AI plays, the stick is dead. One place, so every caller is covered. */
@@ -158,6 +167,14 @@ bool game_session_set_ai_enabled(bool in_is_enabled)
     game_view_set_ai_active(&g_view, in_is_enabled);
 
     return true;
+}
+
+void game_session_set_infinite(bool in_is_infinite)
+{
+    /* Straight through to the view: the session has no opinion about the loop, it only owns the
+     * frame the HUD is drawn in. The shell owns whether the loop is on, because the shell owns what
+     * happens when a run ends. */
+    game_view_set_infinite(&g_view, in_is_infinite);
 }
 
 bool game_session_is_ai_enabled(void)

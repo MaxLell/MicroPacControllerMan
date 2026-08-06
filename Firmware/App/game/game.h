@@ -211,14 +211,37 @@ void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game
 
 /*! \brief Begin a run on one maze, given rather than generated.
  *
- * Every level of the run plays `in_map`. Two callers want this: a test, which cannot assert
- * anything about a corridor it has not been told about, and anything that wants the arcade's
- * own maze (#playfield_get_arcade_map).
+ * Every level of the run plays `in_map`. This is for a caller that has a maze in hand — a test,
+ * which cannot assert anything about a corridor it has not been told about. For the arcade's own
+ * layout use #game_start_on_normal_maze, which does not make anybody hold one.
  *
  * \param[in,out]   inout_game: the game, must not be `NULL`
  * \param[in]       in_map: the maze to play, copied in; must not be `NULL`
  */
 void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map);
+
+/*! \brief Begin a run on one given maze, under rules of the caller's choosing.
+ *
+ * #game_start_on_map with a \ref game_config_t, and the pair to #game_start_configured. The AI's
+ * training curriculum needs both halves at once: it is taught on the normal maze (the arcade's own
+ * layout), and it is taught in stages that switch the ghosts and the power pellets off.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_map: the maze to play, copied in; must not be `NULL`
+ * \param[in]       in_config: the rules to play under, must not be `NULL`
+ */
+void game_start_on_map_configured(game_t* inout_game, const playfield_map_t* in_map, const game_config_t* in_config);
+
+/*! \brief Begin a run on the **normal maze**: the arcade's own layout, every level (FR-040).
+ *
+ * One of the two games the menu offers, and the one the AI plays. It takes no map for a reason
+ * worth knowing: a `playfield_map_t` is 899 bytes and the target reserves a kilobyte of stack, so a
+ * caller assembling one to hand over would have to find that space somewhere. The game already
+ * holds the only copy that needs to exist.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ */
+void game_start_on_normal_maze(game_t* inout_game);
 
 /*! \brief The maze being played, for a caller that has to draw it.
  *

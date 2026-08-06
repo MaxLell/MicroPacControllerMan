@@ -172,16 +172,34 @@ static void prv_present_window(void)
 }
 
 /* The keyboard stands in for the joystick: the same four directions and the same one
- * button, so the host plays the game the device plays (FR-003 / FR-004). */
-static void prv_handle_key(SDL_Keycode in_key)
+ * button, so the host plays the game the device plays (FR-003 / FR-004).
+ *
+ * The game wants a *held* direction and SDL's key repeat is what stands in for one, so a repeat is
+ * passed on. The menu's selection wants the opposite — one move per press (FR-040) — so it is told
+ * only about the first of them. */
+static void prv_handle_key(SDL_Keycode in_key, bool in_is_repeat)
 {
     switch (in_key)
     {
         case SDLK_UP:
-        case SDLK_w: shell_set_direction(DIRECTION_NORTH); break;
+        case SDLK_w:
+            shell_set_direction(DIRECTION_NORTH);
+
+            if (!in_is_repeat)
+            {
+                shell_move_selection(DIRECTION_NORTH);
+            }
+            break;
 
         case SDLK_DOWN:
-        case SDLK_s: shell_set_direction(DIRECTION_SOUTH); break;
+        case SDLK_s:
+            shell_set_direction(DIRECTION_SOUTH);
+
+            if (!in_is_repeat)
+            {
+                shell_move_selection(DIRECTION_SOUTH);
+            }
+            break;
 
         case SDLK_LEFT:
         case SDLK_a: shell_set_direction(DIRECTION_WEST); break;
@@ -194,6 +212,54 @@ static void prv_handle_key(SDL_Keycode in_key)
             /* The button of FR-003: starts a run, and starts the next one once this has
          * ended. Ignored mid-run, so a stray press cannot restart a good game. */
             shell_press_start();
+            break;
+
+        case SDLK_k:
+            /* The board button's other meaning (FR-030), on a key of its own rather than sharing
+             * one with start. The target cannot afford that — it has one button — but a keyboard
+             * can, and sharing would mean a mistyped start silently handing the game to the agent.
+             *
+             * A repeat is ignored: holding the key would toggle sixty times a second. What the
+             * shell refuses — outside a run, in a random-maze game, or a weight table that cannot
+             * be evaluated — it reports, and the reason is printed rather than swallowed. */
+            if (!in_is_repeat)
+            {
+                if (shell_toggle_ai())
+                {
+                    (void)printf("the %s has Pac-Man\n", shell_is_ai_playing() ? "AI" : "player");
+                }
+                else if (shell_get_screen() != SHELL_SCREEN_GAME)
+                {
+                    (void)printf("no run in progress — space starts one\n");
+                }
+                else if (shell_get_selected_mode() != SHELL_MODE_NORMAL_MAZE)
+                {
+                    (void)printf("handing over is a normal-maze thing: this run is the %s\n",
+                                 shell_get_mode_name(shell_get_selected_mode()));
+                }
+                else
+                {
+                    (void)printf("the weight table cannot be evaluated on this build\n");
+                }
+            }
+            break;
+
+        case SDLK_i:
+            /* The board button's third meaning (FR-043), on a key of its own for the same reason K
+             * has one: a keyboard can afford one key per meaning where a board with one button
+             * cannot. Only the Pac-Man AI game has a loop to switch. */
+            if (!in_is_repeat)
+            {
+                if (shell_toggle_infinite())
+                {
+                    (void)printf("endless mode %s\n", shell_is_infinite() ? "on" : "off");
+                }
+                else
+                {
+                    (void)printf("the endless mode belongs to the Pac-Man AI game — pick it on the "
+                                 "menu and start a run\n");
+                }
+            }
             break;
 
         case SDLK_ESCAPE:
@@ -217,7 +283,7 @@ static void prv_poll_input(void)
         }
         else if (event.type == SDL_KEYDOWN)
         {
-            prv_handle_key(event.key.keysym.sym);
+            prv_handle_key(event.key.keysym.sym, event.key.repeat != 0);
         }
         else
         {
@@ -282,7 +348,9 @@ int main(int in_argument_count, char** in_arguments)
         return EXIT_FAILURE;
     }
 
-    (void)printf("%s — arrows or WASD to move, space to start, escape to quit.\n", WINDOW_TITLE);
+    (void)printf("%s — arrows or WASD pick the game and steer, space starts it, K hands Pac-Man to "
+                 "the AI and back, I loops the Pac-Man AI game for ever, escape quits.\n",
+                 WINDOW_TITLE);
 
     shell_init();
 

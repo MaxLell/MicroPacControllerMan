@@ -1,73 +1,49 @@
 /*
  * ai_weights.c
  *
- * GENERATED — do not edit. Written by Training/export_c.py from ../../../../../../tmp/claude-1000/-home-max-Documents-Projekte-MicroPacControllerMan/5e2e3598-f562-43a3-95a5-70c97d2bc371/scratchpad/dev-winner.json.
+ * GENERATED — do not edit. Written by Training/export_c.py from Training/winner.json.
  * Regenerate with:  python3 Training/export_c.py
  *
- * The network b4f18357dc34867a: 27 nodes (0 hidden), 21 connections,
- * 23 inputs, 4 outputs. Trained at stage 2, generation 20,
- * fitness 1932.5.
+ * The network a082e6ea61e8f6fa: 35 nodes (8 hidden), 19 connections,
+ * 23 inputs, 4 outputs. Trained at stage 3, generation 276,
+ * fitness 4980.0.
  */
 
 #include "ai_weights.h"
 
 static const uint16_t g_output_nodes[4] = {
+    32U,
+    33U,
+    34U,
     23U,
-    24U,
-    25U,
-    26U,
 };
 
-static const float g_biases[27] = {
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    0x0.0p+0f,
-    -0x1.fef99a0000000p-2f,
-    0x1.cff07c0000000p+0f,
-    -0x1.488ae20000000p-2f,
-    -0x1.a6e0c60000000p+0f,
+static const float g_biases[35] = {
+    0x0p+0f,       0x0p+0f,        0x0p+0f,         0x0p+0f,         0x0p+0f,         0x0p+0f,        0x0p+0f,
+    0x0p+0f,       0x0p+0f,        0x0p+0f,         0x0p+0f,         0x0p+0f,         0x0p+0f,        0x0p+0f,
+    0x0p+0f,       0x0p+0f,        0x0p+0f,         0x0p+0f,         0x0p+0f,         0x0p+0f,        0x0p+0f,
+    0x0p+0f,       0x0p+0f,        -0x1.5c326ap-1f, -0x1.249b42p-1f, -0x1.22147cp+1f, 0x1.765316p+0f, 0x1.625064p+1f,
+    0x1.7b412p-2f, 0x1.5fd06cp-1f, -0x1.74cb2p+1f,  -0x1.02a6d4p+0f, 0x1.43323ep-1f,  0x1.76f94p-1f,  0x1.ae0f38p-2f,
 };
 
-static const uint16_t g_connection_offsets[28] = {
-    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 2U, 8U, 18U, 21U,
+static const uint16_t g_connection_offsets[36] = {
+    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,  0U,  0U,  0U,  0U,
+    0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 3U, 5U, 6U, 8U, 10U, 11U, 13U, 16U, 19U,
 };
 
-static const uint16_t g_connection_sources[21] = {
-    2U, 19U, 2U, 5U, 6U, 7U, 9U, 19U, 2U, 6U, 7U, 9U, 10U, 11U, 12U, 13U, 18U, 20U, 1U, 13U, 22U,
+static const uint16_t g_connection_sources[19] = {
+    2U, 11U, 24U, 1U, 16U, 21U, 21U, 27U, 20U, 26U, 27U, 30U, 31U, 11U, 25U, 30U, 3U, 28U, 29U,
 };
 
-static const float g_connection_weights[21] = {
-    -0x1.cbe0200000000p-1f, -0x1.a7e5140000000p-2f, 0x1.6aa1460000000p-1f,  0x1.7b0bae0000000p+1f,
-    -0x1.91fc9c0000000p+0f, -0x1.e259c80000000p+1f, 0x1.2103120000000p+1f,  -0x1.6f59360000000p+0f,
-    0x1.3f151a0000000p-1f,  0x1.696fcc0000000p+1f,  -0x1.3c14ae0000000p-1f, -0x1.7f88aa0000000p-4f,
-    0x1.d0ee380000000p-6f,  -0x1.2f6e3e0000000p+1f, 0x1.e685ec0000000p-5f,  0x1.c0a8d80000000p-1f,
-    0x1.65d6c80000000p-4f,  -0x1.c655a00000000p-5f, 0x1.a67d060000000p+0f,  0x1.782c220000000p+0f,
-    -0x1.d277120000000p-3f,
+static const float g_connection_weights[19] = {
+    -0x1.4689c4p+0f, 0x1.194a5p-1f,  0x1.f263f4p+0f, -0x1.c61018p+1f, 0x1.412902p-1f, 0x1.3e1f18p+0f, 0x1.676926p+3f,
+    -0x1.4a2f1cp-1f, 0x1.b4c412p+0f, 0x1.418b88p+0f, 0x1.b958dap+0f,  0x1.d87642p+1f, 0x1.74d9f4p+1f, 0x1.7b80fp+3f,
+    -0x1.49c9fcp-3f, 0x1.05f408p+1f, 0x1.9fa346p+2f, 0x1.9731b6p-2f,  0x1.bdcc96p+1f,
 };
 
 const neural_net_t g_ai_weights_network = {
     .input_count = 23U,
-    .node_count = 27U,
+    .node_count = 35U,
     .output_count = 4U,
     .output_nodes = g_output_nodes,
     .biases = g_biases,

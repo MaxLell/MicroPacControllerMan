@@ -138,7 +138,7 @@ bool ott_pacman_run(const uint8_t* in_parameter, char* out_reason, size_t in_rea
 
     (void)in_parameter;
 
-    cli_print("Pacman: the game itself, on the panel — the end-to-end test for M3.");
+    cli_print("Pac-Man: the game itself, on the panel — the end-to-end test for M3.");
 
     /* `render` brings the display up, but it cannot tell whether anything answered, and a
      * silent SPI bus would otherwise look like a game that renders nothing. */
@@ -160,8 +160,8 @@ bool ott_pacman_run(const uint8_t* in_parameter, char* out_reason, size_t in_rea
 
     prv_measure_frame_cost();
 
-    cli_print("Play it. The stick steers Pacman, and CENTER starts the next run once this");
-    cli_print("one is over. Watch for: the maze drawn whole, Pacman turning where he can");
+    cli_print("Play it. The stick steers Pac-Man, and CENTER starts the next run once this");
+    cli_print("one is over. Watch for: the maze drawn whole, Pac-Man turning where he can");
     cli_print("and only there, the ghosts leaving the house one at a time, a power pellet");
     cli_print("turning them blue, and the level number going up when the maze is empty.");
     cli_print("Press B1 to pass, or let it time out after %u s to fail.",

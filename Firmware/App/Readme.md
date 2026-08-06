@@ -46,7 +46,11 @@ between-cell progress it carries is current
 
 `shell/` and `game_session/` sit above that table: the shell owns the screen flow and
 `game_session` owns the one frame the target, the host application and the `pacman` OTT
-all run ([03 §3.2.2](../../Docu/PrePlanning/03-Architecture.md)).
+all run ([03 §3.2.2](../../Docu/PrePlanning/03-Architecture.md)). The shell also owns
+**which of the two games a player asked for** (FR-040) — the arcade's own maze or
+generated ones — because that is a choice made on a screen, and the screens are what it
+is. It is the same value the AI takeover consults, since the AI is offered in the arcade
+one only.
 
 Note that the `app_main()` call in the generated `main.c` is one of the two things a
 CubeMX re-generation drops and that must be re-applied by hand (the other is the

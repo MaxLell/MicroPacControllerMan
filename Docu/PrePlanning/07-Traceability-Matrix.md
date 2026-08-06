@@ -11,8 +11,8 @@ A few items are structural/process requirements rather than automatically observ
 | Requirement | Name | Verified by |
 |---|---|---|
 | FR-001 | Loading Screen | VT-INT-011 |
-| FR-002 | High Score Menu | VT-INT-011 |
-| FR-003 | Game Start | VT-INT-012 |
+| FR-002 | High Score Menu | VT-INT-011, VT-INT-026, VT-INT-027 |
+| FR-003 | Game Start | VT-INT-012, VT-INT-026 |
 | FR-004 | Directional Control | VT-INT-019, VT-INT-020, VT-INT-013, VT-INT-010 |
 | FR-005 | Game Rendering | VT-INT-006, VT-INT-022 |
 | FR-006 | Starting Lives | VT-INT-014 |
@@ -37,7 +37,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-025 | Level Count & Mazes | VT-UNIT-006, VT-INT-017 |
 | FR-026 | Difficulty Scaling | VT-UNIT-006, VT-INT-017 |
 | FR-027 | Game Completion | VT-INT-017 |
-| FR-029 | Randomly Generated Maze | VT-UNIT-007, VT-UNIT-008 (its appearance), VT-INT-022 (played on the board) |
+| FR-029 | Randomly Generated Maze | VT-UNIT-007, VT-UNIT-008 (its appearance), VT-INT-022 (played on the board), VT-INT-026 (chosen from the menu) |
 | NFR-001 | Loading Screen Duration | VT-INT-011 |
 | NFR-004 | NVM Write Frequency | VT-INT-015 |
 | NFR-005 | Logo Display Delay | VT-INT-011 |
@@ -48,6 +48,10 @@ A few items are structural/process requirements rather than automatically observ
 | CON-005 | Debug Interface | VT-INT-001, VT-INT-002 |
 
 | FR-030 | AI Takeover Toggle | VT-INT-023 |
+| FR-040 | Game Selection | VT-INT-026 |
+| FR-041 | High Scores per Game | VT-UNIT-012, VT-INT-025 (the lockout's other half), ott high_score |
+| FR-042 | Autonomous AI Game | VT-INT-027 |
+| FR-043 | Endless Mode | VT-INT-027 (that it switches), test_shell.c (that it restarts) |
 | FR-031 | AI Control Exclusivity | VT-INT-023 |
 | FR-032 | AI Takeover Indication | VT-INT-023 |
 | FR-033 | AI Control Persistence | VT-INT-023 |

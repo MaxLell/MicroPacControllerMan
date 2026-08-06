@@ -771,12 +771,37 @@ void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game
 void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map)
 {
     ASSERT(inout_game != NULL);
-    ASSERT(in_map != NULL);
 
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_start_on_map_configured(inout_game, in_map, &config);
+}
+
+void game_start_on_map_configured(game_t* inout_game, const playfield_map_t* in_map, const game_config_t* in_config)
+{
+    ASSERT(inout_game != NULL);
+    ASSERT(in_map != NULL);
+    ASSERT(in_config != NULL);
+
+    inout_game->config = *in_config;
     inout_game->maze = *in_map;
     inout_game->is_maze_fixed = true;
 
-    /* A given map is for the arcade's maze and for tests, both of which want the real rules. */
+    prv_begin_run(inout_game);
+}
+
+void game_start_on_normal_maze(game_t* inout_game)
+{
+    ASSERT(inout_game != NULL);
+
+    /* Straight into the game's own copy, rather than through a `playfield_map_t` the caller holds:
+     * one is 899 bytes, which is most of the kilobyte of stack the linker script reserves, and a
+     * caller on the target would have to find that space somewhere for a value it hands straight
+     * over. This is why "the normal maze" is a name in this API and not an argument to it. */
+    playfield_get_arcade_map(&inout_game->maze);
+    inout_game->is_maze_fixed = true;
+
     game_get_default_config(&inout_game->config);
 
     prv_begin_run(inout_game);

@@ -138,7 +138,7 @@ static void prv_measure_partial_rate(void)
     uint32_t elapsed_ms;
     double milliseconds_per_frame;
 
-    cli_print("  timing %lu dirty %dx%d cells per frame — a realistic Pacman update",
+    cli_print("  timing %lu dirty %dx%d cells per frame — a realistic Pac-Man update",
               (unsigned long)OTT_DISPLAY_TEST_DIRTY_CELLS, OTT_DISPLAY_TEST_CELL_SIZE, OTT_DISPLAY_TEST_CELL_SIZE);
 
     start_tick = systick_bsp_get_tick();

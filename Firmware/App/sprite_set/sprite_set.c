@@ -824,6 +824,21 @@ static const char* const g_glyph_z[] = {
     "22222222",
 };
 
+/* The hyphen of "PAC-MAN", and the only glyph here that was not decoded out of the tile ROM: the
+ * extract this font came from is the letters, the digits and a space. Two rows at the vertical
+ * middle of the glyph body, six wide like every other glyph's box, so it sits on the same grid as
+ * the letters either side of it rather than looking like a tile from somewhere else. */
+static const char* const g_glyph_hyphen[] = {
+    "22222222",
+    "22222222",
+    "22222222",
+    "21111112",
+    "21111112",
+    "22222222",
+    "22222222",
+    "22222222",
+};
+
 static const char* const g_actor_blank[] = {
     "2222222222222222",
     "2222222222222222",
@@ -952,6 +967,7 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
     [SPRITE_SET_GLYPH_X] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_x},
     [SPRITE_SET_GLYPH_Y] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_y},
     [SPRITE_SET_GLYPH_Z] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_z},
+    [SPRITE_SET_GLYPH_HYPHEN] = {SPRITE_SET_TILE_SIZE, SPRITE_SET_TILE_SIZE, g_glyph_hyphen},
 
 };
 
@@ -959,6 +975,14 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
  * slot, kept so the array index matches the digit in the art. */
 static const sprite_palette_t g_palettes[SPRITE_SET_PALETTE_COUNT] = {
     [SPRITE_SET_PALETTE_PACMAN] = {{0U, FRAMEBUFFER_COLOR_YELLOW, 0U, 0U}},
+
+    /* The same drawing while the AI is steering. The green is **the maze's own blue with its
+     * channels rotated** — (33, 33, 222) becomes (33, 222, 33) — which is why it belongs to this
+     * palette rather than merely avoiding a clash with it: it is the same saturation and the same
+     * brightness as the walls it is seen against, so it reads as a colour of this game. Pure green
+     * would sit at the palette's edge next to Inky's cyan, and yellow-green would be mistaken for
+     * the yellow it replaces at 16 pixels. */
+    [SPRITE_SET_PALETTE_PACMAN_AI] = {{0U, FRAMEBUFFER_RGB(33U, 222U, 33U), 0U, 0U}},
     [SPRITE_SET_PALETTE_BLINKY] = {{0U, FRAMEBUFFER_RGB(255U, 0U, 0U), FRAMEBUFFER_COLOR_WHITE,
                                     FRAMEBUFFER_RGB(0U, 0U, 160U)}},
     [SPRITE_SET_PALETTE_PINKY] = {{0U, FRAMEBUFFER_RGB(255U, 184U, 255U), FRAMEBUFFER_COLOR_WHITE,
@@ -1015,6 +1039,11 @@ sprite_set_id_e sprite_set_get_glyph(char in_character)
     if ((in_character >= 'A') && (in_character <= 'Z'))
     {
         return (sprite_set_id_e)(SPRITE_SET_GLYPH_A + (in_character - 'A'));
+    }
+
+    if (in_character == '-')
+    {
+        return SPRITE_SET_GLYPH_HYPHEN;
     }
 
     ASSERT(in_character == ' ');

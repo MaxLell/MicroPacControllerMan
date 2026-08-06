@@ -35,7 +35,6 @@
  * and the board button is the toggle — the other way round from every other manual test. Said out
  * loud on the console, because it is the one surprise in this scenario. */
 static sw_timer_t g_timeout_timer;
-static uint32_t g_maze_seed;
 
 static void prv_on_timeout(void)
 {
@@ -139,7 +138,7 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
 
     (void)in_parameter;
 
-    cli_print("Pacman AI: the trained agent playing on the board (FR-030..034).");
+    cli_print("Pac-Man AI: the trained agent playing on the board (FR-030..034).");
     cli_print("weights %s", AI_WEIGHTS_DIGEST);
 
     game_session_init();
@@ -158,24 +157,26 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
         return false;
     }
 
-    g_maze_seed = systick_bsp_get_tick();
-    cli_print("maze seed %lu", (unsigned long)g_maze_seed);
-    game_session_start(g_maze_seed);
+    /* The normal maze, because that is the only maze the game offers the AI in (FR-040) and the one
+     * it was evolved against. No seed is printed: there is nothing to reproduce, since every run of
+     * this test plays the same maze — which is also what makes "it is still playing after a level
+     * turns over" a comparison an operator can make between two runs. */
+    game_session_start_on_normal_maze();
 
     if (!game_session_set_ai_enabled(true))
     {
-        (void)snprintf(out_reason, in_reason_size, "the session refused to hand Pacman to the AI");
+        (void)snprintf(out_reason, in_reason_size, "the session refused to hand Pac-Man to the AI");
 
         return false;
     }
 
     prv_measure_frame_cost();
 
-    cli_print("The AI has Pacman. Watch for, and confirm:");
+    cli_print("The AI has Pac-Man. Watch for, and confirm:");
     cli_print("  - the HUD shows AI between the score and the level (FR-032)");
     cli_print("  - the stick does nothing at all while it plays (FR-031)");
     cli_print("  - it is still playing after a level turns over and after a life is lost (FR-033)");
-    cli_print("  - B1 hands Pacman back, and the AI in the HUD goes away; B1 again takes over");
+    cli_print("  - B1 hands Pac-Man back, and the AI in the HUD goes away; B1 again takes over");
     cli_print("B1 = hand over / take back. CENTER on the stick = pass this test.");
     cli_print("Note the button roles are swapped here: every other manual test confirms with B1.");
     cli_print("Times out after %u s to fail.", OTT_PACMAN_AI_TIMEOUT_MS / OTT_PACMAN_AI_MS_PER_SECOND);

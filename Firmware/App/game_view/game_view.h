@@ -97,12 +97,21 @@
  */
 #define GAME_VIEW_HUD_AI_SLOTS     (2U)
 
+/*! \brief The `LOOP` the HUD shows while the endless mode is on (FR-043), on the lives row and
+ *         right-aligned under `LEVEL`.
+ *
+ * A field of its own rather than more letters next to `AI`, because the two say different things: one
+ * is who is playing, the other is what happens when this run ends. Four slots always, blank while
+ * the loop is off, for the same reason as the AI's two.
+ */
+#define GAME_VIEW_HUD_LOOP_SLOTS   (4U)
+
 /*! \brief Everything the HUD draws, as a fixed list: `1UP`, the score, `LEVEL`, the level,
- *         the life slots and the AI indication. Fixed on purpose — a list that never changes
- *         length can be compared against what was last drawn item by item. */
+ *         the life slots, the AI indication and the loop indication. Fixed on purpose — a list that
+ *         never changes length can be compared against what was last drawn item by item. */
 #define GAME_VIEW_HUD_ITEM_COUNT                                                                                       \
     (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS                      \
-     + GAME_VIEW_HUD_AI_SLOTS)
+     + GAME_VIEW_HUD_AI_SLOTS + GAME_VIEW_HUD_LOOP_SLOTS)
 
 /*! \brief The `drawn_hud` entry for a slot that has never been drawn. Above every
  *         `sprite_set_id_e`, so the first comparison always reports a change. */
@@ -148,6 +157,10 @@ typedef struct
      *   compared against the sprite that was last drawn there, not against an older state, so
      *   flipping this redraws the two slots on the next frame and nothing else. */
     bool is_ai_active;
+
+    /*!< Whether a finished run will be followed by another (FR-043). The view only draws it; the
+     *   shell owns whether it is true. */
+    bool is_infinite;
 } game_view_t;
 
 /* ==========================================================================
@@ -194,6 +207,13 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
  * \param[in]       in_is_active: `true` while the agent is playing
  */
 void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active);
+
+/*! \brief Tell the view whether the endless mode is on, so the HUD can say so (FR-043).
+ *
+ * \param[in,out]   inout_view: initialised view, must not be `NULL`
+ * \param[in]       in_is_infinite: `true` while a finished run will be followed by another
+ */
+void game_view_set_infinite(game_view_t* inout_view, bool in_is_infinite);
 
 /*! \brief Fill in the next display list.
  *

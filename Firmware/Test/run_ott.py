@@ -260,6 +260,98 @@ def check_boot_sequence(port: str, baud: str) -> bool:
         os.close(fd)
 
 
+# Long enough for a reset, the 3 s loading screen and a few commands answered one frame at a time.
+MAZE_SELECTION_TIMEOUT_S = 8.0
+
+
+def check_maze_selection(port: str, baud: str) -> bool:
+    """Walk the menu with `select` and start the game it was left on (FR-040, VT-INT-026).
+
+    The cursor next to the selected option is pixels and only an operator can judge it; what the
+    firmware *does* with the selection is the part that can be falsified without anyone at the
+    board, and it is the part a mistake would show up in — a menu that showed the cursor moving and
+    started the other game would look right and be wrong.
+
+    `select` is a device on the console and not a decision: it pushes the stick, exactly as `start`
+    presses the button, and the shell decides what pushing means.
+    """
+    configure_tty(port, baud)
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+    try:
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
+
+        steps = [
+            ("select\r\n", "selected: normal maze"),
+            ("select down\r\n", "selected: pac-man ai"),
+            ("select down\r\n", "selected: random maze"),
+            ("select down\r\n", "selected: random maze"),  # the end of the list, and it stays there
+            ("select up\r\n", "selected: pac-man ai"),
+            ("select up\r\n", "selected: normal maze"),
+            ("select down\r\n", "selected: pac-man ai"),
+            ("select down\r\n", "selected: random maze"),
+            ("start\r\n", "random maze run 1: level 1"),
+        ]
+
+        if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+            print("[VT-INT-026] maze selection: the menu never came up")
+            return False
+
+        for command, expected in steps:
+            write_command(fd, command)
+
+            if read_until(fd, [expected], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+                print(f"[VT-INT-026] maze selection: '{command.strip()}' did not report "
+                      f"'{expected}'")
+                return False
+
+        print("[VT-INT-026] maze selection: both options offered, and the chosen one is played")
+        return True
+    finally:
+        os.close(fd)
+
+
+def check_the_ai_game(port: str, baud: str) -> bool:
+    """Start the Pac-Man AI game and switch its endless mode, over the serial line (VT-INT-027).
+
+    Two facts a script can settle in seconds. That the agent has Pac-Man from the first frame is
+    visible in the firmware's own report of the run — it names the game — and that the endless mode
+    belongs to that game and switches is visible in what the shell says when the button is pressed.
+
+    What is *not* checked here is the restart itself: seeing it costs a whole run of an agent that
+    clears level 1, which is minutes, and the suite is run after every build. `test_shell.c` covers
+    the restart, and the board covers it whenever somebody watches the game.
+    """
+    configure_tty(port, baud)
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+    try:
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
+
+        steps = [
+            ("select down\r\n", "selected: pac-man ai"),
+            ("start\r\n", "pac-man ai run 1"),
+            ("button\r\n", "endless mode on"),
+            ("button\r\n", "endless mode off"),
+        ]
+
+        if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+            print("[VT-INT-027] the AI game: the menu never came up")
+            return False
+
+        for command, expected in steps:
+            write_command(fd, command)
+
+            if read_until(fd, [expected], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+                print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
+                return False
+
+        print("[VT-INT-027] the AI game: the agent plays it, and the endless mode switches")
+        return True
+    finally:
+        os.close(fd)
+
+
 def run_suite(port: str, baud: str) -> int:
     print("=== OTT automatic regression suite ===")
     results = []
@@ -271,6 +363,8 @@ def run_suite(port: str, baud: str) -> int:
 
     results.append(("VT-INT-002 boot banner", check_banner(port, baud)))
     results.append(("VT-INT-011 boot sequence", check_boot_sequence(port, baud)))
+    results.append(("VT-INT-026 maze selection", check_maze_selection(port, baud)))
+    results.append(("VT-INT-027 the AI game", check_the_ai_game(port, baud)))
 
     for test in AUTOMATIC:
         # Eight seconds is right for a test that judges itself in a moment, and wrong for one that

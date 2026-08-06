@@ -61,12 +61,19 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         return CLI_OK_STATUS;
     }
 
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    /* All three tables, each under the name of the game it belongs to (FR-041). Labelled rather than
+     * numbered, because "table 2" is a number only this file knows the meaning of. */
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        cli_print("  %u. %lu", (unsigned)(place + 1U), (unsigned long)high_score_get(place));
+        cli_print("%s:", shell_get_mode_name((shell_mode_e)table));
+
+        for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+        {
+            cli_print("  %u. %lu", (unsigned)(place + 1U), (unsigned long)high_score_get(table, place));
+        }
     }
 
-    cli_print("'highscore reset' clears them.");
+    cli_print("'highscore reset' clears all three.");
 
     return CLI_OK_STATUS;
 }
@@ -84,6 +91,64 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
     (void)in_context;
 
     shell_press_start();
+
+    /* Said out loud when nothing happened, because the one way pressing start can fail is worth a
+     * sentence: the Pac-Man AI game refuses to begin at all if the generated weight table cannot be
+     * evaluated, rather than starting a game that plays itself with nobody playing it. */
+    if ((shell_get_screen() == SHELL_SCREEN_MENU) && (shell_get_selected_mode() == SHELL_MODE_AI))
+    {
+        cli_print("the Pac-Man AI game could not start: the weight table cannot be evaluated");
+
+        return CLI_FAIL_STATUS;
+    }
+
+    return CLI_OK_STATUS;
+}
+
+/* `select` shows what the menu is on; `select up` / `select down` pushes the stick.
+ *
+ * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
+ * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
+ * score — be walked from `run_ott.py` without anybody at the board (FR-040, VT-INT-011). */
+static int prv_select_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_context;
+
+    if (in_argument_count > 1)
+    {
+        if (strcmp(in_arguments[1], "up") == 0)
+        {
+            shell_move_selection(DIRECTION_NORTH);
+        }
+        else if (strcmp(in_arguments[1], "down") == 0)
+        {
+            shell_move_selection(DIRECTION_SOUTH);
+        }
+        else
+        {
+            cli_print("'select up' or 'select down'");
+
+            return CLI_FAIL_STATUS;
+        }
+    }
+
+    cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
+
+    return CLI_OK_STATUS;
+}
+
+/* `button` presses the board button from the console.
+ *
+ * The counterpart to `select`, and a device rather than a decision for the same reason: it presses,
+ * and the shell decides what pressing means on the screen that is up (FR-003/030/043). It is what
+ * lets the endless mode be switched — and therefore checked — without a finger on B1. */
+static int prv_button_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)in_context;
+
+    shell_press_user_button();
 
     return CLI_OK_STATUS;
 }
@@ -132,6 +197,19 @@ static void prv_poll_input(void)
         }
     }
 
+    /* The same two keys again, and deliberately read the other way: the menu's selection moves once
+     * per *press* (FR-040), where the game wants the level of a held stick. Taking the latch costs
+     * the game nothing, because the game never looks at it. */
+    if (joystick_take_press(JOYSTICK_KEY_NORTH))
+    {
+        shell_move_selection(DIRECTION_NORTH);
+    }
+
+    if (joystick_take_press(JOYSTICK_KEY_SOUTH))
+    {
+        shell_move_selection(DIRECTION_SOUTH);
+    }
+
     /* Start comes from either key, and both are taken as an *edge* so a thumb resting on
      * one does not keep pressing it. FR-003 names the Nucleo's own button; the centre of
      * the stick is where a player's hand already is, and having both costs one line. */
@@ -140,15 +218,15 @@ static void prv_poll_input(void)
         shell_press_start();
     }
 
-    /* The board button means two things now, and which one depends on the screen: start on the
-     * menu and the score screen (FR-003), hand Pacman to the AI and back during a run (FR-030).
+    /* The board button means one of four things and the shell works out which (FR-003/030/043): it
+     * knows the screen and the game, and this file knows neither. It used to be a fall-through here,
+     * which was one condition too many the moment a third meaning arrived.
+     *
      * The stick's centre keeps meaning start only — a player reaching for it mid-run is asking to
-     * play, not to stop playing. The shell decides, because the shell is what knows the screen;
-     * `shell_toggle_ai` says whether it did anything, so the fall-through here is one condition
-     * and not a copy of the screen logic. */
-    if (user_button_take_press() && !shell_toggle_ai())
+     * play, not to stop playing. */
+    if (user_button_take_press())
     {
-        shell_press_start();
+        shell_press_user_button();
     }
 }
 
@@ -167,10 +245,19 @@ static void prv_report_progress(void)
     static shell_screen_e g_reported_screen = SHELL_SCREEN_GAME;
     static uint8_t g_reported_level;
     static uint8_t g_reported_lives;
+    static bool g_reported_infinite;
 
     const shell_screen_e screen = shell_get_screen();
     const uint8_t level = game_session_get_level();
     const uint8_t lives = game_session_get_lives();
+    const bool is_infinite = shell_is_infinite();
+
+    if (is_infinite != g_reported_infinite)
+    {
+        g_reported_infinite = is_infinite;
+
+        cli_print("endless mode %s", is_infinite ? "on - a finished run starts the next one" : "off");
+    }
 
     if ((screen == g_reported_screen) && (level == g_reported_level) && (lives == g_reported_lives))
     {
@@ -184,7 +271,8 @@ static void prv_report_progress(void)
 
     if (screen == SHELL_SCREEN_GAME)
     {
-        cli_print("  level %u - %u lives, %lu points", (unsigned)level, (unsigned)lives,
+        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(shell_get_selected_mode()),
+                  (unsigned long)shell_get_run_count(), (unsigned)level, (unsigned)lives,
                   (unsigned long)game_session_get_score());
     }
     else if (screen == SHELL_SCREEN_SCORE)
@@ -240,8 +328,16 @@ void app_main(void)
 
         cli_binding_t start_binding = {"start", prv_start_command, NULL, "Press start: begins a run from the menu"};
 
+        cli_binding_t select_binding = {"select", prv_select_command, NULL,
+                                        "Show the menu's selection; 'select up'/'down' moves it"};
+
+        cli_binding_t button_binding = {"button", prv_button_command, NULL,
+                                        "Press the board button: start, hand over to the AI, or loop"};
+
         cli_register(&high_score_binding);
         cli_register(&start_binding);
+        cli_register(&select_binding);
+        cli_register(&button_binding);
     }
 
     high_score_init();

@@ -296,18 +296,35 @@ void env_destroy(env_batch_t* inout_batch)
     free(inout_batch);
 }
 
-void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage)
+void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze)
 {
     game_config_t config;
+    playfield_map_t normal_maze;
+    const bool is_generated = ((env_maze_e)in_maze == ENV_MAZE_GENERATED);
 
     prv_config_for_stage(in_stage, &config);
+
+    /* Fetched once for the whole batch rather than per game: it is the same 900 bytes every time,
+     * and `game_start_on_map_configured` copies it in. */
+    if (!is_generated)
+    {
+        playfield_get_arcade_map(&normal_maze);
+    }
 
     for (uint32_t index = 0U; index < inout_batch->count; ++index)
     {
         env_game_t* const entry = &inout_batch->games[index];
 
         game_init(&entry->game);
-        game_start_configured(&entry->game, in_seeds[index], &config);
+
+        if (is_generated)
+        {
+            game_start_configured(&entry->game, in_seeds[index], &config);
+        }
+        else
+        {
+            game_start_on_map_configured(&entry->game, &normal_maze, &config);
+        }
 
         entry->idle_ms = 0U;
         entry->is_done = false;
@@ -441,10 +458,10 @@ void env_use_random_policy(env_batch_t* inout_batch, uint32_t in_rng_seed)
     inout_batch->rng_state = (in_rng_seed == 0U) ? 0x9E3779B9U : in_rng_seed;
 }
 
-void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint32_t* out_scores,
-             uint32_t* out_steps, uint8_t* out_levels)
+void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze,
+             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels)
 {
-    env_reset(inout_batch, in_seeds, in_stage);
+    env_reset(inout_batch, in_seeds, in_stage, in_maze);
 
     /* One game played out at a time rather than all of them in lockstep. Its `game_t` is 15 kB, so
      * finishing one before touching the next keeps the working set to that one game; and it makes

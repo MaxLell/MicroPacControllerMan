@@ -23,6 +23,12 @@ STAGE_MAZE_ONLY = 1
 STAGE_GHOSTS = 2
 STAGE_FULL = 3
 
+#: Which maze a run is played on. The AI may only be handed control in the normal one (FR-040), so
+#: that is where training and FR-037 live and the seeds are then ignored. ``MAZE_GENERATED`` is kept
+#: so the question "how does this agent do on a maze nobody has played" can still be asked.
+MAZE_NORMAL = 0
+MAZE_GENERATED = 1
+
 
 class PacmanEnv:
     """A batch of independent Pacman games, stepped together and never rendered."""
@@ -69,7 +75,12 @@ class PacmanEnv:
         lib.env_create.restype = ctypes.c_void_p
         lib.env_create.argtypes = [ctypes.c_uint32]
         lib.env_destroy.argtypes = [ctypes.c_void_p]
-        lib.env_reset.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint8]
+        lib.env_reset.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+        ]
         lib.env_observe.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
         lib.env_step.argtypes = [
             ctypes.c_void_p,
@@ -97,19 +108,31 @@ class PacmanEnv:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.c_uint8,
+            ctypes.c_uint8,
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint8),
         ]
 
-    def reset(self, seeds: Sequence[int], stage: int = STAGE_FULL) -> None:
+    def _load_seeds(self, seeds: Sequence[int], maze: int) -> None:
+        """Hand the seeds over, or as many zeros as the library expects for the normal maze.
+
+        ``MAZE_NORMAL`` ignores them, so a caller playing it may pass none at all rather than
+        inventing numbers that mean nothing.
+        """
+        if maze == MAZE_NORMAL:
+            seeds = seeds or [0] * self.count
+
         if len(seeds) != self.count:
             raise ValueError(f"expected {self.count} seeds, got {len(seeds)}")
 
         for index, seed in enumerate(seeds):
             self._seeds[index] = seed & 0xFFFFFFFF
 
-        self._lib.env_reset(self._batch, self._seeds, ctypes.c_uint8(stage))
+    def reset(self, seeds: Sequence[int] = (), stage: int = STAGE_FULL, maze: int = MAZE_NORMAL) -> None:
+        self._load_seeds(seeds, maze)
+
+        self._lib.env_reset(self._batch, self._seeds, ctypes.c_uint8(stage), ctypes.c_uint8(maze))
 
     def observe(self) -> List[List[float]]:
         """One feature vector per environment."""
@@ -164,20 +187,24 @@ class PacmanEnv:
         """Play uniformly at random — the baseline FR-037 is measured against."""
         self._lib.env_use_random_policy(self._batch, ctypes.c_uint32(rng_seed & 0xFFFFFFFF))
 
-    def run(self, seeds: Sequence[int], stage: int = STAGE_FULL):
+    def run(self, seeds: Sequence[int] = (), stage: int = STAGE_FULL, maze: int = MAZE_NORMAL):
         """Play every game to its end with the installed policy.
 
         Returns ``(scores, steps, levels)``. This is the call training spends its time in: the
         observation, the network and the choice of action are all C, so a whole episode costs one
         crossing of the language boundary rather than one per decision.
         """
-        if len(seeds) != self.count:
-            raise ValueError(f"expected {self.count} seeds, got {len(seeds)}")
+        self._load_seeds(seeds, maze)
 
-        for index, seed in enumerate(seeds):
-            self._seeds[index] = seed & 0xFFFFFFFF
-
-        self._lib.env_run(self._batch, self._seeds, ctypes.c_uint8(stage), self._scores, self._steps, self._levels)
+        self._lib.env_run(
+            self._batch,
+            self._seeds,
+            ctypes.c_uint8(stage),
+            ctypes.c_uint8(maze),
+            self._scores,
+            self._steps,
+            self._levels,
+        )
 
         return list(self._scores), list(self._steps), list(self._levels)
 

@@ -25,3 +25,8 @@ __pycache__/
 # that wrote it, and a log is a log.
 Training/checkpoint-neat-*
 Training/train.log
+
+# What `campaign.py` leaves behind: one log and one winner per run, plus the summary written for a
+# human to read afterwards. The winner that gets adopted is exported over `winner.json`, so the
+# directory is a working area rather than a record.
+Training/campaign/

@@ -77,7 +77,14 @@ format_in_place() {
 
     local changed=0 file
     for file in "${files[@]}"; do
-        if ! clang-format --style=file --output-replacements-xml "$file" | grep -q '<replacement '; then
+        # The same question `check_only` asks, asked the same way on purpose: "is the formatted
+        # output different from the file". It used to ask clang-format for a replacement list and
+        # `grep -q` it, which **silently skipped every file needing a large reformat** — `grep -q`
+        # exits at the first match, clang-format dies of SIGPIPE writing the rest, and under
+        # `set -o pipefail` the pipeline then reports failure, which read as "nothing to do". Small
+        # diffs fit in the 64 kB pipe buffer and worked; big ones did not. So `format.sh` reported a
+        # clean tree while `format.sh --check` rejected it, which is how it was found.
+        if clang-format --style=file "$file" | diff -q "$file" - >/dev/null; then
             continue
         fi
 

@@ -38,7 +38,9 @@
 static sw_timer_t g_timeout_timer;
 
 /* The three scores as they were when the test started, so the board is left as it was found. */
-static uint32_t g_saved_scores[3];
+/* Every table, because the test clears every table: the run it plays is a normal-maze run, and part
+ * of what it checks is that the *other* two are left alone. */
+static uint32_t g_saved_scores[HIGH_SCORE_TABLE_COUNT][HIGH_SCORE_COUNT];
 
 static void prv_on_timeout(void)
 {
@@ -183,9 +185,12 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
         return false;
     }
 
-    for (uint8_t index = 0U; index < 3U; ++index)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        g_saved_scores[index] = high_score_get(index);
+        for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+        {
+            g_saved_scores[table][place] = high_score_get(table, place);
+        }
     }
 
     if (!high_score_reset())
@@ -202,7 +207,10 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
 
     if (prv_play_one_run(true, &ai_score, out_reason, in_reason_size))
     {
-        const uint32_t best_after_ai = high_score_get_best();
+        /* The table of the game that was played — the normal maze, which is what this scenario
+         * starts, and not the agent's own game. */
+        const uint32_t best_after_ai = high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE);
+        const uint32_t agents_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_AI);
 
         cli_print("  the AI's run scored %lu, the table holds %lu", (unsigned long)ai_score,
                   (unsigned long)best_after_ai);
@@ -218,6 +226,14 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
             (void)snprintf(out_reason, in_reason_size, "the AI's run of %lu reached the table",
                            (unsigned long)ai_score);
         }
+        else if (agents_table_after_ai != 0U)
+        {
+            /* A refusal that quietly filed the score under the agent's own game would look like a
+             * working lockout from the normal maze's side. It is not one: this was a normal-maze run
+             * that the player handed over, and it belongs in no table at all (FR-034/FR-041). */
+            (void)snprintf(out_reason, in_reason_size,
+                           "the AI's run of %lu was filed under the Pac-Man AI game instead", (unsigned long)ai_score);
+        }
         else
         {
             /* The other half: the table still works. A lower score than the AI's is not required
@@ -227,13 +243,13 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
             if (prv_play_one_run(false, &player_score, out_reason, in_reason_size))
             {
                 cli_print("  the player's run scored %lu, the table holds %lu", (unsigned long)player_score,
-                          (unsigned long)high_score_get_best());
+                          (unsigned long)high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE));
 
                 if (player_score == 0U)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run scored nothing");
                 }
-                else if (high_score_get_best() != player_score)
+                else if (high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE) != player_score)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run of %lu did not reach the table",
                                    (unsigned long)player_score);
@@ -252,11 +268,14 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
      * high scores. */
     (void)high_score_reset();
 
-    for (uint8_t index = 0U; index < 3U; ++index)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        if (g_saved_scores[index] != 0U)
+        for (uint8_t place = HIGH_SCORE_COUNT; place > 0U; --place)
         {
-            (void)high_score_offer(g_saved_scores[index]);
+            if (g_saved_scores[table][place - 1U] != 0U)
+            {
+                (void)high_score_offer(table, g_saved_scores[table][place - 1U]);
+            }
         }
     }
 

@@ -387,6 +387,26 @@ void test_a_second_run_starts_from_scratch(void)
     TEST_ASSERT_TRUE(msg_cell_bitmap_get(prv_state().has_pellet, STEPPED_X, STEPPED_Y));
 }
 
+/* FR-040: the normal maze is the arcade's own layout, and the game fetches it itself rather than
+ * being handed it — which is the only difference from #game_start_on_map and the only thing worth
+ * asserting here. Row by row, because a map that matched everywhere but one row would otherwise
+ * pass on a pellet count. */
+void test_a_run_on_the_normal_maze_plays_the_arcade_layout(void)
+{
+    playfield_map_t arcade;
+
+    playfield_get_arcade_map(&arcade);
+    game_start_on_normal_maze(&g_game);
+
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        TEST_ASSERT_EQUAL_STRING(arcade.rows[row], game_get_maze(&g_game)->rows[row]);
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_get_lives(&g_game));
+    TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_get_state(&g_game));
+}
+
 /* --- movement and timing (§10.1) ----------------------------------------- */
 
 void test_pacman_stands_still_until_a_direction_is_asked_for(void)
@@ -713,7 +733,7 @@ void test_an_ordinary_ghost_never_outruns_pacman_before_the_last_level(void)
         prv_start_run();
         prv_jump_to_level(level);
 
-        (void)snprintf(message, sizeof(message), "level %u: a plain ghost outruns Pacman", level);
+        (void)snprintf(message, sizeof(message), "level %u: a plain ghost outruns Pac-Man", level);
         TEST_ASSERT_GREATER_THAN_UINT32_MESSAGE(prv_pacman_period_ms(), prv_measure_ghost_period_ms(GHOST_PINKY),
                                                 message);
     }

@@ -69,6 +69,13 @@ void game_session_start(uint32_t in_maze_seed);
  */
 void game_session_start_on_map(const playfield_map_t* in_map);
 
+/*! \brief Begin a run on the normal maze — the arcade's own layout, every level (FR-040).
+ *
+ * One of the two games the menu offers, and the only one the AI may be handed control in. Takes no
+ * map on purpose: see #game_start_on_normal_maze for why nobody should be holding one.
+ */
+void game_session_start_on_normal_maze(void);
+
 /*! \brief Ask for a direction.
  *
  * A request rather than a move: the turn happens at the first cell where it becomes
@@ -98,6 +105,16 @@ bool game_session_set_ai_enabled(bool in_is_enabled);
 
 /*! \brief Whether the AI is playing right now. */
 bool game_session_is_ai_enabled(void);
+
+/*! \brief Tell the frame whether the endless mode is on, so the HUD can say so (FR-043).
+ *
+ * The session has no opinion about the loop — it does not restart anything — and passes this to the
+ * view. Whether a finished run is followed by another is the shell's, because the shell is what
+ * knows about screens.
+ *
+ * \param[in]       in_is_infinite: `true` while a finished run will be followed by another
+ */
+void game_session_set_infinite(bool in_is_infinite);
 
 /*! \brief Advance and draw the game if the frame is due.
  *

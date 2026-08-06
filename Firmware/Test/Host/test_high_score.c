@@ -32,8 +32,15 @@
  * implementation; this one has to be told the layout, so a change to it shows up as a
  * failure rather than as silence. */
 #define TEST_MAGIC_WORD  (0x5041434DUL)
-#define TEST_VERSION     (1U)
-#define TEST_WORD_COUNT  (6U) /* crc, magic, version, three scores */
+#define TEST_VERSION     (2U)
+#define TEST_WORD_COUNT  (3U + (HIGH_SCORE_TABLE_COUNT * HIGH_SCORE_COUNT)) /* crc, magic, version, the tables */
+
+/* The table the tests about *one* table use. Which one does not matter to them — what matters is
+ * that they name it, so the tests about several tables read as being about something else. */
+#define TEST_TABLE       (0U)
+
+/* A second one, for the tests that are about the tables being separate. */
+#define OTHER_TABLE      (1U)
 
 static uint8_t g_page[FLASH_BSP_BLOCK_SIZE];
 static uint8_t g_written_page[FLASH_BSP_BLOCK_SIZE];
@@ -129,10 +136,10 @@ void test_an_erased_page_reads_as_an_empty_table(void)
 
     for (uint8_t index = 0U; index < HIGH_SCORE_COUNT; ++index)
     {
-        TEST_ASSERT_EQUAL_UINT32(0U, high_score_get(index));
+        TEST_ASSERT_EQUAL_UINT32(0U, high_score_get(TEST_TABLE, index));
     }
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 }
 
 void test_a_stored_table_comes_back(void)
@@ -141,9 +148,9 @@ void test_a_stored_table_comes_back(void)
 
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(3000U, high_score_get(0U));
-    TEST_ASSERT_EQUAL_UINT32(2000U, high_score_get(1U));
-    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(2U));
+    TEST_ASSERT_EQUAL_UINT32(3000U, high_score_get(TEST_TABLE, 0U));
+    TEST_ASSERT_EQUAL_UINT32(2000U, high_score_get(TEST_TABLE, 1U));
+    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(TEST_TABLE, 2U));
 }
 
 /* Three ways stored bytes lie, and the same answer to all of them: an empty table beats a
@@ -154,7 +161,7 @@ void test_a_table_that_is_not_ours_is_discarded(void)
 
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 }
 
 void test_a_table_of_an_older_shape_is_discarded(void)
@@ -163,7 +170,7 @@ void test_a_table_of_an_older_shape_is_discarded(void)
 
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 }
 
 void test_a_table_that_does_not_check_out_is_discarded(void)
@@ -172,7 +179,7 @@ void test_a_table_that_does_not_check_out_is_discarded(void)
 
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 }
 
 void test_a_score_takes_its_place_and_pushes_the_rest_down(void)
@@ -181,11 +188,11 @@ void test_a_score_takes_its_place_and_pushes_the_rest_down(void)
 
     high_score_init();
 
-    TEST_ASSERT_TRUE(high_score_offer(2500U));
+    TEST_ASSERT_TRUE(high_score_offer(TEST_TABLE, 2500U));
 
-    TEST_ASSERT_EQUAL_UINT32(3000U, high_score_get(0U));
-    TEST_ASSERT_EQUAL_UINT32(2500U, high_score_get(1U));
-    TEST_ASSERT_EQUAL_UINT32(2000U, high_score_get(2U));
+    TEST_ASSERT_EQUAL_UINT32(3000U, high_score_get(TEST_TABLE, 0U));
+    TEST_ASSERT_EQUAL_UINT32(2500U, high_score_get(TEST_TABLE, 1U));
+    TEST_ASSERT_EQUAL_UINT32(2000U, high_score_get(TEST_TABLE, 2U));
 }
 
 void test_a_score_that_beats_nothing_changes_nothing(void)
@@ -195,9 +202,9 @@ void test_a_score_that_beats_nothing_changes_nothing(void)
     high_score_init();
     g_was_written = false;
 
-    TEST_ASSERT_FALSE(high_score_offer(500U));
+    TEST_ASSERT_FALSE(high_score_offer(TEST_TABLE, 500U));
     TEST_ASSERT_FALSE(g_was_written);
-    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(2U));
+    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(TEST_TABLE, 2U));
 }
 
 /* First to get there keeps the place, the way the cabinets behaved. */
@@ -207,8 +214,8 @@ void test_an_equal_score_does_not_displace_the_one_already_there(void)
 
     high_score_init();
 
-    TEST_ASSERT_FALSE(high_score_offer(1000U));
-    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(2U));
+    TEST_ASSERT_FALSE(high_score_offer(TEST_TABLE, 1000U));
+    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(TEST_TABLE, 2U));
 }
 
 /* Zero is how an empty place is written down, so storing it would make an empty table
@@ -217,21 +224,21 @@ void test_a_score_of_zero_is_never_stored(void)
 {
     high_score_init();
 
-    TEST_ASSERT_FALSE(high_score_offer(0U));
+    TEST_ASSERT_FALSE(high_score_offer(TEST_TABLE, 0U));
     TEST_ASSERT_FALSE(g_was_written);
-    TEST_ASSERT_FALSE(high_score_would_qualify(0U));
+    TEST_ASSERT_FALSE(high_score_would_qualify(TEST_TABLE, 0U));
 }
 
 void test_a_new_score_survives_a_power_cycle(void)
 {
     high_score_init();
 
-    TEST_ASSERT_TRUE(high_score_offer(1234U));
+    TEST_ASSERT_TRUE(high_score_offer(TEST_TABLE, 1234U));
 
     /* The stub keeps what was written, so re-initialising is the power cycle. */
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(1234U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(1234U, high_score_get_best(TEST_TABLE));
 }
 
 void test_qualifying_is_answered_without_changing_anything(void)
@@ -241,10 +248,10 @@ void test_qualifying_is_answered_without_changing_anything(void)
     high_score_init();
     g_was_written = false;
 
-    TEST_ASSERT_TRUE(high_score_would_qualify(1001U));
-    TEST_ASSERT_FALSE(high_score_would_qualify(1000U));
+    TEST_ASSERT_TRUE(high_score_would_qualify(TEST_TABLE, 1001U));
+    TEST_ASSERT_FALSE(high_score_would_qualify(TEST_TABLE, 1000U));
     TEST_ASSERT_FALSE(g_was_written);
-    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(2U));
+    TEST_ASSERT_EQUAL_UINT32(1000U, high_score_get(TEST_TABLE, 2U));
 }
 
 /* Erased rather than zeroed, so afterwards storage is in the state the very first boot
@@ -257,16 +264,82 @@ void test_a_reset_erases_the_page_and_the_table(void)
 
     TEST_ASSERT_TRUE(high_score_reset());
     TEST_ASSERT_TRUE(g_was_erased);
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 
     high_score_init();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best());
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(TEST_TABLE));
 }
+
+/* --- three tables, one page (FR-041) -------------------------------------- */
+
+/* The whole point of three tables: a run of one game leaves the other two alone. Without this the
+ * feature would be a table with three names for it. */
+void test_the_tables_do_not_see_each_other(void)
+{
+    high_score_init();
+
+    TEST_ASSERT_TRUE(high_score_offer(TEST_TABLE, 5000U));
+
+    TEST_ASSERT_EQUAL_UINT32(5000U, high_score_get_best(TEST_TABLE));
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(OTHER_TABLE));
+
+    /* And a score that would not get into the first table still gets into the empty second one —
+     * which a shared table, or a shared "would qualify", would refuse. */
+    TEST_ASSERT_TRUE(high_score_would_qualify(OTHER_TABLE, 100U));
+    TEST_ASSERT_TRUE(high_score_offer(OTHER_TABLE, 100U));
+
+    TEST_ASSERT_EQUAL_UINT32(5000U, high_score_get_best(TEST_TABLE));
+    TEST_ASSERT_EQUAL_UINT32(100U, high_score_get_best(OTHER_TABLE));
+}
+
+void test_every_table_survives_a_power_cycle(void)
+{
+    high_score_init();
+
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
+    {
+        (void)high_score_offer(table, (uint32_t)(1000U * (table + 1U)));
+    }
+
+    /* The page holds all three, so one write per offer must not lose the ones written before it. */
+    high_score_init();
+
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
+    {
+        TEST_ASSERT_EQUAL_UINT32((uint32_t)(1000U * (table + 1U)), high_score_get_best(table));
+    }
+}
+
+void test_a_reset_clears_every_table(void)
+{
+    high_score_init();
+
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
+    {
+        (void)high_score_offer(table, 4200U);
+    }
+
+    TEST_ASSERT_TRUE(high_score_reset());
+
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
+    {
+        TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best(table));
+    }
+}
+
+/* --- preconditions -------------------------------------------------------- */
 
 void test_asking_for_a_place_that_does_not_exist_trips_the_assert(void)
 {
     high_score_init();
 
-    ASSERT_PROBE_EXPECT(high_score_get(HIGH_SCORE_COUNT), "in_index < HIGH_SCORE_COUNT");
+    ASSERT_PROBE_EXPECT(high_score_get(TEST_TABLE, HIGH_SCORE_COUNT), "in_index < HIGH_SCORE_COUNT");
+}
+
+void test_asking_for_a_table_that_does_not_exist_trips_the_assert(void)
+{
+    high_score_init();
+
+    ASSERT_PROBE_EXPECT(high_score_get(HIGH_SCORE_TABLE_COUNT, 0U), "in_table < HIGH_SCORE_TABLE_COUNT");
 }

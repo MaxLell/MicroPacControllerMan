@@ -7,12 +7,14 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
-> **As-built, with one thing outstanding.** Everything below is implemented and, where it touches
-> hardware, verified on the board: `Services/neural_net`, `App/pacman_ai`, `Firmware/Training/`,
-> the takeover in the game, and both automatic on-target tests. **What is not yet met is FR-037**,
-> the play-strength figure — the first full run of the curriculum reached a factor of 5.3 over a
-> random policy where the requirement asks for 10, and §14 records what was measured about why and
-> what is being done. Figures marked **measured** are real; anything still a budget says so.
+> **As-built, and FR-037 is now met.** Everything below is implemented and, where it touches
+> hardware, verified on the board: `Services/neural_net`, `App/pacman_ai`, `Firmware/Training/`, the
+> takeover in the game, the agent's own game with its endless mode, and every automatic on-target
+> test. The play-strength figure was the last thing outstanding and is now **4,980 points on the
+> normal maze against 433.5 for a random policy — a factor of 11.5 where the requirement asks for
+> 10**. §14 is the whole record, including the honest part: a second training run from a different
+> starting population reached only 4,260, so the margin is not comfortable. Figures marked
+> **measured** are real; anything still a budget says so.
 
 The naming follows the milestone: this is Milestone 6. (The random-maze design document is
 called `M4-Random-Mazes.md` although it delivered Milestone 5 — a pre-existing mismatch, left
@@ -171,6 +173,19 @@ maze — rather than with the panel's refresh.
 
 ## 6 Fitness and the curriculum
 
+**Every episode is played on the normal maze** — the arcade's own layout — because that is the only
+maze the game will hand the AI control in (FR-040, [DEC-045](../PrePlanning/11-Decisions-and-As-Built.md)).
+That single sentence settles two things this section used to spend a lot of words on. A genome plays
+**one** episode per generation rather than twelve, since one fixed maze and a game with nothing
+random in it produce the same episode every time; and fitness is therefore a *measurement* rather
+than a draw, comparable across generations as well as within one. §14 is the record of what the
+noise it replaces was costing.
+
+It also raises the stage thresholds. On the normal maze a level is 244 pellets — 2,440 points while
+a power pellet is demoted to an ordinary one, 2,600 once it is not — and the old promotion bar of
+1,800 is reached by the *first* generation, by wandering. Both early stages promote at **2,200**
+now: almost the whole of level 1, which is what "can walk" and "can stay alive" ought to mean.
+
 Fitness is the run's score (FR-036), with one addition the transcript in the resources is emphatic
 about: **an idle agent must die.** Code Bullet's first stage killed a Pacman that ate nothing
 within a time limit, and without that an agent discovers that hiding in a corner beats playing.
@@ -202,11 +217,11 @@ game_config_t config;
 game_get_default_config(&config);      /* everything on: the game FR-001..029 describe */
 config.has_ghosts = false;             /* stage 1 */
 config.has_power_pellets = false;      /* stages 1 and 2 */
-game_start_configured(&game, seed, &config);
+game_start_on_map_configured(&game, &normal_maze, &config);
 ```
 
-`game_start` and `game_start_on_map` pass the defaults, so the firmware neither sets a config nor
-is affected by one existing. **Measured** after the change: flash **+288 bytes**, RAM **+0** (the
+`game_start`, `game_start_on_map` and `game_start_on_normal_maze` pass the defaults, so the firmware
+neither sets a config nor is affected by one existing. **Measured** after the change: flash **+288 bytes**, RAM **+0** (the
 two flags fit in padding `game_t` already had), 381 host unit tests green, both builds
 warning-free.
 
@@ -259,11 +274,17 @@ to drive one decision at a time, which is what recording and debugging want.
 
 ```c
 env_batch_t* env_create(uint32_t count);
-void         env_reset(env_batch_t*, const uint32_t* seeds);
+void         env_reset(env_batch_t*, const uint32_t* seeds, uint8_t stage, uint8_t maze);
 void         env_step(env_batch_t*, const uint8_t* relative_actions,
                       float* out_features, float* out_fitness_delta, uint8_t* out_done);
 void         env_destroy(env_batch_t*);
 ```
+
+`maze` is `ENV_MAZE_NORMAL` or `ENV_MAZE_GENERATED`, and the seeds are ignored for the former —
+there is one normal maze and every level of a run plays it. Training and FR-037 use the normal maze
+only; the generated path stays so that "how does this agent do on a maze nobody has ever played"
+remains a question that can be *asked* (`evaluate.py --maze generated`), even though nothing gates
+on the answer any more.
 
 The feature extraction lives on the **C** side of that line, not in Python — because it is the
 same code the firmware must run (FR-039). A Python re-implementation of the observation would be
@@ -360,8 +381,28 @@ enough, is an egocentric window with int8 activations, not a whole-maze net.
 
 ## 11 In the game
 
-The player-facing half is small and is fully specified by FR-030..034. Three notes on the
+The player-facing half is small and is fully specified by FR-030..034 and FR-040. Four notes on the
 mechanics:
+
+**The agent appears in two of the three games, and differently in each.** The menu asks which game to
+play (FR-040): `NORMAL MAZE` lets the player hand Pac-Man over mid-run and take him back (FR-030),
+`PAC-MAN AI` is the agent playing that same maze from the first frame with no way to take over
+(FR-042), and `RANDOM MAZE` does not offer it at all. `shell_toggle_ai` enforces all three in the
+*one place* the decision can be made once, for the same reason the joystick lock-out lives in
+`game_session_set_direction`: one door, so it holds however many devices are wired to it. A menu that
+says what the AI does and a button that does something else would be the menu lying.
+
+**The agent's game keeps its own high scores, and FR-034 narrowed because of it.** The lockout exists
+because an AI-assisted run would otherwise sit in a *person's* table; with a table per game
+(FR-041) that reason stops applying to the agent's own, and refusing there would leave one of the
+three tables permanently empty. So an AI-touched run of a person's game reaches no table at all —
+checked on the board, including that it is not quietly filed under the agent's game — and the agent's
+own game files into its own.
+
+**And it can be left running.** In its own game the board button toggles an endless mode (FR-043): a
+finished run starts the next one instead of returning to the menu, and the HUD says `LOOP`. It is a
+way to watch what the agent actually does over many runs rather than one, which is the difference
+between a score and a habit.
 
 **The user button has to learn about screens.** `App/app_main.c:138` currently routes
 `user_button_take_press()` straight into `shell_press_start()`, unconditionally. It has to become
@@ -386,17 +427,30 @@ the live flag rather than the sticky one.
    than the third: §14 shows the limit was fitness noise, and the features have not yet been given a
    fair test against a policy that was selected on ability rather than on luck. The linked projects
    got by with 8.
-3. **Whether one policy can play *generated* mazes at all.** Partly answered, and the answer so far
-   is encouraging rather than sufficient. A policy trained only on mazes it will never see again
-   reaches **2,270 points on twenty unseen mazes against 431 for a random policy** — so it does
-   generalise; it is simply not yet good enough (§14). The single-maze fallback the owner authorised
-   stays **unspent**, which is what this point asked for: it is not to be taken until generalisation
-   has been measured, and now it has been.
+3. ~~**Whether one policy can play *generated* mazes at all.**~~ **Closed, and by a change of
+   product rather than by an answer.** It was measured first: a policy trained only on mazes it would
+   never see again reached **2,270 points on twenty unseen mazes against 431 for a random policy**, so
+   it did generalise and was simply not good enough. Then the owner asked for both mazes to be
+   playable and for the AI to be offered in the arcade one only (FR-040,
+   [DEC-045](../PrePlanning/11-Decisions-and-As-Built.md)) — which spends the single-maze fallback
+   this point was keeping in reserve, deliberately and for a reason that is about the game rather
+   than about the training. The question is no longer one the product asks.
 
-## 13 The acceptance seed set
+## 13 The acceptance seed set — retired
 
-FR-037 is measured over **20 full runs on the generated mazes of seeds 1000 to 1019**, and the
-figure is the mean of their final scores.
+**Superseded by [DEC-045](../PrePlanning/11-Decisions-and-As-Built.md).** FR-037 is now measured on
+one full run of the **normal maze**, against twenty episodes of a uniform-random policy on the same
+maze, because that is the only maze the game hands the AI control in (FR-040). A score on twenty
+mazes the agent will never be handed control in answers nothing about the agent a player can switch
+on. The rule that training may not draw seeds 1000..1019 goes with it: there is nothing left for it
+to protect.
+
+The reasoning below is kept because the *shape* of it still applies to any acceptance set this
+project defines, and because `evaluate.py --maze generated` still uses this range when somebody asks
+the generalisation question by hand.
+
+FR-037 used to be measured over **20 full runs on the generated mazes of seeds 1000 to 1019**, the
+figure being the mean of their final scores.
 
 A contiguous range rather than a hand-picked list, deliberately. The maze generator decorrelates
 neighbouring seeds — `test_maze_gen.c` asserts exactly that — so a range is as varied as a list,
@@ -409,9 +463,11 @@ Twenty runs is enough for the comparison FR-037 asks for, since the bar is a fac
 random policy rather than a few per cent. It is **not** enough to claim a small improvement over
 another agent; a comparison that close needs a larger set and should say so at the time.
 
-The random-policy baseline is re-measured on the same seeds by the same harness (VT-UNIT-010)
-rather than quoted from this document — the 464.3-point figure here was taken over 329 episodes on
-other seeds and exists to justify the threshold, not to be compared against.
+The random-policy baseline is re-measured by the same harness (VT-UNIT-010) rather than quoted from
+this document — the 464.3-point figure here was taken over 329 episodes on generated mazes and
+exists to justify the threshold, not to be compared against. On the normal maze the same harness
+measures **433.5** over twenty episodes, which is close enough to leave FR-037's 4,600 where it is:
+the bar was set at ten times random, and ten times random has not moved.
 
 ## 14 Play strength: what was measured, and what is being done
 
@@ -458,6 +514,51 @@ was offered both cheaper alternatives — the single-maze fallback of §12 and l
 threshold, which the requirement itself marks tunable — and chose to keep the approach and the
 requirement and pay for the run.
 
-**If the bigger run does not close the gap**, the order to look in is: the features (§12 point 2),
-then the expectimax reference agent §2 keeps in reserve as a teacher, then the single-maze fallback.
-Not the threshold — that is the owner's to move, not this document's.
+### 14.1 What happened instead: the noise was removed rather than blurred
+
+That run was never made. The owner asked for something else first — both mazes playable, the AI
+offered in the arcade one only ([DEC-045](../PrePlanning/11-Decisions-and-As-Built.md), FR-040) — and
+it turns out to answer §14 as a side effect. Training now plays **one fixed maze** and the game has
+nothing random in it, so a genome's score is a measurement:
+
+| | 4 mazes | 12 mazes (planned) | the normal maze (now) |
+|---|---|---|---|
+| episodes per genome | 4 | 12 | **1** |
+| spread within one genome's fitness | 1,180..5,570 | narrower by ~√3 | **none — there is one episode** |
+| what selection is deciding on | mostly luck | mostly ability | **ability** |
+| cost of a generation | 1 × | ~3 × | **~1/4 ×** (measured: 11 s → 2 s at stage 3) |
+
+Twelve mazes would have *reduced* the noise at three times the cost. One fixed maze removes it at a
+quarter of it. That is not a cleverer idea than DEC-044's — it is a different product, and the
+cheaper measurement fell out of it.
+
+The starting point is measured rather than assumed. The agent the firmware ships — trained on
+generated mazes — plays the normal maze for **2,400 points** against **433.5** for a uniform-random
+policy on the same maze: a factor of 5.5, where FR-037 asks for 10, and the same gap the generated
+mazes showed. So the change of maze on its own buys nothing; what it buys is a fitness signal that
+can tell ability from luck, and generations cheap enough to use a lot of.
+
+### 14.2 What the retraining reached, and what it did not settle
+
+Two time-budgeted runs, differing only in `--seed` — which is now the draw of the *search* rather
+than of the mazes, since a run with the maze fixed has nothing else left to be lucky about:
+
+| run | budget | best score | vs. random | FR-037 |
+|---|---|---|---|---|
+| the shipped agent, for reference | — | 2,400 | 5.5× | not met |
+| `normal-seed1` | 90 min, 276 generations | **4,980** | **11.5×** | **met** |
+| `normal-seed2` | 75 min, 320 generations | 4,260 | 9.8× | not met |
+
+**FR-037 is met by the agent that ships** — seed 1's network, 35 nodes with 8 hidden and 19
+connections, 334 bytes of tables, verified on the board by VT-INT-024 against the host. It clears
+level 1 and dies in level 2.
+
+**And the second run says the margin is luck as much as method.** 4,260 against 4,980 from the same
+configuration and a different starting population is a spread of 15 %, straddling the threshold. So
+the honest reading is: removing the fitness noise raised the *achievable* score from 2,400 to
+somewhere around 4,500, and which side of 4,600 a given run lands on is not yet reliable. Two
+samples cannot say more than that, and this document is not going to.
+
+If a *reliable* margin is wanted rather than a passing one, the order to look in is unchanged: the
+features (§12 point 2), then the expectimax reference agent §2 keeps in reserve as a teacher. Not the
+threshold — that is the owner's to move, not this document's.

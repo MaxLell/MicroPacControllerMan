@@ -53,6 +53,21 @@ typedef enum
     ENV_STAGE_FULL = 3       /*!< The game as it ships                                */
 } env_stage_e;
 
+/*! \brief Which of the game's two mazes a run is played on.
+ *
+ * The shipped game offers both (FR-040), but the AI may only be handed control in the normal
+ * one — so #ENV_MAZE_NORMAL is where training and FR-037 belong, and the seeds passed alongside
+ * it are ignored: there is one normal maze and every level of a run plays it.
+ *
+ * #ENV_MAZE_GENERATED stays because the question "how does this agent do on a maze nobody has
+ * ever played" is still worth being able to ask, even though nothing gates on the answer any more.
+ */
+typedef enum
+{
+    ENV_MAZE_NORMAL = 0,   /*!< The arcade's own layout — the maze the AI plays (FR-040) */
+    ENV_MAZE_GENERATED = 1 /*!< A maze generated from the seed (FR-029)                  */
+} env_maze_e;
+
 /* ==========================================================================
  * env_api - public API
  * ========================================================================= */
@@ -84,10 +99,12 @@ void env_destroy(env_batch_t* inout_batch);
 /*! \brief Start every game afresh.
  *
  * \param[in,out]   inout_batch: the batch
- * \param[in]       in_seeds: one maze seed per game, `count` long
+ * \param[in]       in_seeds: one maze seed per game, `count` long; ignored when `in_maze` is
+ *                      #ENV_MAZE_NORMAL, and may then be `NULL`
  * \param[in]       in_stage: a \ref env_stage_e; anything else is treated as #ENV_STAGE_FULL
+ * \param[in]       in_maze: a \ref env_maze_e; anything else is treated as #ENV_MAZE_NORMAL
  */
-void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage);
+void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze);
 
 /*! \brief Describe every game.
  *
@@ -170,13 +187,14 @@ void env_use_random_policy(env_batch_t* inout_batch, uint32_t in_rng_seed);
  * visible rather than looking like a policy that stopped scoring.
  *
  * \param[in,out]   inout_batch: the batch, with a policy already installed
- * \param[in]       in_seeds: one maze seed per game, `count` long
+ * \param[in]       in_seeds: one maze seed per game, `count` long; ignored for #ENV_MAZE_NORMAL
  * \param[in]       in_stage: a \ref env_stage_e
+ * \param[in]       in_maze: a \ref env_maze_e
  * \param[out]      out_scores: final score of each game, `count` long, may be `NULL`
  * \param[out]      out_steps: decisions each game took, `count` long, may be `NULL`
  * \param[out]      out_levels: level each game reached, `count` long, may be `NULL`
  */
-void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint32_t* out_scores,
-             uint32_t* out_steps, uint8_t* out_levels);
+void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze,
+             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels);
 
 #endif /* ENV_API_H */
