@@ -409,6 +409,22 @@ run_training_in_docker() {
     require_docker
     build_docker_image
 
+    # The trainer loads this through ctypes and dies on the first line without it. Checked here
+    # rather than found out by a container that exits four seconds after being started detached,
+    # which is a night lost to a missing file.
+    if [ ! -f "$HOST_BUILD_DIR/libpacman_env.so" ]; then
+        fail "$HOST_BUILD_DIR/libpacman_env.so does not exist, and the trainer loads it."
+        {
+            echo "  Build it first — in the container, so that its paths are the container's:"
+            echo ""
+            echo "    ./dev.sh docker host"
+        } >&2
+
+        exit 2
+    fi
+
+    check_build_dir_belongs_here "$HOST_BUILD_DIR"
+
     if docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
         step "Removing the previous $TRAIN_CONTAINER container"
         docker rm -f "$TRAIN_CONTAINER" >/dev/null
