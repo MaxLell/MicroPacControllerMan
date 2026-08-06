@@ -52,12 +52,14 @@ A few items are structural/process requirements rather than automatically observ
 | FR-041 | High Scores per Game | VT-UNIT-012, VT-INT-025 (the lockout's other half), ott high_score |
 | FR-042 | Autonomous AI Game | VT-INT-027 |
 | FR-043 | Endless Mode | VT-INT-027 (that it switches), test_shell.c (that it restarts) |
+| FR-044 | Varied Timings | VT-UNIT-013, VT-INT-028 (that the source works on silicon) |
+| FR-045 | Random Source | VT-INT-028 |
 | FR-031 | AI Control Exclusivity | VT-INT-023 |
 | FR-032 | AI Takeover Indication | VT-INT-023 |
 | FR-033 | AI Control Persistence | VT-INT-023 |
 | FR-034 | AI Run Not Recorded | VT-INT-025 |
 | FR-035 | Observation Bounded by the Display | VT-UNIT-009 |
-| FR-036 | Score as the AI's Objective | VT-UNIT-010 |
+| FR-036 | The AI's Objective | VT-UNIT-010 |
 | FR-037 | AI Play Strength | VT-UNIT-010 |
 | FR-038 | Inference Only on the Target | Code review (no training code is linked into the target build — see gap note above) |
 | FR-039 | Host / Target Inference Equivalence | VT-UNIT-011 (host half), VT-INT-024 (target half) |

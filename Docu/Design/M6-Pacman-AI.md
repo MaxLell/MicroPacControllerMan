@@ -7,13 +7,13 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
-> **As-built, and FR-037 is now met.** Everything below is implemented and, where it touches
-> hardware, verified on the board: `Services/neural_net`, `App/pacman_ai`, `Firmware/Training/`, the
-> takeover in the game, the agent's own game with its endless mode, and every automatic on-target
-> test. The play-strength figure was the last thing outstanding and is now **4,980 points on the
-> normal maze against 433.5 for a random policy — a factor of 11.5 where the requirement asks for
-> 10**. §14 is the whole record, including the honest part: a second training run from a different
-> starting population reached only 4,260, so the margin is not comfortable. Figures marked
+> **As-built, with FR-037 outstanding again — and this time for an instructive reason.** Everything
+> below is implemented and, where it touches hardware, verified on the board: `Services/neural_net`,
+> `App/pacman_ai`, `Firmware/Training/`, the takeover in the game, the agent's own game with its
+> endless mode, and every automatic on-target test. The play-strength figure was met, briefly, at
+> **4,980 points on a single deterministic run**. Then the game's timings were randomised
+> ([DEC-047](../PrePlanning/11-Decisions-and-As-Built.md), FR-044) and the same network averaged
+> **2,197 over twenty runs**: it had memorised one trajectory. §14.3 is the record. Figures marked
 > **measured** are real; anything still a budget says so.
 
 The naming follows the milestone: this is Milestone 6. (The random-maze design document is
@@ -562,3 +562,32 @@ samples cannot say more than that, and this document is not going to.
 If a *reliable* margin is wanted rather than a passing one, the order to look in is unchanged: the
 features (§12 point 2), then the expectimax reference agent §2 keeps in reserve as a teacher. Not the
 threshold — that is the owner's to move, not this document's.
+
+### 14.3 The jitter took the requirement back, and was right to
+
+The owner then asked for the ghosts to be paced randomly (FR-044) — the house's dot counts, the
+scatter/chase phases, the frightened window, the idle timer, each moved by up to two seconds or half
+its nominal value. The same network, unchanged, was measured again:
+
+| | one deterministic run | twenty jittered runs |
+|---|---|---|
+| `normal-seed1`, the shipped table | **4,980** | **2,197** mean (1,680..3,130) |
+| uniform random, same game | 433.5 | 424.5 |
+| FR-037 | met | **not met**, factor 5.2 |
+
+**So the 4,980 was a trajectory, not a skill.** The agent had learned one sequence of turns that
+worked against ghosts leaving the house on exactly known dots; move those dots by two and it scores
+what it scored before any of this — about 2,200, which is where the generated-maze agent was as well.
+That is a more useful thing to know than a passing number, and it is only knowable because the game
+became stochastic. §14.2's worry about the margin was right and understated it.
+
+Two consequences, both taken:
+
+- **FR-037 is a mean over 20 runs again.** The single-episode form DEC-045 earned lasted an hour.
+- **The objective is reshaped** (FR-036): +500 a ghost on top of the score, and an episode ends at
+  the *first* life lost. The second is what makes dying cost anything at all — see
+  [DEC-047](../PrePlanning/11-Decisions-and-As-Built.md) for why a flat penalty per life is a
+  near-constant on a three-life run, and backwards on a run the idle rule ends.
+
+**The retraining is running at the time of writing.** What it has to beat is 2,197, and what it has to
+reach is 4,600.

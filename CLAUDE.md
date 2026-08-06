@@ -158,10 +158,11 @@ silently working around a wart.
 
 - **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
   **NEAT**, ported to the target as `const` weights, and offered in two of the three games the menu
-  now lists. Everything is built and everything that touches hardware is verified there. **FR-037 is
-  met**: 4,980 points on the normal maze against 433.5 for a random policy, a factor of 11.5 where
-  the requirement asks for 10. The margin is not comfortable, and [M6 §14](Docu/Design/M6-Pacman-AI.md)
-  says so — a second training run from a different starting population reached only 4,260.
+  now lists. Everything is built and everything that touches hardware is verified there.
+  **FR-037 is not met at the time of writing**, and it was: the agent that reached 4,980 on the
+  deterministic game averages **2,197** over twenty runs of the jittered one (DEC-047), because it had
+  memorised a trajectory rather than learned to play. Retraining against the jittered game, with the
+  reshaped objective, is what [M6 §14](Docu/Design/M6-Pacman-AI.md) records.
   - **The network that trains is the network that ships** (DEC-042). Training does *not* use
     neat-python's evaluator: a genome is flattened into the arrays `Services/neural_net` reads and
     the C side plays the whole episode, so there is exactly one implementation of inference in the
@@ -221,6 +222,25 @@ silently working around a wart.
     stick and the button the way `start` presses start, which is what makes VT-INT-026/027
     unattended.
 
+- **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
+  timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened
+  window, the idle timer — moves by up to 2 s **or half its nominal value, whichever is smaller**, so
+  the arcade's twentieth-of-a-second phases at level 5 keep their character instead of being replaced.
+  `Bsp/rng_bsp` is the source: the **RNG peripheral** on the target (registers, not the HAL — see the
+  conventions below), a **seeded xorshift** on the host so a training episode still replays (FR-114).
+  `maze_gen` keeps its own reproducible algorithm and takes only its *seed* from there, which is what
+  keeps a maze replayable. `ott rng` (VT-INT-028) proves on silicon that the words are neither
+  constant nor zero. The jitter is **off in the rules tests** — they assert exact timings — and has
+  three tests of its own.
+  - **It cost the AI its requirement, and that is the point.** The agent trained on the
+    deterministic game scored **4,980 on its one episode and 2,197 over twenty jittered runs**: it
+    had memorised a trajectory. FR-037 is a mean over 20 runs again, and the agent is being retrained
+    against the game it actually plays.
+  - **Training's objective is no longer the score** (FR-036): **+500 a ghost** on top of it, and an
+    episode ends at the **first** life lost. A flat penalty per life was rejected — a run ends
+    *because* its lives are gone, so it would be a near-constant, and on a run cut short by the idle
+    rule it would reward standing still.
+
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
@@ -241,6 +261,13 @@ python3 Test/run_ott.py pacman --port /dev/ttyACM0        # one by name; exit 0 
 ./dev.sh check                                           # format + unit tests + both builds
 ./dev.sh all                                             # build + flash + both OTT suites
 ./dev.sh install-hook                                    # format staged files + test on commit
+
+# Another machine, with only Docker installed (Firmware/docker/Dockerfile, Ubuntu 24.04 so the
+# tool versions are the verified ones). The repo is mounted, not copied; the container runs as
+# the host's user. NOT in the image: STM32CubeProgrammer (ST account) — mount the host's and set
+# PROGRAMMER=. Inside the container the trainer's Python is on PATH, so no Training/.venv.
+./dev.sh docker                                          # a shell in it
+./dev.sh docker check                                    # any dev.sh command inside it
 
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
@@ -325,9 +352,12 @@ program this part.
   `g_pin_map`. Do not call `HAL_GPIO_*` anywhere else.
 - **No tick arithmetic, no `millis()`.** `Services/delay` for blocking waits,
   `Services/sw_timer` for every timeout and periodic job.
-- **HAL over registers.** Direct register access needs a justifying comment; there is
-  exactly one today (`uart_bsp_read_character()` reads `RDR` — the HAL has no
-  non-blocking single-character read).
+- **HAL over registers.** Direct register access needs a justifying comment; there are
+  exactly two today. `uart_bsp_read_character()` reads `RDR` — the HAL has no non-blocking
+  single-character read. `rng_bsp.c` drives the RNG's three registers because the HAL's RNG
+  driver is **not compiled**: `HAL_RNG_MODULE_ENABLED` is commented out in the CubeMX export,
+  and enabling it would be a third hand edit to generated code of the kind a regeneration
+  discards (DEC-047).
 - **Adding an OTT test:** new `Firmware/Test/Target/scripts/ott_<name>.c/.h` + one row
   in `ott_scenarios.c` + the source in `CMakeLists.txt`; nothing else changes.
 - **Coding standard:** [c-code-style](https://github.com/MaxLell/c-code-style)
