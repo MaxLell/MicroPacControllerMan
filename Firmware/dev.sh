@@ -9,6 +9,11 @@
 #     ./dev.sh check       # formatting + unit tests + both builds, writing nothing
 #     ./dev.sh host        # build the host library, don't run anything
 #
+#   Another machine — Docker, and nothing else installed
+#     ./dev.sh docker      # a shell in the development image, this tree mounted
+#     ./dev.sh docker check # run any of the commands above inside it
+#     ./dev.sh docker-build # rebuild the image after editing docker/Dockerfile
+#
 #   Commit gate
 #     ./dev.sh install-hook # pre-commit: format the staged files, then run the unit tests
 #     ./dev.sh remove-hook  # take it back out
@@ -170,6 +175,86 @@ run_test() {
 cmd="${1:-all}"
 shift || true
 
+# --- Docker -----------------------------------------------------------------
+#
+# The image carries the toolchain; the tree stays on the host and is mounted. So an edit is an edit
+# on both sides, a build artefact belongs to the host user, and nothing has to be copied or rebuilt
+# into an image after a change.
+#
+# What the container cannot do is flash the board: STM32CubeProgrammer is behind an ST account and
+# cannot be fetched unattended, so the image does not have it. Mount the host's install and point
+# PROGRAMMER at it — see Firmware/README.md.
+DOCKER_IMAGE="micropac-dev"
+
+build_docker_image() {
+    local force=${1:-}
+
+    if [ "$force" != "--force" ] && docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    step "Building the $DOCKER_IMAGE image"
+
+    # The context is Firmware/ because the image copies Training/requirements.txt out of it — one
+    # list of what training needs, and it is the repository's.
+    docker build -f docker/Dockerfile -t "$DOCKER_IMAGE" .
+}
+
+run_in_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        # `fail` prints and returns — every other caller follows it with its own exit, and so does
+        # this one. Without the exit the next line reports "docker: command not found" on top of a
+        # perfectly good message.
+        fail "docker is not installed. See the Docker section of README.md."
+        exit 2
+    fi
+
+    build_docker_image
+
+    # `--user` with the host's ids is what keeps a file written in the container owned by whoever ran
+    # it. The image has no matching passwd entry and does not need one: HOME is /tmp, which is
+    # writable for any uid, and that is all ruby and python want.
+    # The **repository root** is mounted, not `Firmware/`: `.git` lives one level up, so anything
+    # git-shaped — `install-hook`, a commit, `git describe` — needs to see it, and the documents the
+    # sources cross-reference are up there too. The working directory is `Firmware/`, which is where
+    # every command in this file expects to be.
+    local -a arguments=(
+        --rm
+        --user "$(id -u):$(id -g)"
+        --volume "$PWD/..:/work"
+        --workdir /work/Firmware
+    )
+
+    # Interactive only when there is a terminal, so `./dev.sh docker check` works from a script or a
+    # CI job as well as from a keyboard.
+    if [ -t 0 ]; then
+        arguments+=(--interactive --tty)
+    fi
+
+    # The host application opens a window. Handed through when there is a display to hand through,
+    # and silently skipped when there is not — building and testing need no X server.
+    if [ -n "${DISPLAY:-}" ] && [ -d /tmp/.X11-unix ]; then
+        arguments+=(--env "DISPLAY=$DISPLAY" --volume /tmp/.X11-unix:/tmp/.X11-unix)
+    fi
+
+    # The serial console, when the board is plugged in: that is all `run_ott.py` needs, and it is
+    # what makes the on-target tests runnable from in here once the programmer is reachable too.
+    local port
+    port=$(detect_port || true)
+
+    if [ -n "$port" ] && [ -e "$port" ]; then
+        arguments+=(--device "$port:$port")
+    fi
+
+    # Whatever the caller asked for, or a shell. `dev.sh` is re-entered inside the container rather
+    # than a command being duplicated here, so `docker check` and `check` are the same job.
+    if [ "$#" -eq 0 ]; then
+        docker run "${arguments[@]}" "$DOCKER_IMAGE" bash
+    else
+        docker run "${arguments[@]}" "$DOCKER_IMAGE" ./dev.sh "$@"
+    fi
+}
+
 case "$cmd" in
     build) do_build ;;
     host) do_host_build ;;
@@ -177,6 +262,8 @@ case "$cmd" in
     test) do_test ;;
     check) do_check ;;
     format) ./format.sh "$@" ;;
+    docker) run_in_docker "$@" ;;
+    docker-build) build_docker_image --force ;;
     pre-commit) do_pre_commit ;;
     install-hook) install_hook ;;
     remove-hook) remove_hook ;;
@@ -190,11 +277,14 @@ case "$cmd" in
         run_test manual
         ;;
     -h | --help | help)
-        sed -n '2,35p' "$0" | sed 's|^# \{0,1\}||'
+        # Every comment line of the header, however long it grows: a fixed line range was truncating
+        # the last paragraph mid-sentence the first time a command was added to it.
+        awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
         ;;
     *)
         fail "Unknown command: $cmd"
         echo "Try: test | format | check | host | build | flash | install-hook |" >&2
+        echo "     docker | docker-build |" >&2
         echo "     all | suite | manual | display_id | display_test | joystick |" >&2
         echo "     joystick_dot | animation | user_button" >&2
         exit 2

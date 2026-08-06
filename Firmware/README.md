@@ -19,6 +19,9 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 
 ## Toolchain
 
+**Or skip all of it and use the container** — see [Docker](#docker) below. On another machine that is
+the shorter road: `./dev.sh docker` and you are building.
+
 ```
 sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
 ```
@@ -97,6 +100,63 @@ interchangeable and `Services/` never learns which one it got. Prefer this over
 `#ifdef`s inside a module — the only conditional compilation left is where a platform
 genuinely lacks the concept, such as `retain_ram`'s `.noinit` section, which no host
 process has.
+
+## Docker
+
+For a second machine, or for not installing any of the above:
+
+```
+./dev.sh docker              # a shell in the image, this repository mounted
+./dev.sh docker check        # formatting + unit tests + both builds, inside it
+./dev.sh docker-build        # rebuild the image after editing docker/Dockerfile
+```
+
+The image is `Firmware/docker/Dockerfile`, built on **Ubuntu 24.04 on purpose**: every tool version
+this project has been verified against is the one noble packages — gcc-arm-none-eabi 13.2.1,
+cmake 3.28.3, clang-format 18, ruby 3.2, SDL2 2.30 — so `apt-get install` reproduces the verified
+toolchain rather than approximating it. Ceedling is pinned to 1.1.1, the version the suite has been
+run against throughout, because Ceedling generates the mocks and the runners and a different version
+is a different test build.
+
+**The repository is mounted, not copied.** An edit on the host is an edit in the container, and a
+build artefact belongs to whoever ran the command: `dev.sh docker` passes the host's user id
+through. The repository *root* is mounted at `/work` and the working directory is `/work/Firmware`,
+because `.git` lives a level above the firmware and `install-hook` needs it.
+
+The trainer's Python is in the image, at `/opt/venv` and first on `PATH`. So inside the container
+there is no `Training/.venv` to create and the commands are plain `python3`:
+
+```
+python3 Training/train.py
+python3 Training/evaluate.py
+```
+
+### What the container cannot do
+
+**Flashing.** `STM32_Programmer_CLI` comes from STM32CubeProgrammer, which is behind an ST account
+and cannot be fetched unattended, so the image does not have it. Mount the host's install and point
+`dev.sh` at it — it already takes the override:
+
+```
+docker run --rm -it     --user "$(id -u):$(id -g)"     --volume "$PWD/..:/work" --workdir /work/Firmware     --volume /opt/st:/opt/st:ro     --device /dev/ttyACM0 --volume /dev/bus/usb:/dev/bus/usb     --env PROGRAMMER=/opt/st/stm32cubeprg/bin/STM32_Programmer_CLI     micropac-dev ./dev.sh suite
+```
+
+`--device /dev/ttyACM0` is the serial console and is enough for `run_ott.py` on its own;
+`/dev/bus/usb` is what the programmer needs to reach the ST-LINK. `./dev.sh docker` adds the serial
+device for you when a board is plugged in, and nothing else — the USB bus and somebody else's
+`/opt` are not things it should mount behind your back.
+
+**The window, unless you hand it a display.** `pacman_host_app` opens an SDL window.
+`./dev.sh docker` passes `DISPLAY` and `/tmp/.X11-unix` through when there is a display to pass, so
+under X11 it works; under Wayland you will need `xhost` or an Xwayland socket. Building and testing
+need no display at all.
+
+> **Not yet verified.** The machine this was written on has no Docker installed, so the image has
+> never been built. Everything in it is either a package whose exact version is installed and
+> working on that machine, or a line of the same `dev.sh` the host uses — but "should work" is not
+> "does", and the first `./dev.sh docker check` on a machine with Docker is what will say. If it
+> fails, the likely places are the two the author could not exercise: the `gem install` and the
+> `pip install`, both of which want a network at build time.
 
 ## On-Target Tests (OTT)
 
