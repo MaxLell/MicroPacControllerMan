@@ -19,6 +19,11 @@
 #     ./dev.sh adopt-weights path/to/other.json # a campaign run's winner
 #     ./dev.sh adopt-weights --force ...        # adopt one that does not meet FR-037
 #
+#   Training in the container, detached — survives the terminal
+#     ./dev.sh docker-train        # the campaign, in the background, logs followed
+#     ./dev.sh docker-train --fresh # ...after throwing away previous winners
+#     ./dev.sh docker-train-stop   # stop it
+#
 #   Commit gate
 #     ./dev.sh install-hook # pre-commit: format the staged files, then run the unit tests
 #     ./dev.sh remove-hook  # take it back out
@@ -380,6 +385,106 @@ require_docker() {
     exit 2
 }
 
+TRAIN_CONTAINER="micropac-train"
+
+# The campaign, detached, so that closing the terminal does not end the night.
+#
+# Wrapped rather than written out in the README for two reasons a person hits in that order: a
+# container of this name left over from last time makes `docker run` refuse, and a winner file left
+# over from last time makes the campaign *skip* that run — which shortens the night without looking
+# like anything went wrong.
+run_training_in_docker() {
+    local fresh=""
+    local keep=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --fresh) fresh=yes ;;
+            --keep) keep=yes ;;
+            *) fail "Unknown option for docker-train: $1"; exit 2 ;;
+        esac
+        shift
+    done
+
+    require_docker
+    build_docker_image
+
+    if docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
+        step "Removing the previous $TRAIN_CONTAINER container"
+        docker rm -f "$TRAIN_CONTAINER" >/dev/null
+    fi
+
+    # A run whose winner exists is measured rather than repeated — deliberate, and what makes a
+    # campaign resumable after a reboot. It is also the thing that silently halves a night when the
+    # leftovers were not meant to be kept, so it is said out loud either way.
+    local -a leftovers=()
+    if [ -d Training/campaign ]; then
+        mapfile -t leftovers < <(find Training/campaign -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null | sort)
+    fi
+
+    if [ "${#leftovers[@]}" -gt 0 ] && [ "$keep" != yes ]; then
+        if [ "$fresh" = yes ]; then
+            step "Throwing away ${#leftovers[@]} previous winner(s): ${leftovers[*]}"
+            rm -f Training/campaign/*.json
+        else
+            fail "Training/campaign already holds ${#leftovers[@]} winner(s): ${leftovers[*]}"
+            {
+                echo "  Those runs will be *measured, not trained* — which is what makes a campaign"
+                echo "  resumable, and what shortens a night when you did not mean it. Either keep"
+                echo "  them on purpose:"
+                echo ""
+                echo "    ./dev.sh docker-train --keep"
+                echo ""
+                echo "  ...or start over:"
+                echo ""
+                echo "    ./dev.sh docker-train --fresh"
+            } >&2
+            exit 2
+        fi
+    fi
+
+    local repository_root
+    repository_root=$(cd .. && pwd)
+
+    local uid=${SUDO_UID:-$(id -u)}
+    local gid=${SUDO_GID:-$(id -g)}
+
+    step "Starting the campaign in $TRAIN_CONTAINER"
+
+    docker run -d --name "$TRAIN_CONTAINER" \
+        --user "$uid:$gid" \
+        --volume "$repository_root:/work" \
+        --workdir /work/Firmware \
+        "$DOCKER_IMAGE" python3 Training/campaign.py >/dev/null
+
+    echo ""
+    echo "  Follow it:  ./dev.sh docker-train        (or docker logs -f $TRAIN_CONTAINER)"
+    echo "  Stop it:    ./dev.sh docker-train-stop"
+    echo "  Read it:    Training/campaign/summary.md, rewritten after every run"
+    echo ""
+
+    # Straight into the log, so the first thing seen is the campaign saying when it will be done.
+    docker logs -f "$TRAIN_CONTAINER"
+}
+
+stop_training_in_docker() {
+    require_docker
+
+    if ! docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
+        fail "There is no $TRAIN_CONTAINER container."
+        exit 2
+    fi
+
+    step "Stopping $TRAIN_CONTAINER"
+
+    # Thirty seconds rather than the default ten: nothing needs them, but a trainer mid-write of a
+    # winner file should be allowed to finish it.
+    docker stop -t 30 "$TRAIN_CONTAINER" >/dev/null
+
+    echo "Stopped. Nothing is lost — train.py writes its winner on every improvement, and"
+    echo "'./dev.sh docker-train' measures rather than repeats a run whose winner is on disk."
+}
+
 run_in_docker() {
     require_docker
 
@@ -450,6 +555,8 @@ case "$cmd" in
     format) ./format.sh "$@" ;;
     adopt-weights) do_adopt_weights "$@" ;;
     docker) run_in_docker "$@" ;;
+    docker-train) run_training_in_docker "$@" ;;
+    docker-train-stop) stop_training_in_docker ;;
     docker-build) build_docker_image --force ;;
     pre-commit) do_pre_commit ;;
     install-hook) install_hook ;;
@@ -471,7 +578,8 @@ case "$cmd" in
     *)
         fail "Unknown command: $cmd"
         echo "Try: test | format | check | host | build | flash | install-hook |" >&2
-        echo "     docker | docker-build | adopt-weights |" >&2
+        echo "     docker | docker-build | docker-train | docker-train-stop |" >&2
+        echo "     adopt-weights |" >&2
         echo "     all | suite | manual | display_id | display_test | joystick |" >&2
         echo "     joystick_dot | animation | user_button" >&2
         exit 2

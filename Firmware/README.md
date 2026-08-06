@@ -207,16 +207,19 @@ derived from them.
 Detached, so it survives the terminal:
 
 ```
-docker run -d --name micropac-train \
-    --user "$(id -u):$(id -g)" \
-    -v "$PWD/..:/work" -w /work/Firmware \
-    micropac-dev python3 Training/campaign.py
-docker logs -f micropac-train
+./dev.sh docker-train           # start it, then follow the log
+./dev.sh docker-train --fresh   # ...after throwing away previous winners
+./dev.sh docker-train-stop      # stop it
 ```
 
-**To stop it:** `docker stop -t 30 micropac-train`. Nothing is lost — `train.py` writes its winner on
-every improvement rather than at the end — and the campaign is resumable, so a run whose winner file
-already exists is measured rather than repeated.
+That is a wrapper for one `docker run -d`, and it exists for the two things a person hits in this
+order. A container of that name left over from last time makes `docker run` refuse outright — plain
+enough. A **winner file** left over from last time makes the campaign *skip* that run, which is what
+makes a campaign resumable after a reboot and also what quietly halves a night when the leftovers
+were not meant to be kept. So it stops and says which files it found, and takes `--fresh` or `--keep`
+rather than guessing.
+
+Stopping loses nothing: `train.py` writes its winner on every improvement rather than at the end.
 
 Outside a container the order matters, and there is a trap in it:
 
