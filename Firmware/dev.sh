@@ -66,8 +66,40 @@ HOOK_PATH="../.git/hooks/pre-commit"
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; }
 
+# A build directory belongs to the path it was configured at.
+#
+# CMake writes the source path into CMakeCache.txt as an absolute one, so a `build/` configured on
+# the host and then used inside the container — where the same tree is /work/Firmware — stops with
+# "the current CMakeCache.txt is different than the directory where CMakeCache.txt was created",
+# which is accurate and reads like the tree is broken. It is not: the build directory is simply
+# somebody else's. Said here in one sentence, with the fix, rather than left to CMake.
+check_build_dir_belongs_here() {
+    local directory=$1
+    local cache="$directory/CMakeCache.txt"
+    local configured_at
+
+    [ -f "$cache" ] || return 0
+
+    configured_at=$(sed -n 's|^CMAKE_HOME_DIRECTORY:INTERNAL=||p' "$cache" | head -1)
+
+    [ -n "$configured_at" ] && [ "$configured_at" != "$PWD" ] || return 0
+
+    fail "$directory was configured for $configured_at, and this is $PWD."
+    {
+        echo "  A build directory carries the absolute path it was configured at, so one made on the"
+        echo "  host cannot be used in the container or the other way round. Throw it away:"
+        echo ""
+        echo "    rm -rf $directory"
+        echo ""
+        echo "  Nothing is lost — it is all regenerated, and the two can coexist no other way."
+    } >&2
+
+    exit 2
+}
+
 do_build() {
     step "Build (target)"
+    check_build_dir_belongs_here "$BUILD_DIR"
     if [ ! -d "$BUILD_DIR" ]; then
         cmake -B "$BUILD_DIR" -G "Unix Makefiles"
     fi
@@ -76,6 +108,7 @@ do_build() {
 
 do_host_build() {
     step "Build (host)"
+    check_build_dir_belongs_here "$HOST_BUILD_DIR"
     if [ ! -d "$HOST_BUILD_DIR" ]; then
         cmake -B "$HOST_BUILD_DIR" -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
     fi

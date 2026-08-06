@@ -131,6 +131,14 @@ python3 Training/train.py
 python3 Training/evaluate.py
 ```
 
+### One build directory per path
+
+`build/`, `build-host/` and `build-test/` carry the absolute path they were configured at, so a
+directory made on the host cannot be used inside the container — the tree is `/work/Firmware` in
+there — or the other way round. `dev.sh` notices and says so with the fix, which is to delete the
+directory; nothing is lost, it is all regenerated. If you switch between the two often, keep the
+habit of `rm -rf build build-host build-test` when you cross over, or simply work in one of them.
+
 ### If it says the daemon cannot be reached
 
 ```
