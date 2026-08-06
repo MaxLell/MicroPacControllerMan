@@ -47,10 +47,6 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _OUT_DIR = os.path.join(_HERE, "campaign")
 _PYTHON = sys.executable
 
-#: What the whole campaign may take, with a little spare, so that a run which turns out slower than
-#: expected eats its own slice rather than the next one's.
-CAMPAIGN_HOURS = 4.0
-
 #: One entry per run. `hours` is that run's slice; `args` goes to train.py.
 #:
 #: Two runs of one configuration on two draws, because a single run cannot tell a good
@@ -70,6 +66,18 @@ RUNS = [
         "what": "the same again from a different starting population",
     },
 ]
+
+#: Spare on top of the runs' own budgets, so that a run which overruns eats it rather than the next
+#: run's slice. Half an hour is generous: `train.py --max-seconds` stops between generations, so the
+#: worst overrun is one generation.
+CAMPAIGN_SLACK_HOURS = 0.5
+
+#: What the whole campaign may take. **Derived**, not written down, because it used to be both: a
+#: ceiling of its own that had to be dragged along whenever a run's `hours` changed, and silently
+#: clamped the runs when it was not — the second run simply did not happen. Now there is one place to
+#: edit, which is `hours` above. `CAMPAIGN_HOURS` in the environment still overrides it, for "be done
+#: by breakfast whatever the runs say".
+CAMPAIGN_HOURS = float(os.environ.get("CAMPAIGN_HOURS", sum(run["hours"] for run in RUNS) + CAMPAIGN_SLACK_HOURS))
 
 #: How many cores to evolve on. Unset means every one `train.py` can see, which is what you want on a
 #: machine whose whole job this is — a container on a big host sees all of them. Set `WORKERS` to
@@ -188,6 +196,12 @@ def main() -> int:
     os.makedirs(_OUT_DIR, exist_ok=True)
     deadline = time.monotonic() + (CAMPAIGN_HOURS * 3600.0)
     rows = []
+
+    # Said at the start, because the one question anybody has about a campaign is when it will be
+    # done, and it is answerable from the configuration rather than by watching.
+    _log(f"{len(RUNS)} run(s), {sum(run['hours'] for run in RUNS):.2f} h of training, "
+         f"{CAMPAIGN_HOURS:.2f} h ceiling — expect to be finished around "
+         f"{time.strftime('%H:%M', time.localtime(time.time() + (CAMPAIGN_HOURS * 3600.0)))}")
 
     for baseline in BASELINES:
         if not os.path.exists(baseline["path"]):
