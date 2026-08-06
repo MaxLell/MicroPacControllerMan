@@ -101,9 +101,9 @@ def _play(task):
     Returns the *fitness* alongside the raw figures, so that what selection sees and what a log line
     reports come out of one place.
     """
-    flat_net, seeds, stage, library_path = task
+    flat_net, seeds, stage, library_path, ends_at_first_death = task
     env = _worker_env(len(seeds), library_path)
-    env.set_episode_ends_at_first_death(True)
+    env.set_episode_ends_at_first_death(ends_at_first_death)
     env.set_net(flat_net)
     scores, steps, levels, ghosts = env.run(seeds, stage, MAZE_NORMAL)
 
@@ -149,7 +149,8 @@ class Trainer:
 
         flat = []
         for genome_id, genome in genomes:
-            flat.append((net.from_genome(genome, config), seeds, self.stage, self.arguments.library))
+            flat.append((net.from_genome(genome, config), seeds, self.stage, self.arguments.library,
+                         self.arguments.episode == "one-life"))
 
         if self.pool is not None:
             results = self.pool.map(_play, flat, chunksize=1)
@@ -224,7 +225,7 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "node_keys": flat_net.node_keys,
         "training": {**report, "population": arguments.population_size, "maze": "normal",
                      "seed": arguments.seed, "episodes": arguments.episodes,
-                     "ghost_bonus": GHOST_BONUS, "ends_at_first_death": True},
+                     "ghost_bonus": GHOST_BONUS, "episode": arguments.episode},
     }
 
     with open(path, "w") as handle:
@@ -238,6 +239,8 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--episodes", type=int, default=EPISODES_PER_GENOME,
                         help="episodes each genome is scored on per generation")
+    parser.add_argument("--episode", choices=["one-life", "whole-run"], default="one-life",
+                        help="stop an episode at the first death, or play the run out as FR-037 does")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
     parser.add_argument("--seed", type=int, default=1,
@@ -315,7 +318,8 @@ def main(argv: Sequence[str]) -> int:
             promote_at = entry["promote_at"]
 
             print(f"\n=== stage {entry['stage']}: {entry['what']} "
-                  f"({generations} generations max, {arguments.workers} workers) ===", flush=True)
+                  f"({generations} generations max, {arguments.workers} workers, "
+                  f"{arguments.episode} episodes) ===", flush=True)
 
             # Run a generation at a time so that the stage can end the moment it is learned. `run`
             # would otherwise only come back when the whole cap is spent.

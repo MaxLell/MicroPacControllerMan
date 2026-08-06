@@ -197,6 +197,41 @@ need no display at all.
 > fails, the likely places are the two the author could not exercise: the `gem install` and the
 > `pip install`, both of which want a network at build time.
 
+## Training overnight, and stopping it
+
+`Training/campaign.py` runs the configured runs one after another and writes
+`Training/campaign/summary.md` after each. It says at the start when it expects to be finished. The
+only thing to edit for a longer or shorter night is each run's `hours`; the campaign's ceiling is
+derived from them.
+
+Detached, so it survives the terminal:
+
+```
+docker run -d --name micropac-train \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD/..:/work" -w /work/Firmware \
+    micropac-dev python3 Training/campaign.py
+docker logs -f micropac-train
+```
+
+**To stop it:** `docker stop -t 30 micropac-train`. Nothing is lost — `train.py` writes its winner on
+every improvement rather than at the end — and the campaign is resumable, so a run whose winner file
+already exists is measured rather than repeated.
+
+Outside a container the order matters, and there is a trap in it:
+
+```
+pkill -f "[c]ampaign.py" && sleep 2 && pkill -f "[t]rain.py --out"
+```
+
+The campaign first. `pkill -f train.py` on its own matches the pool workers as well as the parent,
+kills them, and leaves the parent waiting in `pool.map` for results that will never arrive.
+
+**More cores do not finish sooner.** The budget is wall-clock: `train.py --max-seconds` stops between
+generations, so a bigger machine spends the same night doing more generations. That is deliberate — a
+generation is not a fixed amount of work, since a better agent lives longer and its episodes take
+longer.
+
 ## After training: taking a winner into the firmware
 
 Training produces `Training/winner.json` (or a file per run under `Training/campaign/`, which is not

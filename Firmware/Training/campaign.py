@@ -52,18 +52,27 @@ _PYTHON = sys.executable
 #: Two runs of one configuration on two draws, because a single run cannot tell a good
 #: configuration from a lucky one — and with the maze fixed, the draw is the only thing left that
 #: can be lucky.
+#: One entry per run. `hours` is that run's slice; `args` goes to train.py. The ceiling below is
+#: derived from these, so `hours` is the only thing to edit for a longer or shorter campaign.
+#:
+#: The two runs differ in **what is being optimised**, not in the draw. Varying the seed answers "was
+#: that lucky", and that is already answered: the same configuration gave 4,980 and 4,260 on the
+#: deterministic game. What is open is whether ending an episode at the first death — which is how
+#: FR-036 makes dying cost something — trains the wrong game, because FR-037 measures a run with
+#: three lives and the first agent trained that way came out *below* the one it was to replace.
+#: One run each way answers it; two seeds of one way would not.
 RUNS = [
     {
-        "name": "normal-seed1",
-        "hours": 2.0,
-        "args": ["--seed", "1"],
-        "what": "the jittered game, one life per episode, a bonus per ghost (FR-036/FR-044)",
+        "name": "one-life",
+        "hours": 7.5,
+        "args": ["--seed", "1", "--episode", "one-life"],
+        "what": "an episode ends at the first death — FR-036 as it stands",
     },
     {
-        "name": "normal-seed2",
-        "hours": 1.5,
-        "args": ["--seed", "2"],
-        "what": "the same again from a different starting population",
+        "name": "whole-run",
+        "hours": 7.5,
+        "args": ["--seed", "1", "--episode", "whole-run"],
+        "what": "an episode is a whole three-life run, which is what FR-037 measures",
     },
 ]
 
