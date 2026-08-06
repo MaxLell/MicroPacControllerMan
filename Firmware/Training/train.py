@@ -8,16 +8,27 @@ Nothing here decides how the game behaves or how a network is evaluated — both
 the same C the board runs (FR-039). This file is the loop around them: which rules a generation
 plays under, which mazes it plays, and which genome is kept.
 
-One choice is worth knowing about before reading the code.
+Four things about it are worth knowing before reading the code.
 
-**Every genome plays one episode, on the normal maze.** The game offers two mazes and the AI may
-only be handed control in the normal one (FR-040), so that is the only maze worth training on. It is
-also the whole of the fitness noise gone: one fixed maze and a game with nothing random in it means
-a genome's score is a *measurement* rather than a draw, and fitness is comparable across generations
-as well as within one. That is what DEC-044 measured as the limit on play strength, and it used to
-cost twelve episodes per genome to blur rather than remove.
+**The maze is the normal one, always.** The AI is only ever handed control there (FR-040/FR-042), so
+it is the only maze worth training on.
 
-See Docu/Design/M6-Pacman-AI.md §2, §6 and §7.
+**Fitness is not the score.** It is the score *plus* a bonus for every ghost eaten (FR-036): the
+game's own 200/400/800/1600 is the same currency as the pellets that produced it, so the score alone
+cannot say "this was worth more". FR-037 still measures the plain score, and `evaluate.py` does not
+know this bonus exists.
+
+**An episode ends at the first death** by default, where a run has three lives — that is what makes
+dying cost anything. `--episode whole-run` trains on what FR-037 measures instead, and comparing the
+two is an experiment rather than a setting.
+
+**A genome is scored on twelve episodes, not one.** FR-044 jitters the game's timings, so a run is a
+draw rather than a measurement. That noise is not a detail: it is what NEAT's structural search reads
+when it decides whether a deletion cost anything, and a winner that pruned itself to six connections
+is what happens when it cannot tell. `--no-deletion` forbids the pruning outright, which is the other
+way at the same problem.
+
+See Docu/Design/M6-Pacman-AI.md §2, §6, §7 and §14.
 """
 
 import argparse
@@ -49,9 +60,15 @@ GHOST_BONUS = 500
 ACCEPTANCE_SEEDS = range(1000, 1020)
 
 #: Episodes one genome is scored on. The game's timings are jittered (FR-044), so one episode is a
-#: draw; six cuts the spread by about half. They are also cheap now, because an episode ends at the
-#: first death instead of after three lives.
-EPISODES_PER_GENOME = 6
+#: draw, and the noise in a mean falls with the square root of how many you take.
+#:
+#: **Twelve, and this is the lever a long night actually converts into quality.** The measured failure
+#: is not too little search — it is selection deciding on noise: NEAT's winner pruned itself to six
+#: connections because a deletion that costs real ability is invisible when the same network scores
+#: 1,500 on one run and 3,100 on the next. Six episodes halve that spread against one; twelve halve it
+#: again against six. Doubling the episodes doubles the cost of a generation and buys a signal that
+#: selection can actually act on, which is the better trade whenever there are hours to spend.
+EPISODES_PER_GENOME = 12
 
 #: The curriculum of M6 §6. A stage ends when the best genome's fitness reaches `promote_at` or
 #: when `generations` are spent, whichever comes first — the cap is there so that a stage which
@@ -66,8 +83,9 @@ EPISODES_PER_GENOME = 6
 #: provisional bar for "gets most of the way through a level without dying", and the log is what will
 #: say whether it was set anywhere near right.
 #:
-#: Stage 3's cap is high because time, not generations, is what a campaign budgets: a generation
-#: costs one episode per genome now instead of twelve, and `--max-seconds` is what stops the run.
+#: Stage 3's cap is high because time, not generations, is what a campaign budgets — a generation is
+#: not a fixed amount of work, since a better agent lives longer — and `--max-seconds` is what
+#: actually stops a run.
 CURRICULUM = [
     {"stage": STAGE_MAZE_ONLY, "generations": 60, "promote_at": 2200.0, "what": "walk and eat"},
     {"stage": STAGE_GHOSTS, "generations": 200, "promote_at": 1200.0, "what": "stay alive"},
@@ -225,7 +243,8 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "node_keys": flat_net.node_keys,
         "training": {**report, "population": arguments.population_size, "maze": "normal",
                      "seed": arguments.seed, "episodes": arguments.episodes,
-                     "ghost_bonus": GHOST_BONUS, "episode": arguments.episode},
+                     "ghost_bonus": GHOST_BONUS, "episode": arguments.episode,
+                     "no_deletion": arguments.no_deletion},
     }
 
     with open(path, "w") as handle:
@@ -241,6 +260,8 @@ def main(argv: Sequence[str]) -> int:
                         help="episodes each genome is scored on per generation")
     parser.add_argument("--episode", choices=["one-life", "whole-run"], default="one-life",
                         help="stop an episode at the first death, or play the run out as FR-037 does")
+    parser.add_argument("--no-deletion", action="store_true",
+                        help="forbid NEAT from removing nodes and connections: grow only")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
     parser.add_argument("--seed", type=int, default=1,
@@ -265,6 +286,17 @@ def main(argv: Sequence[str]) -> int:
         neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, arguments.config
     )
     arguments.population_size = config.pop_size
+
+    if arguments.no_deletion:
+        # Structural freedom upwards and none downwards. NEAT is allowed to add and forbidden to
+        # remove, which tests the obvious reading of "give the search more freedom and more time"
+        # directly: the measured collapse to six connections was deletion, and DEC-044 had already
+        # halved these once. Set here rather than in a second config file, because a copy of 3.8 kB
+        # of settings differing in two lines is two files to keep in step.
+        config.genome_config.conn_delete_prob = 0.0
+        config.genome_config.node_delete_prob = 0.0
+
+        print("deletion is off: NEAT may add structure and may not remove it", flush=True)
 
     # Asked, not assumed. If the firmware's observation grows a feature, this is where the run
     # stops — rather than in a network that was trained against the wrong 23 numbers.

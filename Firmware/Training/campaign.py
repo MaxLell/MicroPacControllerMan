@@ -29,10 +29,13 @@ game mid-experiment. It has already cost one run: a `git stash` during a campaig
 died on `undefined symbol: env_ghosts_eaten`. The already-running workers kept their mapping and
 finished, which is what made it look fine until the measurement.
 
-What the runs vary is **the draw of the search** and nothing else: `--seed` picks the population NEAT
-starts from and the episodes each generation is scored on. The maze does not vary — the AI only ever
-plays the normal one (FR-040) — but the game's *timings* do now (FR-044), which is why a genome is
-scored on several episodes again rather than one.
+**The runs vary one thing each**, against a baseline that is already measured. They no longer vary the
+seed: whether a given configuration got lucky is a question worth asking *after* one of them works,
+and there are four more useful questions to ask first. What varies is the pruning, then the search,
+then the objective, then the capacity — the list is above `RUNS`, next to the runs it describes.
+
+The maze never varies; the AI only ever plays the normal one (FR-040). The game's *timings* do
+(FR-044), which is why a genome is scored on twelve episodes rather than one.
 
 See Docu/Design/M6-Pacman-AI.md §14.
 """
@@ -47,43 +50,52 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _OUT_DIR = os.path.join(_HERE, "campaign")
 _PYTHON = sys.executable
 
-#: One entry per run. `hours` is that run's slice; `args` goes to train.py.
-#:
-#: Two runs of one configuration on two draws, because a single run cannot tell a good
-#: configuration from a lucky one — and with the maze fixed, the draw is the only thing left that
-#: can be lucky.
-#: One entry per run. `hours` is that run's slice; `args` goes to train.py. The ceiling below is
+#: One entry per run. `hours` is that run's slice; `args` goes to the trainer. The ceiling below is
 #: derived from these, so `hours` is the only thing to edit for a longer or shorter campaign.
 #:
-#: One variable at a time, and the runs are on the **fixed topology** because NEAT's answer is already
-#: in: its winner used 6 connections out of 23 inputs and scored 1,746 with the one-life objective.
-#: That is the baseline these are measured against, and it costs no time to reuse.
+#: One variable at a time, against one baseline that is **already measured** and costs no time to
+#: reuse: NEAT, the one-life objective, deletion on — 1,746 points, with a winner that used 6
+#: connections against 23 inputs.
 #:
-#:   es-one-life        against that baseline, the search is the only thing that changed
-#:   es-whole-run       against es-one-life, the objective is the only thing that changed
-#:   es-whole-run-wide  against es-whole-run, the capacity is the only thing that changed
+#:   neat-no-deletion   against that baseline, only the pruning changed
+#:   es-one-life        against that baseline, only the search changed
+#:   es-whole-run       against es-one-life, only the objective changed
+#:   es-whole-run-wide  against es-whole-run, only the capacity changed
+#:
+#: `neat-no-deletion` is here because it is the literal reading of "give the search more freedom and
+#: more time": NEAT may add structure and may not remove it. The measured collapse was deletion, and
+#: DEC-044 had already halved these probabilities once; zero is where that road ends. Whether
+#: unchecked growth helps is genuinely unknown — a network that only ever grows can bloat without
+#: playing better — which is why it is a run and not a decision.
 #:
 #: `trainer` says which script runs. Both take the same arguments for the things they share, because
 #: they share the episode, the fitness and the curriculum — see train_es.py.
 RUNS = [
     {
+        "name": "neat-no-deletion",
+        "trainer": "train.py",
+        "hours": 3.0,
+        "args": ["--seed", "1", "--episode", "one-life", "--no-deletion"],
+        "what": "NEAT, but forbidden to remove nodes or connections",
+    },
+    {
         "name": "es-one-life",
         "trainer": "train_es.py",
-        "hours": 4.5,
+        "hours": 3.0,
         "args": ["--seed", "1", "--episode", "one-life"],
         "what": "fixed 23-16-4 network, an episode ends at the first death",
     },
     {
         "name": "es-whole-run",
         "trainer": "train_es.py",
-        "hours": 4.5,
+        "hours": 3.0,
         "args": ["--seed", "1", "--episode", "whole-run"],
         "what": "the same, but an episode is the three-life run FR-037 measures",
     },
     {
         "name": "es-whole-run-wide",
         "trainer": "train_es.py",
-        "hours": 4.5,
+        "hours": 3.0,
         "args": ["--seed", "1", "--episode", "whole-run", "--hidden", "32"],
         "what": "the same again with 32 hidden units, to see whether 16 was the ceiling",
     },
