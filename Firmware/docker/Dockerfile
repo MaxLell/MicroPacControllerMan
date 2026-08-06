@@ -18,6 +18,12 @@
 #   build-essential cmake make   the host build, and gcc for the tests
 #   gcc-arm-none-eabi            the cross-toolchain, 13.2.1 on noble
 #   binutils-arm-none-eabi       arm-none-eabi-size, which the build prints its usage with
+#   libnewlib-arm-none-eabi      the C library for the target: math.h, libc.a, libm.a. Named
+#                                explicitly because it is only a *Recommends* of the compiler, and
+#                                --no-install-recommends therefore leaves it out — which is how the
+#                                first build of this image failed, on `math.h: No such file or
+#                                directory` from the HAL. It pulls libnewlib-dev, where the headers
+#                                actually live.
 #   clang-format                 format.sh, against the vendored .clang-format
 #   ruby ruby-dev                ceedling is a gem; ruby-dev is for native extensions in its deps
 #   libsdl2-dev                  the host application's window (CON-103 / FR-104)
@@ -44,6 +50,7 @@ RUN apt-get update \
         cmake \
         gcc-arm-none-eabi \
         gdb-multiarch \
+        libnewlib-arm-none-eabi \
         git \
         libsdl2-dev \
         make \

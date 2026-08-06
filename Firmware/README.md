@@ -23,8 +23,15 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 the shorter road: `./dev.sh docker` and you are building.
 
 ```
-sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
+sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
+                        libnewlib-arm-none-eabi cmake openocd
 ```
+
+`libnewlib-arm-none-eabi` is the target's C library — `math.h`, `libc.a`, `libm.a`, which the HAL
+includes. It is only a *Recommends* of `gcc-arm-none-eabi`, so an ordinary `apt-get install` pulls it
+along and it used to go unmentioned here. Anything installing without recommends does not get it, and
+then the HAL fails to compile on `math.h: No such file or directory` — which is exactly how the first
+build of the container failed.
 
 Plus **STM32CubeProgrammer** for flashing, from
 [st.com](https://www.st.com/en/development-tools/stm32cubeprog.html) (an ST account is

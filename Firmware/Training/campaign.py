@@ -22,6 +22,13 @@ so far on disk.
 **It is resumable.** A run whose winner file already exists is skipped, so if the machine is
 rebooted the campaign can simply be started again and will carry on where it left off.
 
+**One thing it is not safe against: rebuilding `build-host` while it runs.** The trainer loads
+`libpacman_env.so` through ctypes, so replacing that file under a running campaign is replacing the
+game mid-experiment. It has already cost one run: a `git stash` during a campaign reverted
+`env_api.c`, an unrelated `./dev.sh check` rebuilt the library from it, and the next process to start
+died on `undefined symbol: env_ghosts_eaten`. The already-running workers kept their mapping and
+finished, which is what made it look fine until the measurement.
+
 What the runs vary is **the draw of the search** and nothing else: `--seed` picks the population NEAT
 starts from and the episodes each generation is scored on. The maze does not vary — the AI only ever
 plays the normal one (FR-040) — but the game's *timings* do now (FR-044), which is why a genome is
@@ -53,16 +60,22 @@ RUNS = [
     {
         "name": "normal-seed1",
         "hours": 2.0,
-        "args": ["--seed", "1", "--workers", "3"],
+        "args": ["--seed", "1"],
         "what": "the jittered game, one life per episode, a bonus per ghost (FR-036/FR-044)",
     },
     {
         "name": "normal-seed2",
         "hours": 1.5,
-        "args": ["--seed", "2", "--workers", "3"],
+        "args": ["--seed", "2"],
         "what": "the same again from a different starting population",
     },
 ]
+
+#: How many cores to evolve on. Unset means every one `train.py` can see, which is what you want on a
+#: machine whose whole job this is — a container on a big host sees all of them. Set `WORKERS` to
+#: fewer when the machine is also being *used*: three of four cores keeps a desktop responsive, and
+#: that figure used to be hard-coded here, which quietly capped a sixteen-core machine at three.
+WORKERS = os.environ.get("WORKERS")
 
 #: Measured before the campaign and carried into the summary so the comparison is on one page. It was
 #: trained on *generated* mazes, which is what makes it the right reference: it says what the change
@@ -203,11 +216,13 @@ def main() -> int:
         else:
             _log(f"training {run['name']} for {seconds / 3600.0:.1f} h -> {log_path}")
 
+            worker_arguments = ["--workers", WORKERS] if WORKERS else []
+
             with open(log_path, "w") as handle:
                 subprocess.run(
                     [_PYTHON, "-u", os.path.join(_HERE, "train.py"),
                      "--out", winner, "--max-seconds", str(seconds),
-                     "--checkpoint-every", "0", *run["args"]],
+                     "--checkpoint-every", "0", *worker_arguments, *run["args"]],
                     stdout=handle,
                     stderr=subprocess.STDOUT,
                 )

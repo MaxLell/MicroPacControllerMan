@@ -302,7 +302,9 @@ refuses to run against a different one rather than reporting a stale recording a
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
 (debug only), **STM32CubeProgrammer 2.23.0** (flashing).
-`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`, plus
+`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi cmake
+openocd` — newlib is the target's C library and only a *Recommends* of the compiler, so an install
+without recommends fails on `math.h` — plus
 CubeProgrammer from st.com. After installing openocd, **unplug/replug the board once**
 so a non-root user can reach SWD — openocd ships the udev rules even though it cannot
 program this part.
