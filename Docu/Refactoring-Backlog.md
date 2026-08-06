@@ -43,6 +43,8 @@ They are left as written; the items they belong to are closed anyway.
 | [RF-011](#rf-011) | No `ASSERT` handler is registered on the target | Low | **Never done.** A failed assertion on the target halts silently; under an OTT that is a bare harness timeout. |
 | [RF-014](#rf-014) | The 32 ms debounce window is sized by a `uint32_t`, not by a contact | Medium | **Never done.** The input path is ~34 ms, 32 of it debounce. No requirement measures it any more ([DEC-036](PrePlanning/11-Decisions-and-As-Built.md)); it is still four times what a contact needs. |
 | [RF-016](#rf-016) | The console samples the UART on the tick instead of on an interrupt | Low | **Never done.** Characters must arrive >1 ms apart; typing and `run_ott.py` comply, a paste does not. |
+| [RF-017](#rf-017) | The Python training code has no tests, and `net.dense` has invariants worth one | Medium | **Never done.** The C evaluator refuses a malformed network, so the failure is loud — but it is caught at runtime rather than at build time, and nothing checks the packing itself. |
+| [RF-018](#rf-018) | Two thirds of a training decision is unaccounted for | Deferred — only matters if training becomes compute-bound | **Never done.** A decision costs ~390 µs; the parts that can be named sum to ~140. |
 
 ---
 
@@ -267,3 +269,50 @@ in the `.ioc`, so it means a regeneration plus a handler, against a limitation n
 currently runs into. `uart_bsp_read_character()` already reads `RDR` directly and explains
 why ([DEC-013](PrePlanning/11-Decisions-and-As-Built.md)), so the register-level precedent
 is set and the interrupt would extend it rather than open a new argument.
+
+### RF-017
+
+**The Python training code has no tests, and `net.dense` has invariants that deserve one.** Medium.
+
+`net.dense` packs a flat vector of 452 numbers into the arrays `Services/neural_net` evaluates:
+biases, `connection_offsets`, `connection_sources`, `connection_weights`. Four things have to hold or
+the network is silently a different network — the offsets must be `node_count + 1` long, the last one
+must equal the connection count, every connection's source must be numbered below its target, and the
+value layout must match what the optimiser thinks it is producing.
+
+Those were checked by hand, in a throwaway script, once. What checks them now is the C side:
+`env_set_net` runs `neural_net_is_well_formed` on every candidate of every generation and raises
+rather than scoring a network the board could not evaluate. So a packing mistake is loud — but it is
+loud at *runtime*, in the middle of a night's training, where a test would have been loud in a second.
+
+Not done because there is no Python test harness in this project at all, and adding one is a
+dependency (`pytest`), a line in `requirements.txt` and a rebuilt container image. The C code has
+Ceedling and 452 tests; the trainer has none, and `train.py` has been in that state since M6 began.
+The honest statement is that the *firmware* is tested and the *tools* are not.
+
+### RF-018
+
+**Two thirds of a training decision is unaccounted for.** Deferred — it only matters if training
+becomes compute-bound.
+
+Measured against the `-O2` library the trainer actually loads:
+
+```
+game_tick                 0.077 µs
+game_get_state_message    7.817 µs
+pacman_ai_get_features   38.124 µs
+the network               0.319 µs
+```
+
+A decision is one `pacman_ai_decide`, one state message and about a dozen ticks, which comes to
+roughly 140 µs. The trainer's own rate says a decision really costs about **390 µs**. The difference
+is not in any of the calls above and is most likely the working set: a decision walks a 15 kB
+`game_t` and the observation's breadth-first search touches its own slice of the maze, where the
+benchmark above calls one function repeatedly on data that stays in cache.
+
+It is deferred rather than chased because the size of the prize is known and small: removing the
+observation *entirely* would buy about a tenth, and the one thing that was worth fixing — a full
+state message built once per tick to answer "did Pacman change cell" — is fixed and was worth 9 %.
+Anyone who does pick this up should start with `perf record` on a single-worker run rather than with
+another microbenchmark; this entry exists because the first microbenchmark was measured against the
+unoptimised library and overstated the state message by a factor of five.
