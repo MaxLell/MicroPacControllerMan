@@ -55,24 +55,37 @@ _PYTHON = sys.executable
 #: One entry per run. `hours` is that run's slice; `args` goes to train.py. The ceiling below is
 #: derived from these, so `hours` is the only thing to edit for a longer or shorter campaign.
 #:
-#: The two runs differ in **what is being optimised**, not in the draw. Varying the seed answers "was
-#: that lucky", and that is already answered: the same configuration gave 4,980 and 4,260 on the
-#: deterministic game. What is open is whether ending an episode at the first death — which is how
-#: FR-036 makes dying cost something — trains the wrong game, because FR-037 measures a run with
-#: three lives and the first agent trained that way came out *below* the one it was to replace.
-#: One run each way answers it; two seeds of one way would not.
+#: One variable at a time, and the runs are on the **fixed topology** because NEAT's answer is already
+#: in: its winner used 6 connections out of 23 inputs and scored 1,746 with the one-life objective.
+#: That is the baseline these are measured against, and it costs no time to reuse.
+#:
+#:   es-one-life        against that baseline, the search is the only thing that changed
+#:   es-whole-run       against es-one-life, the objective is the only thing that changed
+#:   es-whole-run-wide  against es-whole-run, the capacity is the only thing that changed
+#:
+#: `trainer` says which script runs. Both take the same arguments for the things they share, because
+#: they share the episode, the fitness and the curriculum — see train_es.py.
 RUNS = [
     {
-        "name": "one-life",
-        "hours": 7.5,
+        "name": "es-one-life",
+        "trainer": "train_es.py",
+        "hours": 4.5,
         "args": ["--seed", "1", "--episode", "one-life"],
-        "what": "an episode ends at the first death — FR-036 as it stands",
+        "what": "fixed 23-16-4 network, an episode ends at the first death",
     },
     {
-        "name": "whole-run",
-        "hours": 7.5,
+        "name": "es-whole-run",
+        "trainer": "train_es.py",
+        "hours": 4.5,
         "args": ["--seed", "1", "--episode", "whole-run"],
-        "what": "an episode is a whole three-life run, which is what FR-037 measures",
+        "what": "the same, but an episode is the three-life run FR-037 measures",
+    },
+    {
+        "name": "es-whole-run-wide",
+        "trainer": "train_es.py",
+        "hours": 4.5,
+        "args": ["--seed", "1", "--episode", "whole-run", "--hidden", "32"],
+        "what": "the same again with 32 hidden units, to see whether 16 was the ceiling",
     },
 ]
 
@@ -237,15 +250,20 @@ def main() -> int:
         if os.path.exists(winner):
             _log(f"{run['name']} already has a winner — measuring it, not retraining")
         else:
-            _log(f"training {run['name']} for {seconds / 3600.0:.1f} h -> {log_path}")
-
             worker_arguments = ["--workers", WORKERS] if WORKERS else []
+            trainer = run.get("trainer", "train.py")
+
+            _log(f"training {run['name']} with {trainer} for {seconds / 3600.0:.1f} h -> {log_path}")
+
+            # `--checkpoint-every` is NEAT's, and only NEAT's: the evolution strategy has no
+            # population to pickle, its whole state is a mean and a deviation.
+            trainer_arguments = ["--checkpoint-every", "0"] if trainer == "train.py" else []
 
             with open(log_path, "w") as handle:
                 subprocess.run(
-                    [_PYTHON, "-u", os.path.join(_HERE, "train.py"),
+                    [_PYTHON, "-u", os.path.join(_HERE, trainer),
                      "--out", winner, "--max-seconds", str(seconds),
-                     "--checkpoint-every", "0", *worker_arguments, *run["args"]],
+                     *trainer_arguments, *worker_arguments, *run["args"]],
                     stdout=handle,
                     stderr=subprocess.STDOUT,
                 )

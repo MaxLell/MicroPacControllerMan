@@ -184,3 +184,88 @@ def from_genome(genome, config) -> Net:
         connection_weights=weights,
         node_keys=order,
     )
+
+
+# --- a fixed topology, for a search that is not NEAT ---------------------------------------------
+
+def dense_value_count(input_count: int, hidden_count: int, output_count: int) -> int:
+    """How many numbers :func:`dense` needs.
+
+    Every weight and every bias of a fully connected `input -> hidden -> output` network. For the
+    firmware's 23 features and 4 actions with 16 hidden units that is 452 — which is the point of
+    using it: a NEAT winner measured on this game was down to **6** connections out of 23 inputs,
+    because NEAT deletes structure whenever fitness is noisy and a deletion that costs real ability
+    is invisible in noise. A fixed topology cannot prune itself blind.
+    """
+    return (input_count * hidden_count) + hidden_count + (hidden_count * output_count) + output_count
+
+
+def dense(input_count: int, hidden_count: int, output_count: int, values: List[float]) -> Net:
+    """A fully connected `input -> hidden -> output` network from a flat vector.
+
+    The node numbering is inputs, then hidden, then outputs, which satisfies the evaluator's rule
+    that a connection's source is numbered below its target — the same rule `from_genome` obeys, and
+    the C side re-checks it either way.
+
+    `values` is laid out as: the hidden layer's weights row by row, the hidden biases, the output
+    layer's weights row by row, the output biases. Any optimiser working on a flat vector can produce
+    one; nothing here knows which.
+    """
+    expected = dense_value_count(input_count, hidden_count, output_count)
+
+    if len(values) != expected:
+        raise ValueError(f"expected {expected} values for {input_count}-{hidden_count}-{output_count}, "
+                         f"got {len(values)}")
+
+    node_count = input_count + hidden_count + output_count
+
+    if node_count > MAX_NODES:
+        raise ValueError(f"{node_count} nodes exceeds the evaluator's {MAX_NODES}")
+
+    biases = [0.0] * node_count
+    offsets = [0]
+    sources: List[int] = []
+    weights: List[float] = []
+    cursor = 0
+
+    # Inputs feed nothing and have no bias; their offsets are all zero, which is what the evaluator
+    # reads as "no incoming connections".
+    for _ in range(input_count):
+        offsets.append(0)
+
+    for hidden in range(hidden_count):
+        for source in range(input_count):
+            sources.append(source)
+            weights.append(values[cursor])
+            cursor += 1
+
+        offsets.append(len(sources))
+
+    for hidden in range(hidden_count):
+        biases[input_count + hidden] = values[cursor]
+        cursor += 1
+
+    for output in range(output_count):
+        for hidden in range(hidden_count):
+            sources.append(input_count + hidden)
+            weights.append(values[cursor])
+            cursor += 1
+
+        offsets.append(len(sources))
+
+    for output in range(output_count):
+        biases[input_count + hidden_count + output] = values[cursor]
+        cursor += 1
+
+    return Net(
+        input_count=input_count,
+        output_count=output_count,
+        biases=biases,
+        output_nodes=[input_count + hidden_count + index for index in range(output_count)],
+        connection_offsets=offsets,
+        connection_sources=sources,
+        connection_weights=weights,
+        # Not a genome, so there are no genome keys to record. The node index is the only name a node
+        # here has, which an exported table shows anyway.
+        node_keys=list(range(node_count)),
+    )

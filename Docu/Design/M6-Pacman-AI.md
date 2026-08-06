@@ -589,5 +589,48 @@ Two consequences, both taken:
   [DEC-047](../PrePlanning/11-Decisions-and-As-Built.md) for why a flat penalty per life is a
   near-constant on a three-life run, and backwards on a run the idle rule ends.
 
-**The retraining is running at the time of writing.** What it has to beat is 2,197, and what it has to
-reach is 4,600.
+**The retraining came out below what it replaced: 1,746.5 against 2,197.** And looking at *why* found
+something the score alone does not say. The winning network:
+
+```
+nodes 29   hidden 2   connections 6
+```
+
+Six connections, against 23 inputs. **The agent is very nearly blind** and still scores 1,746, because
+wandering a full maze pays. The log shows how it got there — 92 connections at the start, then 14, 18,
+22, 19 — which is [DEC-044](../PrePlanning/11-Decisions-and-As-Built.md)'s diagnosis exactly: NEAT
+deletes structure, and under a noisy fitness a deletion that costs real ability is invisible, so it
+keeps deleting. FR-044's jitter put that noise back deliberately, and this is the bill.
+
+That reorders everything §14.2 suggested. It is pointless to give the agent better eyes (§12 point 2)
+while it uses six connections, and pointless to buy more compute for a search that spends it on
+pruning.
+
+### 14.4 A fixed topology, and 72 seconds that matched two hours
+
+So the next thing tried is not a better observation and not more time: it is a search that **cannot**
+prune itself blind. `Training/train_es.py` optimises a fixed 23-16-4 network — 452 numbers, every one
+used on every decision — with a separable evolution strategy: a mean, one standard deviation per
+dimension, ranked recombination with CMA-ES's log-weights. Deliberately *not* CMA-ES: the covariance
+matrix is what that name is about, it wants numpy, numpy is not in the container, and a 452 x 452
+eigendecomposition is not what this problem is short of.
+
+Nothing in C changes. `Services/neural_net` already evaluates an arbitrary feed-forward graph, so a
+dense network is a special case of what the firmware runs, and `export_c.py` writes it out unchanged —
+measured at 2,860 bytes of tables against NEAT's 334, both far inside NFR-007. The episode, the
+fitness, the ghost bonus and the curriculum are *imported* from `train.py` rather than restated, so
+the two trainers remain comparable.
+
+First measurement, and it is a strong hint rather than a result — **72 seconds of training per run**:
+
+| | score | generations |
+|---|---|---|
+| the shipped NEAT table, hours of training | 2,197 | 276 |
+| NEAT retrained for two hours | 1,746 | 317 |
+| `es-one-life`, 72 s | **2,162** | 12 |
+| `es-whole-run`, 72 s | **2,079** | 34 |
+| `es-whole-run-wide` (32 hidden), 72 s | **2,133** | 34 |
+
+A minute of the fixed topology reaches what NEAT reached in hours. Three runs of a few hours each are
+what a night is for, and that is what is configured; what these numbers justify is spending the night
+that way rather than on NEAT.
