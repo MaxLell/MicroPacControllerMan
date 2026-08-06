@@ -131,6 +131,31 @@ python3 Training/train.py
 python3 Training/evaluate.py
 ```
 
+### If it says the daemon cannot be reached
+
+```
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+That is group membership, not a broken daemon. Docker's socket is owned by the `docker` group and a
+fresh installation puts nobody in it:
+
+```
+sudo usermod -aG docker "$USER" && newgrp docker
+```
+
+`newgrp docker` fixes the shell you are in; logging out and back in fixes every shell. `dev.sh`
+checks for this before it builds and prints the same two lines, rather than letting the socket error
+be the whole explanation.
+
+**Do not use `sudo ./dev.sh docker` as a workaround.** It works, and then every artefact the build
+writes into your tree belongs to root — including `build/`, `build-test/` and Ceedling's caches, which
+you then cannot rebuild without sudo either. `dev.sh` does take `SUDO_UID` into account so that it is
+merely unnecessary rather than destructive, but the group is the fix.
+
+`DEPRECATED: The legacy builder is deprecated` alongside it is only a notice: the legacy builder
+builds this image correctly. `sudo apt-get install docker-buildx` silences it.
+
 ### What the container cannot do
 
 **Flashing.** `STM32_Programmer_CLI` comes from STM32CubeProgrammer, which is behind an ST account

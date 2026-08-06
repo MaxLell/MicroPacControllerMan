@@ -189,6 +189,8 @@ DOCKER_IMAGE="micropac-dev"
 build_docker_image() {
     local force=${1:-}
 
+    require_docker
+
     if [ "$force" != "--force" ] && docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1; then
         return 0
     fi
@@ -200,7 +202,12 @@ build_docker_image() {
     docker build -f docker/Dockerfile -t "$DOCKER_IMAGE" .
 }
 
-run_in_docker() {
+# Docker installed *and* reachable, or a sentence saying which of the two is missing.
+#
+# Checked before building rather than letting `docker build` fail, because what it prints then is
+# "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock" — true,
+# and no help at all about the fix being a group.
+require_docker() {
     if ! command -v docker >/dev/null 2>&1; then
         # `fail` prints and returns — every other caller follows it with its own exit, and so does
         # this one. Without the exit the next line reports "docker: command not found" on top of a
@@ -209,19 +216,54 @@ run_in_docker() {
         exit 2
     fi
 
+    if docker info >/dev/null 2>&1; then
+        return 0
+    fi
+
+    fail "docker is installed, but its daemon cannot be reached."
+    {
+        echo "  Nearly always group membership rather than a broken daemon:"
+        echo ""
+        echo "    sudo usermod -aG docker \"\$USER\" && newgrp docker"
+        echo ""
+        echo "  'newgrp docker' fixes the shell you are in; logging out and in fixes every shell."
+        echo "  If that is not it, the daemon itself: systemctl status docker"
+        echo ""
+        echo "  Do not reach for 'sudo ./dev.sh docker' as a workaround. It works, and it writes"
+        echo "  every build artefact into your tree as root — see the Docker section of README.md."
+    } >&2
+
+    exit 2
+}
+
+run_in_docker() {
+    require_docker
+
     build_docker_image
 
     # `--user` with the host's ids is what keeps a file written in the container owned by whoever ran
     # it. The image has no matching passwd entry and does not need one: HOME is /tmp, which is
     # writable for any uid, and that is all ruby and python want.
+    #
+    # Under sudo, `id -u` is 0 and every artefact would come out root-owned — so the ids sudo
+    # remembers are preferred where they exist. That makes `sudo ./dev.sh docker` merely unnecessary
+    # rather than something that leaves a tree you cannot build in afterwards.
+    local uid=${SUDO_UID:-$(id -u)}
+    local gid=${SUDO_GID:-$(id -g)}
     # The **repository root** is mounted, not `Firmware/`: `.git` lives one level up, so anything
     # git-shaped — `install-hook`, a commit, `git describe` — needs to see it, and the documents the
     # sources cross-reference are up there too. The working directory is `Firmware/`, which is where
     # every command in this file expects to be.
+    # The repository root, spelled without a `..`: docker accepts the relative form, but a mount
+    # argument is something people read in error messages and `-v /a/b/Firmware/..:/work` invites a
+    # second look it does not deserve.
+    local repository_root
+    repository_root=$(cd .. && pwd)
+
     local -a arguments=(
         --rm
-        --user "$(id -u):$(id -g)"
-        --volume "$PWD/..:/work"
+        --user "$uid:$gid"
+        --volume "$repository_root:/work"
         --workdir /work/Firmware
     )
 
