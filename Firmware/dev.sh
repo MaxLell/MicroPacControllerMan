@@ -77,15 +77,25 @@ step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 fail() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; }
 done_message() { printf '\033[1;32m%s\033[0m\n' "$*"; }
 
-# A build directory belongs to the path it was configured at.
+# Where the tree lives inside the container. Named once, because `run_in_docker` mounts it there and
+# the build-directory check below has to expect the same thing; two spellings of it would drift.
+CONTAINER_WORKDIR="/work/Firmware"
+
+# A build directory belongs to the path it was configured at, and to whoever is about to use it.
 #
-# CMake writes the source path into CMakeCache.txt as an absolute one, so a `build/` configured on
-# the host and then used inside the container — where the same tree is /work/Firmware — stops with
-# "the current CMakeCache.txt is different than the directory where CMakeCache.txt was created",
-# which is accurate and reads like the tree is broken. It is not: the build directory is simply
-# somebody else's. Said here in one sentence, with the fix, rather than left to CMake.
-check_build_dir_belongs_here() {
+# CMake writes the source path into CMakeCache.txt as an absolute one, so a `build/` configured on the
+# host and then used inside the container — where the same tree is /work/Firmware — stops with "the
+# current CMakeCache.txt is different than the directory where CMakeCache.txt was created", which is
+# accurate and reads like the tree is broken. It is not: the build directory is somebody else's.
+#
+# `in_expected` is whose it has to be, and it is **not always $PWD**: `docker-train` runs on the host
+# and hands the directory to a container, so what it needs is a directory configured for the
+# container. Asking for $PWD there made the check unsatisfiable — deleting the directory and
+# rebuilding it in the container produced the same complaint, because rebuilding it in the container
+# is precisely what was being asked for. That was a bug, and this parameter is the fix.
+check_build_dir_configured_for() {
     local directory=$1
+    local expected=$2
     local cache="$directory/CMakeCache.txt"
     local configured_at
 
@@ -93,16 +103,22 @@ check_build_dir_belongs_here() {
 
     configured_at=$(sed -n 's|^CMAKE_HOME_DIRECTORY:INTERNAL=||p' "$cache" | head -1)
 
-    [ -n "$configured_at" ] && [ "$configured_at" != "$PWD" ] || return 0
+    [ -n "$configured_at" ] && [ "$configured_at" != "$expected" ] || return 0
 
-    fail "$directory was configured for $configured_at, and this is $PWD."
+    fail "$directory was configured for $configured_at, and $expected is what is about to use it."
     {
-        echo "  A build directory carries the absolute path it was configured at, so one made on the"
-        echo "  host cannot be used in the container or the other way round. Throw it away:"
+        echo "  A build directory carries the absolute path it was configured at, so the host's and"
+        echo "  the container's cannot be the same one. Throw it away and build it where it is needed:"
         echo ""
-        echo "    rm -rf $directory"
+
+        if [ "$expected" = "$CONTAINER_WORKDIR" ]; then
+            echo "    rm -rf $directory && ./dev.sh docker host"
+        else
+            echo "    rm -rf $directory && ./dev.sh host"
+        fi
+
         echo ""
-        echo "  Nothing is lost — it is all regenerated, and the two can coexist no other way."
+        echo "  Nothing is lost — it is all regenerated."
     } >&2
 
     exit 2
@@ -110,7 +126,7 @@ check_build_dir_belongs_here() {
 
 do_build() {
     step "Build (target)"
-    check_build_dir_belongs_here "$BUILD_DIR"
+    check_build_dir_configured_for "$BUILD_DIR" "$PWD"
     if [ ! -d "$BUILD_DIR" ]; then
         cmake -B "$BUILD_DIR" -G "Unix Makefiles"
     fi
@@ -119,7 +135,7 @@ do_build() {
 
 do_host_build() {
     step "Build (host)"
-    check_build_dir_belongs_here "$HOST_BUILD_DIR"
+    check_build_dir_configured_for "$HOST_BUILD_DIR" "$PWD"
     if [ ! -d "$HOST_BUILD_DIR" ]; then
         cmake -B "$HOST_BUILD_DIR" -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles"
     fi
@@ -423,7 +439,8 @@ run_training_in_docker() {
         exit 2
     fi
 
-    check_build_dir_belongs_here "$HOST_BUILD_DIR"
+    # The container's, not this shell's: the library is loaded by a trainer running in there.
+    check_build_dir_configured_for "$HOST_BUILD_DIR" "$CONTAINER_WORKDIR"
 
     if docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
         step "Removing the previous $TRAIN_CONTAINER container"
@@ -470,7 +487,7 @@ run_training_in_docker() {
     docker run -d --name "$TRAIN_CONTAINER" \
         --user "$uid:$gid" \
         --volume "$repository_root:/work" \
-        --workdir /work/Firmware \
+        --workdir "$CONTAINER_WORKDIR" \
         "$DOCKER_IMAGE" python3 Training/campaign.py >/dev/null
 
     echo ""
@@ -529,7 +546,7 @@ run_in_docker() {
         --rm
         --user "$uid:$gid"
         --volume "$repository_root:/work"
-        --workdir /work/Firmware
+        --workdir "$CONTAINER_WORKDIR"
     )
 
     # Interactive only when there is a terminal, so `./dev.sh docker check` works from a script or a

@@ -142,9 +142,14 @@ python3 Training/evaluate.py
 
 `build/`, `build-host/` and `build-test/` carry the absolute path they were configured at, so a
 directory made on the host cannot be used inside the container — the tree is `/work/Firmware` in
-there — or the other way round. `dev.sh` notices and says so with the fix, which is to delete the
-directory; nothing is lost, it is all regenerated. If you switch between the two often, keep the
-habit of `rm -rf build build-host build-test` when you cross over, or simply work in one of them.
+there — or the other way round. `dev.sh` notices and names the command that fixes it; nothing is
+lost, it is all regenerated.
+
+Which one it asks for depends on **who is about to use the directory, not on where you typed the
+command**. `./dev.sh docker-train` runs on the host and hands `build-host/` to a container, so what it
+needs is a directory configured for `/work/Firmware` — and it will send you to `./dev.sh docker host`
+to make one. `./dev.sh host` needs the opposite. If you switch between the two often, keep the habit
+of `rm -rf build build-host build-test` when you cross over, or simply work in one of them.
 
 ### If it says the daemon cannot be reached
 
