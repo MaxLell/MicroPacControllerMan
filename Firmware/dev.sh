@@ -221,13 +221,37 @@ require_docker() {
     fi
 
     fail "docker is installed, but its daemon cannot be reached."
+
+    # Three different faults produce one error from docker, and they have three different fixes. So
+    # say which one it is rather than listing all of them and letting the reader try each: the socket
+    # either is not there, or is there and we are not allowed at it.
     {
-        echo "  Nearly always group membership rather than a broken daemon:"
-        echo ""
-        echo "    sudo usermod -aG docker \"\$USER\" && newgrp docker"
-        echo ""
-        echo "  'newgrp docker' fixes the shell you are in; logging out and in fixes every shell."
-        echo "  If that is not it, the daemon itself: systemctl status docker"
+        if [ -n "${DOCKER_HOST:-}" ]; then
+            echo "  DOCKER_HOST is set to '$DOCKER_HOST', so this is not about the local socket."
+            echo "  Whatever it points at is not answering. Unset it to use the local daemon."
+        elif [ ! -S /var/run/docker.sock ]; then
+            echo "  There is no socket at /var/run/docker.sock, so the daemon is not running:"
+            echo ""
+            echo "    sudo systemctl enable --now docker"
+            echo ""
+            echo "  (A rootless installation puts its socket elsewhere and sets DOCKER_HOST; this"
+            echo "  has neither, so it is the ordinary one and it is stopped.)"
+        elif id -nG | tr ' ' '\n' | grep -qx docker; then
+            echo "  You are in the 'docker' group already, so the membership has not reached this"
+            echo "  shell — a group is read at login, not looked up per command:"
+            echo ""
+            echo "    newgrp docker          # this shell only"
+            echo ""
+            echo "  ...or log out and back in, which fixes every shell. 'id -nG' in the new shell"
+            echo "  should list docker before you try again."
+        else
+            echo "  The socket is there and you are not in the 'docker' group, which owns it:"
+            echo ""
+            echo "    sudo usermod -aG docker \"\$USER\" && newgrp docker"
+            echo ""
+            echo "  'newgrp docker' fixes the shell you are in; logging out and in fixes every shell."
+        fi
+
         echo ""
         echo "  Do not reach for 'sudo ./dev.sh docker' as a workaround. It works, and it writes"
         echo "  every build artefact into your tree as root — see the Docker section of README.md."

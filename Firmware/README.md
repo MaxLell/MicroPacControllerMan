@@ -137,16 +137,15 @@ python3 Training/evaluate.py
 permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
 ```
 
-That is group membership, not a broken daemon. Docker's socket is owned by the `docker` group and a
-fresh installation puts nobody in it:
+One error from Docker, three different faults behind it — so `dev.sh` checks which one before it
+builds and tells you that, instead of listing all three:
 
-```
-sudo usermod -aG docker "$USER" && newgrp docker
-```
-
-`newgrp docker` fixes the shell you are in; logging out and back in fixes every shell. `dev.sh`
-checks for this before it builds and prints the same two lines, rather than letting the socket error
-be the whole explanation.
+| what it finds | what it means | the fix |
+|---|---|---|
+| `DOCKER_HOST` is set | not about the local socket at all | unset it, or fix what it points at |
+| no socket at `/var/run/docker.sock` | the daemon is not running | `sudo systemctl enable --now docker` |
+| socket there, you are in the `docker` group | the membership has not reached *this shell* — a group is read at login | `newgrp docker`, or log out and in |
+| socket there, you are not in the group | the group owns the socket and a fresh install puts nobody in it | `sudo usermod -aG docker "$USER" && newgrp docker` |
 
 **Do not use `sudo ./dev.sh docker` as a workaround.** It works, and then every artefact the build
 writes into your tree belongs to root — including `build/`, `build-test/` and Ceedling's caches, which
