@@ -11,11 +11,14 @@ somewhere else is a baseline that can drift (M6 §13).
 
 Exit code 0 means the requirement is met, 1 means it is not, so this is usable as a gate.
 
-**The maze is the normal one, and one episode is the whole measurement.** The AI may only be handed
-control in the normal maze (FR-040), so that is the maze FR-037 is about; and with one fixed maze and
-nothing random in the game, a trained network plays the identical episode every time. Repeating it
-twenty times would report a standard deviation of zero and cost twenty times as much. The random
-baseline *is* stochastic, so it gets its twenty episodes.
+**The maze is the normal one and the figure is a mean over twenty runs.** The AI may only be handed
+control in the normal maze (FR-040), so that is the maze FR-037 is about. It was briefly measurable in
+a single episode — one fixed maze and a game with nothing random in it play out identically every
+time — and FR-044's timing jitter ended that: a run is a draw again, and both policies have a spread.
+
+**A run here has its three lives.** Training may end an episode at the first death (FR-036), which is
+how it makes dying cost something; that is a training rule. FR-037 asks what a *run* scores, so this
+measures runs, whichever trainer produced the network.
 
 ``--maze generated`` answers a different and no longer required question — how the agent does on a
 maze it has never seen — and says so rather than returning an FR-037 verdict.

@@ -188,17 +188,27 @@ silently working around a wart.
     stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
     `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
     its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
-  - RAM 71.5 %, flash 21.0 %. The trained tables are **298 bytes**; the search scratch is 4.3 kB of
-    RAM; the rest of the growth is the equivalence test's own recorded states and playfield.
-  - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves,
+  - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
+    2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
+    growth is the equivalence test's own recorded states and playfield.
+  - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves with NEAT,
+    **`train_es.py` fits a fixed 23-16-4 network with a separable evolution strategy** (DEC-048),
     `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
     `pacman_ai_record` writes the FR-039 state set, `campaign.py` runs several time-budgeted
-    trainings unattended and writes one summary to read afterwards.
-    **Everything trains and is measured on the normal maze** (DEC-045) — one episode per genome,
-    because that maze is fixed and the game has nothing random in it, so a score is a measurement
-    rather than a draw. The acceptance seed set 1000..1019 and the rule against training on it are
-    retired; `evaluate.py --maze generated` still asks the generalisation question and says out loud
-    that the answer is not an FR-037 verdict.
+    trainings unattended — each naming its own trainer — and writes one summary to read afterwards.
+    **`./dev.sh docker-train` starts a campaign detached** and refuses to start one over leftover
+    winners without being told `--fresh` or `--keep`, because a leftover is *measured* rather than
+    retrained and that silently halves a night.
+    **Why two trainers:** NEAT's winner used **6 of 23 inputs** — it deletes structure whenever the
+    fitness is noisy, and FR-044's jitter is noise (DEC-044/048). A fixed topology cannot prune
+    itself blind, and nothing in C changes: `neural_net` already evaluates an arbitrary graph, so a
+    dense net is a special case of what ships.
+    **Everything trains and is measured on the normal maze** (DEC-045). It was briefly one episode per
+    genome — a fixed maze plus a game with nothing random in it makes a score a *measurement* — and
+    FR-044's jitter ended that: six episodes per genome now, and the acceptance seeds 1000..1019 are
+    reserved again, because a score on the draws it trained against answers nothing.
+    `evaluate.py --maze generated` still asks the generalisation question and says out loud that the
+    answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
 
 - **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
