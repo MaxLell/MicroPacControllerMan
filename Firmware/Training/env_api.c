@@ -11,6 +11,7 @@
 #include "game_session.h"
 #include "neural_net.h"
 #include "pacman_ai.h"
+#include "rng_bsp.h"
 
 /* ==========================================================================
  * env_api - private types and data
@@ -37,6 +38,10 @@
 typedef struct
 {
     game_t game;
+
+    /*! \brief Whether this episode stops the moment a life is lost. Training's rule, not the
+     *         game's — the shipped game always has its three lives. */
+    bool ends_at_first_death;
 
     /*! \brief Since the last time the score moved. Resetting it is what "something was eaten"
      *         means here — the score is the only signal the harness needs for it, which is why
@@ -76,6 +81,10 @@ struct env_batch_s
     /*! \brief State of the baseline's generator. One per batch, not one per game, so that the
      *         games do not all take the same random walk. */
     uint32_t rng_state;
+
+    /*! \brief Whether episodes end at the first life lost. Off by default, because FR-037 is about
+     *         what a *run* scores and a run has three lives; training turns it on. */
+    bool ends_at_first_death;
 };
 
 /* ==========================================================================
@@ -154,7 +163,16 @@ static uint32_t prv_step_one(env_game_t* const inout_entry, pacman_ai_action_e i
     const bool is_over = (game_get_state(&inout_entry->game) != GAME_STATE_RUNNING);
     const bool is_idle = (inout_entry->idle_ms >= IDLE_LIMIT_MS);
 
-    inout_entry->is_done = is_over || is_idle;
+    /* "Losing a life must not pay" (FR-036), and this is the only mechanism that says it. A penalty
+     * per life would be nearly a constant — a run *ends* because all three are gone, so almost every
+     * complete run pays it three times — and where it is not constant it is backwards: a run cut
+     * short by the idle rule keeps its remaining lives and would be *rewarded*. Ending the episode at
+     * the first death costs the agent everything it would have scored afterwards, which is the whole
+     * of the game still to come. */
+    const bool has_died =
+        inout_entry->ends_at_first_death && (game_get_lives(&inout_entry->game) < GAME_STARTING_LIVES);
+
+    inout_entry->is_done = is_over || is_idle || has_died;
 
     return gained;
 }
@@ -315,6 +333,15 @@ void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_st
     {
         env_game_t* const entry = &inout_batch->games[index];
 
+        /* The game's own timing jitter is drawn from `rng_bsp` (FR-044), so seeding it here is what
+         * makes an episode replayable (FR-114). Per game rather than per batch: it is the seed of
+         * *this* episode's ghosts. A batch stepped in lockstep by `env_step` interleaves the draws,
+         * so the guarantee is "the same seeds give the same batch"; training runs one game per
+         * batch, where that is the same thing. */
+        rng_bsp_seed(in_seeds[index]);
+
+        entry->ends_at_first_death = inout_batch->ends_at_first_death;
+
         game_init(&entry->game);
 
         if (is_generated)
@@ -362,6 +389,22 @@ void env_scores(const env_batch_t* in_batch, uint32_t* out_scores)
     for (uint32_t index = 0U; index < in_batch->count; ++index)
     {
         out_scores[index] = game_get_score(&in_batch->games[index].game);
+    }
+}
+
+void env_set_episode_ends_at_first_death(env_batch_t* inout_batch, bool in_ends_at_first_death)
+{
+    if (inout_batch != NULL)
+    {
+        inout_batch->ends_at_first_death = in_ends_at_first_death;
+    }
+}
+
+void env_ghosts_eaten(const env_batch_t* in_batch, uint16_t* out_ghosts_eaten)
+{
+    for (uint32_t index = 0U; index < in_batch->count; ++index)
+    {
+        out_ghosts_eaten[index] = game_get_ghosts_eaten(&in_batch->games[index].game);
     }
 }
 
@@ -459,7 +502,7 @@ void env_use_random_policy(env_batch_t* inout_batch, uint32_t in_rng_seed)
 }
 
 void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze,
-             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels)
+             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels, uint16_t* out_ghosts_eaten)
 {
     env_reset(inout_batch, in_seeds, in_stage, in_maze);
 
@@ -491,6 +534,11 @@ void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stag
         if (out_levels != NULL)
         {
             out_levels[index] = game_get_level(&entry->game);
+        }
+
+        if (out_ghosts_eaten != NULL)
+        {
+            out_ghosts_eaten[index] = game_get_ghosts_eaten(&entry->game);
         }
     }
 }

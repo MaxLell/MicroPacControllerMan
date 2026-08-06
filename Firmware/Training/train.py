@@ -37,21 +37,40 @@ from pacman_env import MAZE_NORMAL, PacmanEnv, STAGE_FULL, STAGE_GHOSTS, STAGE_M
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_CONFIG = os.path.join(_HERE, "config-neat.txt")
 
+#: What training pays for a ghost, on top of the 200/400/800/1600 the game's score already pays
+#: (FR-036). Five hundred a ghost roughly doubles what a full chain of four is worth — 3,000 of score
+#: becomes 5,000 of fitness — which is enough to change a decision without drowning out the pellets
+#: that a level is mostly made of.
+GHOST_BONUS = 500
+
+#: Reserved for VT-UNIT-010, and reserved again. The acceptance set went away when the game became
+#: deterministic and one episode was the whole measurement; the jitter brings it back, because an
+#: episode is a draw again and a score on the draws it was trained against would answer nothing.
+ACCEPTANCE_SEEDS = range(1000, 1020)
+
+#: Episodes one genome is scored on. The game's timings are jittered (FR-044), so one episode is a
+#: draw; six cuts the spread by about half. They are also cheap now, because an episode ends at the
+#: first death instead of after three lives.
+EPISODES_PER_GENOME = 6
+
 #: The curriculum of M6 §6. A stage ends when the best genome's fitness reaches `promote_at` or
 #: when `generations` are spent, whichever comes first — the cap is there so that a stage which
 #: turns out to be unlearnable cannot swallow the whole run in silence.
 #:
-#: The thresholds are read off the normal maze, which is now the only maze trained on: 244 pellets,
-#: so clearing level 1 is worth 2,440 points in the first two stages (a power pellet is an ordinary
-#: one there) and 2,600 in the third. 2,200 is therefore "almost the whole of level 1" — and a real
-#: bar rather than the 1,800 it used to be, which the first generation of a fixed maze clears by
-#: wandering.
+#: The thresholds are read off the normal maze: 244 pellets, so clearing level 1 is worth 2,440 points
+#: in the first two stages (a power pellet is an ordinary one there) and 2,600 in the third.
+#:
+#: Stage 1 keeps the "almost all of level 1" bar of 2,200, because nothing there can kill Pacman —
+#: the ghosts are inert, so ending an episode at the first death changes nothing about it. Stages 2
+#: and 3 have **one life** now, so a score that took three to reach is out of range: 1,200 is a
+#: provisional bar for "gets most of the way through a level without dying", and the log is what will
+#: say whether it was set anywhere near right.
 #:
 #: Stage 3's cap is high because time, not generations, is what a campaign budgets: a generation
 #: costs one episode per genome now instead of twelve, and `--max-seconds` is what stops the run.
 CURRICULUM = [
     {"stage": STAGE_MAZE_ONLY, "generations": 60, "promote_at": 2200.0, "what": "walk and eat"},
-    {"stage": STAGE_GHOSTS, "generations": 200, "promote_at": 2200.0, "what": "stay alive"},
+    {"stage": STAGE_GHOSTS, "generations": 200, "promote_at": 1200.0, "what": "stay alive"},
     {"stage": STAGE_FULL, "generations": 4000, "promote_at": None, "what": "the whole game"},
 ]
 
@@ -78,13 +97,19 @@ def _play(task):
 
     The network arrives already flattened rather than as a genome: `net.from_genome` then runs in
     the parent, where a topology it refuses is one visible exception instead of a worker dying.
-    """
-    flat_net, stage, library_path = task
-    env = _worker_env(1, library_path)
-    env.set_net(flat_net)
-    scores, steps, levels = env.run(stage=stage, maze=MAZE_NORMAL)
 
-    return scores[0], steps[0], levels[0]
+    Returns the *fitness* alongside the raw figures, so that what selection sees and what a log line
+    reports come out of one place.
+    """
+    flat_net, seeds, stage, library_path = task
+    env = _worker_env(len(seeds), library_path)
+    env.set_episode_ends_at_first_death(True)
+    env.set_net(flat_net)
+    scores, steps, levels, ghosts = env.run(seeds, stage, MAZE_NORMAL)
+
+    fitness = sum(score + (GHOST_BONUS * eaten) for score, eaten in zip(scores, ghosts)) / float(len(scores))
+
+    return fitness, scores, steps, levels, ghosts
 
 
 class Trainer:
@@ -94,18 +119,37 @@ class Trainer:
         self.config = config
         self.arguments = arguments
         self.stage = arguments.stage or CURRICULUM[0]["stage"]
+        self.random = random.Random(arguments.seed)
         self.generation = 0
         self.best_fitness = float("-inf")
         self.best_net = None
         self.best_report = {}
         self.pool = multiprocessing.Pool(arguments.workers) if arguments.workers > 1 else None
 
+    def draw_seeds(self) -> list:
+        """This generation's episodes.
+
+        A fresh draw each generation, and the *same* draw for every genome in it: genomes then have
+        to be comparable with each other, which is all selection needs, and nothing is comparable
+        across generations — which is the right way round.
+        """
+        seeds = []
+
+        while len(seeds) < self.arguments.episodes:
+            candidate = self.random.randrange(1, 1_000_000)
+
+            if (candidate not in ACCEPTANCE_SEEDS) and (candidate not in seeds):
+                seeds.append(candidate)
+
+        return seeds
+
     def evaluate(self, genomes, config) -> None:
+        seeds = self.draw_seeds()
         started = time.perf_counter()
 
         flat = []
         for genome_id, genome in genomes:
-            flat.append((net.from_genome(genome, config), self.stage, self.arguments.library))
+            flat.append((net.from_genome(genome, config), seeds, self.stage, self.arguments.library))
 
         if self.pool is not None:
             results = self.pool.map(_play, flat, chunksize=1)
@@ -115,17 +159,15 @@ class Trainer:
         total_steps = 0
         best_index = 0
 
-        for index, ((genome_id, genome), (score, steps, level)) in enumerate(zip(genomes, results)):
-            # Fitness is the episode's score — FR-036's "maximise the score", and nothing more:
-            # one maze, one deterministic run of the game, so there is nothing to average over.
-            genome.fitness = float(score)
-            total_steps += steps
+        for index, ((genome_id, genome), (fitness, scores, steps, levels, ghosts)) in enumerate(zip(genomes, results)):
+            genome.fitness = fitness
+            total_steps += sum(steps)
 
             if genome.fitness > genomes[best_index][1].fitness:
                 best_index = index
 
         best_genome = genomes[best_index][1]
-        best_score, best_steps, best_level = results[best_index]
+        _, best_scores, best_steps, best_levels, best_ghosts = results[best_index]
         elapsed = time.perf_counter() - started
 
         if best_genome.fitness > self.best_fitness:
@@ -135,9 +177,11 @@ class Trainer:
                 "stage": self.stage,
                 "generation": self.generation,
                 "fitness": best_genome.fitness,
-                "score": best_score,
-                "level": best_level,
-                "decisions": best_steps,
+                "mean_score": sum(best_scores) / float(len(best_scores)),
+                "scores": best_scores,
+                "ghosts_eaten": sum(best_ghosts),
+                "level": max(best_levels),
+                "decisions": sum(best_steps),
             }
 
             # Written the moment it improves, not at the end of the stage. A stage-3 run is hours,
@@ -151,7 +195,8 @@ class Trainer:
 
         print(
             f"  stage {self.stage} gen {self.generation:4d}  "
-            f"best {best_genome.fitness:8.1f}  level {best_level}  "
+            f"best {best_genome.fitness:8.1f}  score {sum(best_scores) / len(best_scores):7.1f}  "
+            f"ghosts {sum(best_ghosts):3d}  level {max(best_levels)}  "
             f"nodes {len(best_genome.nodes)} conns {sum(1 for c in best_genome.connections.values() if c.enabled)}  "
             f"{total_steps / elapsed:7.0f} decisions/s  {elapsed:5.1f}s",
             flush=True,
@@ -177,7 +222,9 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "connection_sources": flat_net.connection_sources,
         "connection_weights": flat_net.connection_weights,
         "node_keys": flat_net.node_keys,
-        "training": {**report, "population": arguments.population_size, "maze": "normal", "seed": arguments.seed},
+        "training": {**report, "population": arguments.population_size, "maze": "normal",
+                     "seed": arguments.seed, "episodes": arguments.episodes,
+                     "ghost_bonus": GHOST_BONUS, "ends_at_first_death": True},
     }
 
     with open(path, "w") as handle:
@@ -189,6 +236,8 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--stage", type=int, choices=[1, 2, 3], help="train one stage only")
     parser.add_argument("--generations", type=int, help="override the stage's generation cap")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
+    parser.add_argument("--episodes", type=int, default=EPISODES_PER_GENOME,
+                        help="episodes each genome is scored on per generation")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
     parser.add_argument("--seed", type=int, default=1,

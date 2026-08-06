@@ -99,8 +99,8 @@ void env_destroy(env_batch_t* inout_batch);
 /*! \brief Start every game afresh.
  *
  * \param[in,out]   inout_batch: the batch
- * \param[in]       in_seeds: one maze seed per game, `count` long; ignored when `in_maze` is
- *                      #ENV_MAZE_NORMAL, and may then be `NULL`
+ * \param[in]       in_seeds: one seed per game, `count` long. It seeds the game's timing jitter
+ *                      (FR-044) always, and the maze when `in_maze` is #ENV_MAZE_GENERATED
  * \param[in]       in_stage: a \ref env_stage_e; anything else is treated as #ENV_STAGE_FULL
  * \param[in]       in_maze: a \ref env_maze_e; anything else is treated as #ENV_MAZE_NORMAL
  */
@@ -135,6 +135,30 @@ void env_scores(const env_batch_t* in_batch, uint32_t* out_scores);
 
 /*! \brief Each game's level, for reporting how far a genome actually got. `count` long. */
 void env_levels(const env_batch_t* in_batch, uint8_t* out_levels);
+
+/*! \brief Ghosts each game has eaten. `count` long.
+ *
+ * Reported separately from the score although the score already pays the arcade's 200/400/800/1600
+ * for them, because training pays **more** than that (FR-036): the owner wants eating a ghost to be
+ * worth learning, and a fitness that only saw the score could not weight it differently from the
+ * pellets that produced the same points.
+ */
+void env_ghosts_eaten(const env_batch_t* in_batch, uint16_t* out_ghosts_eaten);
+
+/*! \brief End every episode at the first life lost, rather than when the run is over (FR-036).
+ *
+ * Training's rule and not the game's: the shipped game always has its three lives. It is what makes
+ * dying cost something — a flat penalty per life would be almost a constant, since a run ends
+ * *because* the lives are gone, and where it is not constant it rewards the run that stopped early
+ * by idling.
+ *
+ * Off by default, because FR-037 asks what a **run** scores and a run has three lives. Evaluation
+ * therefore leaves it alone and training turns it on.
+ *
+ * \param[in,out]   inout_batch: the batch
+ * \param[in]       in_ends_at_first_death: `true` to stop at the first death
+ */
+void env_set_episode_ends_at_first_death(env_batch_t* inout_batch, bool in_ends_at_first_death);
 
 /* ==========================================================================
  * env_api - playing a whole episode without leaving C
@@ -193,8 +217,9 @@ void env_use_random_policy(env_batch_t* inout_batch, uint32_t in_rng_seed);
  * \param[out]      out_scores: final score of each game, `count` long, may be `NULL`
  * \param[out]      out_steps: decisions each game took, `count` long, may be `NULL`
  * \param[out]      out_levels: level each game reached, `count` long, may be `NULL`
+ * \param[out]      out_ghosts_eaten: ghosts each game ate, `count` long, may be `NULL`
  */
 void env_run(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_stage, uint8_t in_maze,
-             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels);
+             uint32_t* out_scores, uint32_t* out_steps, uint8_t* out_levels, uint16_t* out_ghosts_eaten);
 
 #endif /* ENV_API_H */

@@ -65,6 +65,7 @@ class PacmanEnv:
         self._scores = (ctypes.c_uint32 * count)()
         self._steps = (ctypes.c_uint32 * count)()
         self._levels = (ctypes.c_uint8 * count)()
+        self._ghosts_eaten = (ctypes.c_uint16 * count)()
 
     def _declare(self) -> None:
         lib = self._lib
@@ -89,6 +90,8 @@ class PacmanEnv:
             ctypes.POINTER(ctypes.c_uint8),
         ]
         lib.env_scores.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        lib.env_ghosts_eaten.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint16)]
+        lib.env_set_episode_ends_at_first_death.argtypes = [ctypes.c_void_p, ctypes.c_bool]
         lib.env_levels.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint8)]
         lib.env_set_net.restype = ctypes.c_bool
         lib.env_set_net.argtypes = [
@@ -112,16 +115,19 @@ class PacmanEnv:
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_uint8),
+            ctypes.POINTER(ctypes.c_uint16),
         ]
 
     def _load_seeds(self, seeds: Sequence[int], maze: int) -> None:
-        """Hand the seeds over, or as many zeros as the library expects for the normal maze.
+        """Hand the seeds over, or as many zeros as the library expects.
 
-        ``MAZE_NORMAL`` ignores them, so a caller playing it may pass none at all rather than
-        inventing numbers that mean nothing.
+        A seed now means something on the normal maze too: it seeds the game's timing jitter
+        (FR-044), so two episodes of the same maze differ in when the ghosts leave the house. Passing
+        none gives the same episode every time, which is what a caller wanting one fixed game asks
+        for.
         """
-        if maze == MAZE_NORMAL:
-            seeds = seeds or [0] * self.count
+        if not seeds:
+            seeds = [0] * self.count
 
         if len(seeds) != self.count:
             raise ValueError(f"expected {self.count} seeds, got {len(seeds)}")
@@ -187,12 +193,20 @@ class PacmanEnv:
         """Play uniformly at random — the baseline FR-037 is measured against."""
         self._lib.env_use_random_policy(self._batch, ctypes.c_uint32(rng_seed & 0xFFFFFFFF))
 
+    def set_episode_ends_at_first_death(self, ends_at_first_death: bool) -> None:
+        """End every episode at the first life lost (FR-036), instead of when the run is over.
+
+        Training's rule, not the game's, and the only mechanism that makes dying cost something —
+        see ``env_api.h``. Off unless asked for, because FR-037 measures what a *run* scores.
+        """
+        self._lib.env_set_episode_ends_at_first_death(self._batch, ctypes.c_bool(ends_at_first_death))
+
     def run(self, seeds: Sequence[int] = (), stage: int = STAGE_FULL, maze: int = MAZE_NORMAL):
         """Play every game to its end with the installed policy.
 
-        Returns ``(scores, steps, levels)``. This is the call training spends its time in: the
-        observation, the network and the choice of action are all C, so a whole episode costs one
-        crossing of the language boundary rather than one per decision.
+        Returns ``(scores, steps, levels, ghosts_eaten)``. This is the call training spends its time
+        in: the observation, the network and the choice of action are all C, so a whole episode costs
+        one crossing of the language boundary rather than one per decision.
         """
         self._load_seeds(seeds, maze)
 
@@ -204,9 +218,10 @@ class PacmanEnv:
             self._scores,
             self._steps,
             self._levels,
+            self._ghosts_eaten,
         )
 
-        return list(self._scores), list(self._steps), list(self._levels)
+        return list(self._scores), list(self._steps), list(self._levels), list(self._ghosts_eaten)
 
     def scores(self) -> List[int]:
         self._lib.env_scores(self._batch, self._scores)

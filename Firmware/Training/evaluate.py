@@ -33,8 +33,9 @@ from pacman_env import MAZE_GENERATED, MAZE_NORMAL, PacmanEnv, STAGE_FULL
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-#: Episodes the random baseline is averaged over. It is the only policy here with a spread.
-BASELINE_EPISODES = 20
+#: Runs each policy is averaged over. Both have a spread now — the trained one because the game's
+#: timings vary from run to run, the baseline because it also picks its directions at random.
+EPISODES = 20
 
 #: Where ``--maze generated`` starts counting. A contiguous range on purpose: changing it is one
 #: visible line in a diff, whereas swapping an unkind seed out of a hand-picked list looks like
@@ -45,17 +46,16 @@ GENERATED_FIRST_SEED = 1000
 REQUIRED_MEAN_SCORE = 4600.0
 
 
-def _report(title: str, scores: Sequence[int], steps: Sequence[int], levels: Sequence[int], cap: int) -> float:
+def _report(title: str, scores: Sequence[int], steps: Sequence[int], levels: Sequence[int],
+            ghosts: Sequence[int], cap: int) -> float:
     mean = statistics.fmean(scores)
 
     print(f"{title}")
     print(f"  scores  {list(scores)}")
-
-    if len(scores) > 1:
-        print(f"  mean    {mean:.1f}   median {statistics.median(scores):.0f}   "
-              f"min {min(scores)}   max {max(scores)}")
-
-    print(f"  levels  reached up to {max(levels)}   decisions {min(steps)}..{max(steps)}")
+    print(f"  mean    {mean:.1f}   median {statistics.median(scores):.0f}   "
+          f"min {min(scores)}   max {max(scores)}")
+    print(f"  levels  reached up to {max(levels)}   decisions {min(steps)}..{max(steps)}   "
+          f"ghosts eaten {sum(ghosts)}")
 
     # A run stopped by the decision cap has not finished, so its score is a lower bound rather than
     # a result. Said out loud, because silently averaging truncated runs is how a harness reports a
@@ -73,8 +73,8 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--stage", type=int, default=STAGE_FULL, choices=[1, 2, 3])
     parser.add_argument("--maze", default="normal", choices=["normal", "generated"],
                         help="the maze FR-037 is about, or mazes the agent has never seen")
-    parser.add_argument("--episodes", type=int, default=BASELINE_EPISODES,
-                        help="episodes for the random baseline, and for --maze generated")
+    parser.add_argument("--episodes", type=int, default=EPISODES,
+                        help="runs each policy is averaged over")
     parser.add_argument("--rng-seed", type=int, default=1, help="the random baseline's own draw")
     parser.add_argument(
         "--library",
@@ -99,29 +99,24 @@ def main(argv: Sequence[str]) -> int:
     is_generated = arguments.maze == "generated"
     maze = MAZE_GENERATED if is_generated else MAZE_NORMAL
 
-    # A deterministic policy on a fixed maze needs one episode; everything else needs the spread.
+    # The same seeds for both policies, so the two are measured on the same runs of the same game and
+    # a lucky draw cannot flatter one of them.
     seeds: List[int] = list(range(GENERATED_FIRST_SEED, GENERATED_FIRST_SEED + arguments.episodes))
-    trained_count = arguments.episodes if is_generated else 1
 
     print(f"stage {arguments.stage}, {arguments.maze} maze, {trained.node_count} nodes "
           f"({trained.hidden_count} hidden), {trained.connection_count} connections, "
           f"digest {trained.digest()}\n")
 
-    with PacmanEnv(trained_count, arguments.library) as env:
+    with PacmanEnv(arguments.episodes, arguments.library) as env:
         cap = env.max_decisions
 
         env.set_net(trained)
-        trained_mean = _report(
-            "trained", *env.run(seeds[:trained_count], arguments.stage, maze), cap=cap
-        )
+        trained_mean = _report("trained", *env.run(seeds, arguments.stage, maze), cap=cap)
 
-    print()
+        print()
 
-    with PacmanEnv(arguments.episodes, arguments.library) as env:
         env.use_random_policy(arguments.rng_seed)
-        random_mean = _report(
-            "uniform random", *env.run(seeds, arguments.stage, maze), cap=env.max_decisions
-        )
+        random_mean = _report("uniform random", *env.run(seeds, arguments.stage, maze), cap=cap)
 
     beats_random = trained_mean > random_mean
     meets_bar = trained_mean >= REQUIRED_MEAN_SCORE

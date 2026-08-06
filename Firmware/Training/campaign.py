@@ -22,11 +22,10 @@ so far on disk.
 **It is resumable.** A run whose winner file already exists is skipped, so if the machine is
 rebooted the campaign can simply be started again and will carry on where it left off.
 
-What the runs vary is **the draw of the search** and nothing else. Since the AI only ever plays the
-normal maze (FR-040), training plays that one maze too — so the maze-draw noise DEC-044 measured as
-the limit on play strength is gone rather than merely blurred, and there is no longer a "how many
-mazes" knob to tune. What is left to differ between two runs of the same configuration is which
-random population NEAT started from, and that is exactly what `--seed` now selects.
+What the runs vary is **the draw of the search** and nothing else: `--seed` picks the population NEAT
+starts from and the episodes each generation is scored on. The maze does not vary — the AI only ever
+plays the normal one (FR-040) — but the game's *timings* do now (FR-044), which is why a genome is
+scored on several episodes again rather than one.
 
 See Docu/Design/M6-Pacman-AI.md §14.
 """
@@ -43,7 +42,7 @@ _PYTHON = sys.executable
 
 #: What the whole campaign may take, with a little spare, so that a run which turns out slower than
 #: expected eats its own slice rather than the next one's.
-CAMPAIGN_HOURS = 3.0
+CAMPAIGN_HOURS = 4.0
 
 #: One entry per run. `hours` is that run's slice; `args` goes to train.py.
 #:
@@ -53,13 +52,13 @@ CAMPAIGN_HOURS = 3.0
 RUNS = [
     {
         "name": "normal-seed1",
-        "hours": 1.5,
+        "hours": 2.0,
         "args": ["--seed", "1", "--workers", "3"],
-        "what": "the normal maze, population 250, deletion slowed (DEC-044)",
+        "what": "the jittered game, one life per episode, a bonus per ghost (FR-036/FR-044)",
     },
     {
         "name": "normal-seed2",
-        "hours": 1.25,
+        "hours": 1.5,
         "args": ["--seed", "2", "--workers", "3"],
         "what": "the same again from a different starting population",
     },
@@ -72,7 +71,7 @@ BASELINES = [
     {
         "name": "shipped",
         "path": os.path.join(_HERE, "winner.json"),
-        "what": "trained on generated mazes — the table the firmware ships today, and the run DEC-044 diagnoses",
+        "what": "the deterministic-game winner the firmware ships today — 4,980 on one fixed episode",
     },
 ]
 
@@ -119,11 +118,10 @@ def _write_summary(rows: list) -> None:
         handle.write("# Training campaign\n\n")
         handle.write("FR-037 asks for **4,600** points on the normal maze — the only maze the AI\n")
         handle.write("may be handed control in (FR-040) — and for more than a uniform-random policy\n")
-        handle.write("on the same maze. The trained figure is one episode, because one fixed maze\n")
-        handle.write("and a game with nothing random in it play out identically every time; the\n")
-        handle.write("random baseline is the mean of twenty. Every figure below comes out of\n")
-        handle.write("`Training/evaluate.py`, which measures both policies in one run so the\n")
-        handle.write("comparison cannot drift.\n\n")
+        handle.write("on the same maze. Both figures are the mean of twenty runs on the same twenty\n")
+        handle.write("draws: the game's timings are jittered (FR-044), so a run is a draw rather than\n")
+        handle.write("a measurement. Every figure below comes out of `Training/evaluate.py`, which\n")
+        handle.write("measures both policies in one run so the comparison cannot drift.\n\n")
         handle.write("| run | what | score | vs. random | factor | nodes | conns | gen | FR-037 |\n")
         handle.write("|---|---|---|---|---|---|---|---|---|\n")
 
