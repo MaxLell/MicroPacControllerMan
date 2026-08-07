@@ -495,6 +495,33 @@ run_training() {
         exit 2
     fi
 
+    # This may well be the machine that has Docker and nothing else — that is what the container
+    # exists for. Asked here rather than found out from `cmake: command not found` halfway through
+    # the host build, or from a campaign that starts and whose every trainer dies on `import neat`.
+    local missing=""
+
+    if ! command -v cmake >/dev/null 2>&1; then
+        missing="cmake"
+    fi
+
+    if ! "$python" -c "import neat" >/dev/null 2>&1; then
+        missing="${missing:+$missing and }the trainer's Python (neat-python)"
+    fi
+
+    if [ -n "$missing" ]; then
+        fail "A campaign on this machine needs $missing — not found here."
+        {
+            echo "  The container has all of it and takes the same options:"
+            echo ""
+            echo "    ./dev.sh docker host                   # build-host, with the container's paths"
+            echo "    ./dev.sh docker-train --hours 1 --keep"
+            echo ""
+            echo "  Or set this machine up for it: cmake, and Training/requirements.txt installed"
+            echo "  into Training/.venv."
+        } >&2
+        exit 2
+    fi
+
     check_campaign_leftovers train
 
     # Before starting, never during: the trainer loads libpacman_env.so through ctypes, and replacing
