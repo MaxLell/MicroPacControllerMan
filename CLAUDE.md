@@ -196,9 +196,16 @@ silently working around a wart.
     `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
     `pacman_ai_record` writes the FR-039 state set, `campaign.py` runs several time-budgeted
     trainings unattended — each naming its own trainer — and writes one summary to read afterwards.
-    **`./dev.sh docker-train` starts a campaign detached** and refuses to start one over leftover
+    **`./dev.sh train --hours 1` starts a campaign on this machine, detached**, `docker-train` the
+    same one in the container; both refuse to start over leftover
     winners without being told `--fresh` or `--keep`, because a leftover is *measured* rather than
     retrained and that silently halves a night.
+    **The budget is an input and the runs share it** (M6 §14.5): a run whose share falls below the
+    least it is worth starting with is *dropped and named*, not shortened into a different
+    experiment, and the stages share a run's budget the same way so that a short run still reaches
+    stage 3 — the only stage FR-037 is measured on. A trainer that exits non-zero is reported as
+    failed with the tail of its log; it used to look exactly like a run that found nothing, which
+    is how three of four runs crashed in seconds and left nine hours of a night idle.
     **Why two trainers:** NEAT's winner used **6 of 23 inputs** — it deletes structure whenever the
     fitness is noisy, and FR-044's jitter is noise (DEC-044/048). A fixed topology cannot prune
     itself blind, and nothing in C changes: `neural_net` already evaluates an arbitrary graph, so a
@@ -291,7 +298,10 @@ ceedling test:all
 python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
 Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
 Training/.venv/bin/python Training/evaluate.py              # VT-UNIT-010: FR-037 and its baseline
-Training/.venv/bin/python Training/campaign.py               # several runs unattended -> campaign/summary.md
+./dev.sh train --hours 1                                    # a campaign that is finished in an hour
+./dev.sh train                                              # the whole thing, which is a night
+./dev.sh train-stop                                         # stop it
+Training/.venv/bin/python Training/campaign.py --hours 1     # what that wraps -> campaign/summary.md
 Training/.venv/bin/python Training/export_c.py              # winner.json -> App/pacman_ai/ai_weights.[ch]
 ./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
 ```

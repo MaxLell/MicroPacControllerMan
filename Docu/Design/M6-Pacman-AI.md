@@ -627,10 +627,80 @@ First measurement, and it is a strong hint rather than a result — **72 seconds
 |---|---|---|
 | the shipped NEAT table, hours of training | 2,197 | 276 |
 | NEAT retrained for two hours | 1,746 | 317 |
-| `es-one-life`, 72 s | **2,162** | 12 |
-| `es-whole-run`, 72 s | **2,079** | 34 |
-| `es-whole-run-wide` (32 hidden), 72 s | **2,133** | 34 |
+| ~~`es-one-life`, 72 s~~ | ~~2,162~~ | 12 |
+| ~~`es-whole-run`, 72 s~~ | ~~2,079~~ | 34 |
+| ~~`es-whole-run-wide` (32 hidden), 72 s~~ | ~~2,133~~ | 34 |
 
-A minute of the fixed topology reaches what NEAT reached in hours. Three runs of a few hours each are
-what a night is for, and that is what is configured; what these numbers justify is spending the night
-that way rather than on NEAT.
+**Those three rows are struck through because they do not measure what they say.** `train_es.py` kept
+its best genome *across* the stages, and stage 1 has no ghosts and no power pellets: its networks
+clear level after level and score tens of thousands, where a stage-3 network scores a couple of
+thousand. Nothing after stage 1 could therefore ever beat the recorded best, and the winner file could
+hold nothing but stage 1's — a **pellet-walker that has never seen a ghost**, measured against the
+full game. The generation counts say so too: 12 and 34 are stage 1 promoting and stage 2 starting.
+`train.py` resets per stage for exactly this reason, and the two had to agree.
+
+Measured after the fix, on this four-core machine, both by `evaluate.py` on the acceptance seeds:
+
+| | score |
+|---|---|
+| a stage-1 walker, 3 min, the old behaviour reproduced | 1,643 |
+| a stage-3 network, 5 min, the same trainer fixed | **1,952** |
+| `es-one-life`, **17 min**, through `campaign.py` | **2,396** |
+
+So the honest reading of the struck-out rows is that **a network that only ever learned to eat scores
+about 2,000 on this game** — which is worth knowing, and is the same reason §14.3's six-connection
+network scored 1,746: wandering a full maze pays. It is not evidence about the evolution strategy,
+and "a minute of the fixed topology reaches what NEAT reached in hours" was that artefact.
+
+**The claim survives its evidence being wrong.** Seventeen minutes of the fixed topology on four
+cores scores **2,396** — above the shipped table's 2,197 and above the three hours of NEAT that were
+the whole of last night's 2,360, and it ate **40 ghosts across the twenty runs** where the shipped
+table eats 6 and last night's 19. What is different is that the number now comes from a network
+trained on the game it is measured on.
+
+### 14.5 The night that ran for three hours out of twelve
+
+The campaign of §14.4 was configured as four runs of three hours and started. One row came back.
+
+**Three of the four never ran.** `train_es.py` shares `_write_winner` with `train.py`, and that helper
+had just grown a line reading `arguments.no_deletion` — a flag only NEAT's parser has. Every ES run
+died with an `AttributeError` on its first fitness improvement, seconds in. `campaign.py` checked
+whether a winner file had appeared and not what the trainer's exit code was, so a crash and a run that
+trained for three hours and found nothing produced the same line in the log. Nine hours of the machine
+were idle, and the summary said only that three runs "produced no winner".
+
+**The one run that did work is the best result so far, and its own experiment leaked.** With deletion
+forbidden, NEAT kept 40 nodes and 22 connections and scored **2,360** against `normal-seed1`'s 1,746 —
+the pruning diagnosis of §14.3 confirmed, with the spread cut from 555 to 313 as well. Against the
+shipped table's 2,197 it is +163 over the same twenty seeds, which is 14 wins out of 20 and *not*
+significant (paired t = 1.5). But `--no-deletion` had only closed one of two doors: `net.py` flattens
+the **enabled** connections, and `enabled_mutate_rate = 0.01` switches about one connection a
+generation off. Disabling is deletion under another name, which is why a run with deletion forbidden
+still came out holding 22 of its initial 92. The flag now sets that rate to zero as well.
+
+What the tooling learned from a wasted night, all of it aimed at making the *next* attempt cheap
+enough to iterate on rather than at making it bigger:
+
+- **A campaign's budget is an input and its runs share it.** `campaign.py --hours 1`, or
+  `./dev.sh train --hours 1`, which runs it on this machine rather than in the container. The `hours`
+  in each run's entry is a share, not an absolute.
+- **A run the budget cannot pay for is dropped and says so**, rather than being shortened into a
+  different experiment. Each run carries the least time it is worth starting with: about 14 s a
+  generation for NEAT against 3 s for the ES on four cores, so an hour can pay for one ES run and
+  cannot pay for NEAT at all.
+- **The stages share a run's budget too** — 15 %, 30 %, and stage 3 gets the rest plus whatever the
+  teaching stages promoted out of early. Without it stage 2 takes everything a short run has, since
+  it does not reliably clear its promotion bar, and the winner comes from the wrong stage. That is
+  survivable overnight and fatal in an hour.
+- **A trainer that exits non-zero is reported as failed**, with the last lines of its log, rather
+  than as a run that found nothing.
+
+`./dev.sh train --hours 1` therefore plans one run — `es-one-life`, 0.95 h — and names the three it
+cannot pay for along with the budget each would need (`--hours 1.6`, `2.6` and `6.9`). One clean
+answer in an hour, rather than four runs of a quarter of one that all stop in stage 2.
+
+**Two things to watch in the next run's log rather than assume.** The strategy's `sigma` halves about
+every forty generations and is at its 0.01 floor well inside an hour, so a longer run may be buying
+less than its length suggests. And with deletion *and* disabling forbidden, the best genome's
+connection count still drifts down — 92 to 72 over fourteen generations where it used to be 92 to 26
+over nineteen. Much slower, not stopped, and the remaining mechanism is not yet identified.
