@@ -92,6 +92,34 @@ CURRICULUM = [
     {"stage": STAGE_FULL, "generations": 4000, "promote_at": None, "what": "the whole game"},
 ]
 
+#: How much of a run's wall-clock budget each stage may spend, as a **cumulative** fraction of it.
+#:
+#: Without this a stage takes whatever it is given, and the two teaching stages will take all of it:
+#: stage 2 promotes on a fitness bar it does not reliably clear, and its 200-generation cap is far
+#: more than a short run can pay for. That is survivable overnight and fatal in an hour — the winner
+#: comes out of stage 2, and stage 3 is the only stage FR-037 is measured on.
+#:
+#: It can only ever *end* a stage early. A stage that promotes before its share is spent hands the
+#: rest to the one after it, which is why the last entry is 1.0 and not a third: stage 3 gets
+#: everything the teaching stages did not use.
+STAGE_BUDGET_SHARE = {STAGE_MAZE_ONLY: 0.15, STAGE_GHOSTS: 0.45, STAGE_FULL: 1.0}
+
+
+def stage_deadlines(started: float, max_seconds, stages) -> dict:
+    """When each stage has to hand over, as `time.perf_counter` readings.
+
+    A run with no budget has no deadlines, and a run of a single stage gives that stage all of it —
+    `--stage 3` means "spend the budget on stage 3", not "spend 55 % of it".
+    """
+    if max_seconds is None:
+        return {entry["stage"]: float("inf") for entry in stages}
+
+    if len(stages) == 1:
+        return {stages[0]["stage"]: started + max_seconds}
+
+    return {entry["stage"]: started + (max_seconds * STAGE_BUDGET_SHARE[entry["stage"]])
+            for entry in stages}
+
 # One environment per worker process, created on first use. The C side keeps its search scratch and
 # the evaluator's node values at file scope, so a batch is not safe to share between threads — with
 # processes the question does not arise, which is why this is a Pool and not a ThreadPool.
@@ -244,7 +272,9 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "training": {**report, "population": arguments.population_size, "maze": "normal",
                      "seed": arguments.seed, "episodes": arguments.episodes,
                      "ghost_bonus": GHOST_BONUS, "episode": arguments.episode,
-                     "no_deletion": arguments.no_deletion},
+                     # Shared with train_es.py, whose search has no deletion to forbid and
+                     # therefore no such flag.
+                     "no_deletion": getattr(arguments, "no_deletion", False)},
     }
 
     with open(path, "w") as handle:
@@ -296,7 +326,14 @@ def main(argv: Sequence[str]) -> int:
         config.genome_config.conn_delete_prob = 0.0
         config.genome_config.node_delete_prob = 0.0
 
-        print("deletion is off: NEAT may add structure and may not remove it", flush=True)
+        # The same door, by its other name. `net.py` flattens only the *enabled* connections, so a
+        # connection that gets switched off is gone from the network that plays and from the network
+        # that ships — deletion in everything but the word. At 1 % over 92 connections that is about
+        # one a generation, which is why a run with deletion forbidden still came out of the night
+        # holding 22 of its initial 92. Forbidding one and leaving the other is not an experiment.
+        config.genome_config.enabled_mutate_rate = 0.0
+
+        print("deletion is off: NEAT may add structure and may not remove or disable it", flush=True)
 
     # Asked, not assumed. If the firmware's observation grows a feature, this is where the run
     # stops — rather than in a network that was trained against the wrong 23 numbers.
@@ -340,6 +377,8 @@ def main(argv: Sequence[str]) -> int:
         """
         return (arguments.max_seconds is not None) and ((time.perf_counter() - started) >= arguments.max_seconds)
 
+    deadlines = stage_deadlines(started, arguments.max_seconds, stages)
+
     try:
         for entry in stages:
             if is_out_of_time():
@@ -348,6 +387,7 @@ def main(argv: Sequence[str]) -> int:
             trainer.stage = entry["stage"]
             generations = arguments.generations or entry["generations"]
             promote_at = entry["promote_at"]
+            deadline = deadlines[entry["stage"]]
 
             print(f"\n=== stage {entry['stage']}: {entry['what']} "
                   f"({generations} generations max, {arguments.workers} workers, "
@@ -362,8 +402,9 @@ def main(argv: Sequence[str]) -> int:
                     print(f"  promoted: {trainer.best_fitness:.1f} >= {promote_at:.1f}", flush=True)
                     break
 
-                if is_out_of_time():
-                    print(f"  out of time after {(time.perf_counter() - started) / 60.0:.0f} min", flush=True)
+                if time.perf_counter() >= deadline:
+                    print(f"  stage {entry['stage']} is out of time after "
+                          f"{(time.perf_counter() - started) / 60.0:.0f} min of the run", flush=True)
                     break
 
             # A stage is its own comparison. Carrying the previous stage's best fitness into the

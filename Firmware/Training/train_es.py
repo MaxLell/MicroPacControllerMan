@@ -44,7 +44,8 @@ from pacman_env import STAGE_FULL
 # sharing them is the whole point, because a second copy of "what a genome is worth" or "what a winner
 # file looks like" is a second thing to keep in step, and the comparison between the two trainers
 # depends on there being exactly one of each.
-from train import ACCEPTANCE_SEEDS, CURRICULUM, EPISODES_PER_GENOME, GHOST_BONUS, _play, _write_winner
+from train import (ACCEPTANCE_SEEDS, CURRICULUM, EPISODES_PER_GENOME, GHOST_BONUS, _play,
+                   _write_winner, stage_deadlines)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -174,7 +175,6 @@ def main(argv: Sequence[str]) -> int:
     pool = multiprocessing.Pool(arguments.workers) if arguments.workers > 1 else None
     stages = [entry for entry in CURRICULUM if (arguments.stage is None) or (entry["stage"] == arguments.stage)]
     started = time.perf_counter()
-    best_fitness = float("-inf")
     best_net = None
     generation = 0
 
@@ -192,6 +192,8 @@ def main(argv: Sequence[str]) -> int:
 
         return seeds
 
+    deadlines = stage_deadlines(started, arguments.max_seconds, stages)
+
     try:
         for entry in stages:
             if is_out_of_time():
@@ -200,12 +202,16 @@ def main(argv: Sequence[str]) -> int:
             stage = entry["stage"]
             generations = arguments.generations or entry["generations"]
             promote_at = entry["promote_at"]
+            deadline = deadlines[stage]
 
             print(f"\n=== stage {stage}: {entry['what']} ({generations} generations max, "
                   f"{arguments.workers} workers, {arguments.episode} episodes) ===", flush=True)
 
-            # A stage is its own comparison: the rules just changed, so a fitness from the stage
-            # before it says nothing about this one.
+            # A stage is its own comparison, and the winner file follows it. Stage 1 has no ghosts
+            # and no power pellets, so its networks clear level after level and score tens of
+            # thousands; stage 3 scores a couple of thousand. A best kept *across* the stages is
+            # therefore a stage-1 walker that nothing later can ever beat, and it is what the file
+            # would keep — train.py resets for the same reason, and the two must agree.
             stage_best = float("-inf")
 
             for _ in range(generations):
@@ -232,9 +238,6 @@ def main(argv: Sequence[str]) -> int:
 
                 if fitnesses[best] > stage_best:
                     stage_best = fitnesses[best]
-
-                if fitnesses[best] > best_fitness:
-                    best_fitness = fitnesses[best]
                     best_net = nets[best]
 
                     # Written the moment it improves, so a killed run still leaves its best on disk.
@@ -260,8 +263,9 @@ def main(argv: Sequence[str]) -> int:
                     print(f"  promoted: {stage_best:.1f} >= {promote_at:.1f}", flush=True)
                     break
 
-                if is_out_of_time():
-                    print(f"  out of time after {(time.perf_counter() - started) / 60.0:.0f} min", flush=True)
+                if time.perf_counter() >= deadline:
+                    print(f"  stage {stage} is out of time after "
+                          f"{(time.perf_counter() - started) / 60.0:.0f} min of the run", flush=True)
                     break
     except KeyboardInterrupt:
         print("\ninterrupted — writing what has been reached so far", flush=True)
