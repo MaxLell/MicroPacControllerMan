@@ -7,10 +7,14 @@ draws: the game's timings are jittered (FR-044), so a run is a draw rather than
 a measurement. Every figure below comes out of `Training/evaluate.py`, which
 measures both policies in one run so the comparison cannot drift.
 
-| run | what | score | vs. random | factor | nodes | conns | gen | FR-037 |
-|---|---|---|---|---|---|---|---|---|
-| `shipped` | the deterministic-game winner the firmware ships today — 4,980 on one fixed episode | 2197.0 | 424.5 | 5.2x | 35 | 19 | 276 | not met |
-| `neat-no-deletion` | NEAT, but forbidden to remove nodes or connections | 2360.0 | 424.5 | 5.6x | 40 | 22 | 360 | not met |
+| run | what | budget | score | vs. random | factor | nodes | conns | gen | FR-037 |
+|---|---|---|---|---|---|---|---|---|---|
+| `shipped` | the deterministic-game winner the firmware ships today — 4,980 on one fixed episode | — | 2197.0 | 424.5 | 5.2x | 35 | 19 | 276 | not met |
+| `neat-no-deletion` | NEAT, but forbidden to remove nodes or connections | — | 2360.0 | 424.5 | 5.6x | 40 | 22 | 360 | not met |
+| `es-one-life` | fixed 23-16-4 network, an episode ends at the first death | 0.95 h | 2353.0 | 424.5 | 5.5x | 43 | 432 | 1748 | not met |
+
+A budget of **1.00 h** could not pay for 2 of the configured runs, so they were not started: `es-whole-run` (needs 0.75 h), `es-whole-run-wide` (needs 0.75 h). A run too short to reach stage 3 answers a different question,
+so it is dropped rather than shortened.
 
 ## What each run reported
 
@@ -50,6 +54,25 @@ uniform random
 
 FR-037: 2360.0 vs. required 4600 — NOT met
          2360.0 vs. random 424.5 (5.6x) — met
+```
+
+### es-one-life — fixed 23-16-4 network, an episode ends at the first death
+
+```
+stage 3, normal maze, 43 nodes (16 hidden), 432 connections, digest d362304b2970ea24
+
+trained
+  scores  [3130, 2690, 2620, 2210, 2020, 1970, 1690, 1690, 4050, 1970, 1970, 3130, 1970, 2620, 1950, 820, 3620, 1670, 3270, 2000]
+  mean    2353.0   median 2010   min 820   max 4050
+  levels  reached up to 1   decisions 199..428   ghosts eaten 47
+
+uniform random
+  scores  [640, 540, 550, 460, 410, 360, 240, 140, 350, 510, 280, 700, 360, 440, 470, 290, 300, 340, 440, 670]
+  mean    424.5   median 425   min 140   max 700
+  levels  reached up to 1   decisions 75..295   ghosts eaten 0
+
+FR-037: 2353.0 vs. required 4600 — NOT met
+         2353.0 vs. random 424.5 (5.5x) — met
 ```
 
 ## Next
