@@ -1,12 +1,24 @@
 """An unattended training campaign: several runs, one after another, and one summary to read.
 
-    nohup Training/.venv/bin/python -u Training/campaign.py > Training/campaign/campaign.log 2>&1 &
+    Training/.venv/bin/python Training/campaign.py --hours 1
+    ./dev.sh train --hours 1                  # the same thing, detached, with the log followed
 
-Runs each configuration below for its slice of wall-clock time, measures the winner against FR-037
-on the **normal maze**, and appends a row to `Training/campaign/summary.md`. Read that file when it
-is done; it is the whole point of this script.
+Runs each configuration below for its share of the wall-clock time it is given, measures the winner
+against FR-037 on the **normal maze**, and appends a row to `Training/campaign/summary.md`. Read that
+file when it is done; it is the whole point of this script.
 
-Three things make it safe to leave alone.
+Four things make it safe to leave alone.
+
+**The budget is an input, and the runs share it.** `--hours` says when the campaign has to be
+finished, and each run gets a slice in proportion to its `hours` below — so the same list of runs is
+an hour at lunchtime or a night, without editing anything. What does *not* happen is a short campaign
+quietly running the first configuration and skipping the rest, which is what a fixed slice per run
+does to a budget that cannot pay for all of them.
+
+**A run that cannot be paid for is dropped, not shortened.** Each run says the least time it is worth
+starting with (`min_hours`), because a run too short to reach stage 3 does not produce a weaker
+answer — it produces a stage-2 network, and stage 3 is the only stage FR-037 is about. Its share goes
+to the runs that remain.
 
 **Every run is time-budgeted, not generation-budgeted.** A generation is not a fixed amount of
 work — a better agent lives longer, so its episodes are longer and its generations slower — and a
@@ -40,6 +52,7 @@ The maze never varies; the AI only ever plays the normal one (FR-040). The game'
 See Docu/Design/M6-Pacman-AI.md §14.
 """
 
+import argparse
 import json
 import os
 import subprocess
@@ -50,8 +63,18 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _OUT_DIR = os.path.join(_HERE, "campaign")
 _PYTHON = sys.executable
 
-#: One entry per run. `hours` is that run's slice; `args` goes to the trainer. The ceiling below is
-#: derived from these, so `hours` is the only thing to edit for a longer or shorter campaign.
+#: One entry per run. `args` goes to the trainer.
+#:
+#: `hours` is the run's **share** of the campaign, not an absolute: a campaign given three hours
+#: divides them the way a campaign given twelve does, so the same list is a lunch break or a night.
+#: The default budget is their sum, which is what these figures used to mean literally.
+#:
+#: `min_hours` is the least it is worth starting with. It is not a preference — below it the run
+#: does not reach stage 3 in any useful number of generations, and stage 3 is the only stage FR-037
+#: is measured on. Measured on four cores: a NEAT generation costs about 14 s (250 genomes x 12
+#: episodes) and an ES one about 3 s (32 x 12), which is the whole reason their floors differ by
+#: six times. `--episode whole-run` plays three lives instead of one, so its generations cost
+#: roughly three times what the one-life ones do.
 #:
 #: One variable at a time, against one baseline that is **already measured** and costs no time to
 #: reuse: NEAT, the one-life objective, deletion on — 1,746 points, with a winner that used 6
@@ -75,6 +98,7 @@ RUNS = [
         "name": "neat-no-deletion",
         "trainer": "train.py",
         "hours": 3.0,
+        "min_hours": 1.5,
         "args": ["--seed", "1", "--episode", "one-life", "--no-deletion"],
         "what": "NEAT, but forbidden to remove nodes or connections",
     },
@@ -82,6 +106,7 @@ RUNS = [
         "name": "es-one-life",
         "trainer": "train_es.py",
         "hours": 3.0,
+        "min_hours": 0.25,
         "args": ["--seed", "1", "--episode", "one-life"],
         "what": "fixed 23-16-4 network, an episode ends at the first death",
     },
@@ -89,6 +114,7 @@ RUNS = [
         "name": "es-whole-run",
         "trainer": "train_es.py",
         "hours": 3.0,
+        "min_hours": 0.75,
         "args": ["--seed", "1", "--episode", "whole-run"],
         "what": "the same, but an episode is the three-life run FR-037 measures",
     },
@@ -96,22 +122,23 @@ RUNS = [
         "name": "es-whole-run-wide",
         "trainer": "train_es.py",
         "hours": 3.0,
+        "min_hours": 0.75,
         "args": ["--seed", "1", "--episode", "whole-run", "--hidden", "32"],
         "what": "the same again with 32 hidden units, to see whether 16 was the ceiling",
     },
 ]
 
-#: Spare on top of the runs' own budgets, so that a run which overruns eats it rather than the next
-#: run's slice. Half an hour is generous: `train.py --max-seconds` stops between generations, so the
-#: worst overrun is one generation.
-CAMPAIGN_SLACK_HOURS = 0.5
+#: Held back from the runs so that one which overruns eats the spare rather than the next run's
+#: slice. A **fraction** rather than the half hour it used to be, because that half hour was sized
+#: against a night and is half of a one-hour campaign. `--max-seconds` stops between generations, so
+#: the worst overrun is one generation per run: 5 % is three minutes of an hour and 36 of a night,
+#: and both are the right order.
+CAMPAIGN_SLACK_FRACTION = 0.05
 
-#: What the whole campaign may take. **Derived**, not written down, because it used to be both: a
-#: ceiling of its own that had to be dragged along whenever a run's `hours` changed, and silently
-#: clamped the runs when it was not — the second run simply did not happen. Now there is one place to
-#: edit, which is `hours` above. `CAMPAIGN_HOURS` in the environment still overrides it, for "be done
-#: by breakfast whatever the runs say".
-CAMPAIGN_HOURS = float(os.environ.get("CAMPAIGN_HOURS", sum(run["hours"] for run in RUNS) + CAMPAIGN_SLACK_HOURS))
+#: What the whole campaign may take when nobody says. The runs' shares add up to it, so the default
+#: campaign is the one these figures always described. `--hours`, or `CAMPAIGN_HOURS` in the
+#: environment, is what makes it an hour instead.
+DEFAULT_CAMPAIGN_HOURS = sum(run["hours"] for run in RUNS)
 
 #: How many cores to evolve on. Unset means every one `train.py` can see, which is what you want on a
 #: machine whose whole job this is — a container on a big host sees all of them. Set `WORKERS` to
@@ -165,7 +192,7 @@ def _evaluate(winner_path: str) -> "tuple[str, dict]":
     return text, numbers
 
 
-def _write_summary(rows: list) -> None:
+def _write_summary(rows: list, dropped: list, hours: float) -> None:
     os.makedirs(_OUT_DIR, exist_ok=True)
     path = os.path.join(_OUT_DIR, "summary.md")
 
@@ -177,8 +204,8 @@ def _write_summary(rows: list) -> None:
         handle.write("draws: the game's timings are jittered (FR-044), so a run is a draw rather than\n")
         handle.write("a measurement. Every figure below comes out of `Training/evaluate.py`, which\n")
         handle.write("measures both policies in one run so the comparison cannot drift.\n\n")
-        handle.write("| run | what | score | vs. random | factor | nodes | conns | gen | FR-037 |\n")
-        handle.write("|---|---|---|---|---|---|---|---|---|\n")
+        handle.write("| run | what | budget | score | vs. random | factor | nodes | conns | gen | FR-037 |\n")
+        handle.write("|---|---|---|---|---|---|---|---|---|---|\n")
 
         for row in rows:
             factor = "—"
@@ -188,13 +215,26 @@ def _write_summary(rows: list) -> None:
             def number(value):
                 return f"{value:.1f}" if isinstance(value, float) else "—"
 
+            budget = f"{row['budget_hours']:.2f} h" if row.get("budget_hours") else "—"
+
             handle.write(
-                f"| `{row['name']}` | {row['what']} | "
+                f"| `{row['name']}` | {row['what']} | {budget} | "
                 f"{number(row['numbers']['trained'])} | {number(row['numbers']['random'])} | "
                 f"{factor} | {row.get('nodes') or '—'} | {row.get('conns') or '—'} | "
                 f"{row.get('generation') if row.get('generation') is not None else '—'} | "
                 f"{'**met**' if row['numbers']['met'] else 'not met'} |\n"
             )
+
+        if dropped:
+            # In the committed record and not only in a log that is not. "Why is there one row when
+            # four were configured" is the question this file exists to answer, and it has been
+            # asked once already.
+            handle.write(f"\nA budget of **{hours:.2f} h** could not pay for "
+                         f"{len(dropped)} of the configured runs, so they were not started: "
+                         + ", ".join(f"`{run['name']}` (needs {run['min_hours']:.2f} h)"
+                                     for run in dropped)
+                         + ". A run too short to reach stage 3 answers a different question,\n"
+                           "so it is dropped rather than shortened.\n")
 
         handle.write("\n## What each run reported\n")
         for row in rows:
@@ -226,16 +266,85 @@ def _describe(winner_path: str) -> dict:
     }
 
 
-def main() -> int:
+def _slices(runs: list, seconds: float) -> "tuple[dict, list]":
+    """Share `seconds` out between `runs`, and say which of them the budget cannot pay for.
+
+    Proportional to each run's `hours`, except that a run whose share falls below its `min_hours`
+    is dropped and its time given to the others. Dropped rather than shortened on purpose: a run
+    too short to reach stage 3 is not a weaker answer to the question, it is an answer to a
+    different one, and it would sit in the summary looking like the first.
+
+    The greediest run goes first, because dropping the one hardest to pay for is what most often
+    pays for all the rest — an hour that cannot afford NEAT can afford three ES runs.
+    """
+    remaining = list(runs)
+
+    while remaining:
+        total = sum(run["hours"] for run in remaining)
+        shares = {run["name"]: seconds * run["hours"] / total for run in remaining}
+        short = [run for run in remaining if shares[run["name"]] < (run["min_hours"] * 3600.0)]
+
+        if not short:
+            return shares, [run for run in runs if run not in remaining]
+
+        greediest = max(short, key=lambda run: run["min_hours"])
+        remaining = [run for run in remaining if run is not greediest]
+
+    return {}, list(runs)
+
+
+def _budget_that_would_run(run: dict, runs: list) -> float:
+    """The smallest campaign, in hours, that would actually start `run`.
+
+    Not simply its `min_hours`: dropping the runs it cannot afford hands their time to the ones that
+    remain, so a run needing a quarter of an hour can be paid for by a campaign of a third of one
+    even though four runs are configured. Answering with the naive figure sent the reader to three
+    times the budget they needed, which is a worse kind of wrong than being approximate.
+    """
+    hours = run["min_hours"]
+
+    for _ in range(64):
+        shares, _dropped = _slices(runs, hours * 3600.0 * (1.0 - CAMPAIGN_SLACK_FRACTION))
+
+        if run["name"] in shares:
+            return hours
+
+        hours *= 1.1
+
+    return hours
+
+
+def main(argv: "list[str]") -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--hours", type=float,
+                        default=float(os.environ.get("CAMPAIGN_HOURS", DEFAULT_CAMPAIGN_HOURS)),
+                        help="when the whole campaign has to be finished; the runs share it")
+    arguments = parser.parse_args(argv)
+
     os.makedirs(_OUT_DIR, exist_ok=True)
-    deadline = time.monotonic() + (CAMPAIGN_HOURS * 3600.0)
+    deadline = time.monotonic() + (arguments.hours * 3600.0)
     rows = []
+
+    # A run whose winner is already on disk is measured and not repeated, and measuring costs a
+    # second — so it is kept out of the sharing rather than given a slice it will never spend. That
+    # is what makes a resumed campaign put its whole budget into what is actually left to do.
+    to_train = [run for run in RUNS if not os.path.exists(os.path.join(_OUT_DIR, f"{run['name']}.json"))]
+    shares, dropped = _slices(to_train, arguments.hours * 3600.0 * (1.0 - CAMPAIGN_SLACK_FRACTION))
 
     # Said at the start, because the one question anybody has about a campaign is when it will be
     # done, and it is answerable from the configuration rather than by watching.
-    _log(f"{len(RUNS)} run(s), {sum(run['hours'] for run in RUNS):.2f} h of training, "
-         f"{CAMPAIGN_HOURS:.2f} h ceiling — expect to be finished around "
-         f"{time.strftime('%H:%M', time.localtime(time.time() + (CAMPAIGN_HOURS * 3600.0)))}")
+    _log(f"{len(shares)} run(s) to train, {arguments.hours:.2f} h ceiling — expect to be finished "
+         f"around {time.strftime('%H:%M', time.localtime(time.time() + (arguments.hours * 3600.0)))}")
+
+    for run in dropped:
+        # Loudly, and with the number that would change it. A campaign that silently ran fewer runs
+        # than it was configured with is how a night turns into a single row nobody expected.
+        _log(f"dropping {run['name']}: {arguments.hours:.2f} h cannot give it the "
+             f"{run['min_hours']:.2f} h it needs — --hours "
+             f"{_budget_that_would_run(run, to_train):.1f} would")
+
+    if not shares:
+        _log("nothing left to train — measuring what is on disk")
 
     for baseline in BASELINES:
         if not os.path.exists(baseline["path"]):
@@ -244,35 +353,43 @@ def main() -> int:
         _log(f"measuring the baseline: {baseline['name']}")
         text, numbers = _evaluate(baseline["path"])
         rows.append({**baseline, **_describe(baseline["path"]), "text": text, "numbers": numbers})
-        _write_summary(rows)
+        _write_summary(rows, dropped, arguments.hours)
 
     for run in RUNS:
         winner = os.path.join(_OUT_DIR, f"{run['name']}.json")
         log_path = os.path.join(_OUT_DIR, f"{run['name']}.log")
-        remaining = deadline - time.monotonic()
 
-        if remaining <= 300.0:
-            _log(f"skipping {run['name']}: only {remaining / 60.0:.0f} min of the campaign left")
-            continue
-
-        # The slice, or whatever is left of the campaign — whichever is smaller. A run that
-        # overran must not be paid for by the run after it.
-        seconds = min(run["hours"] * 3600.0, remaining - 60.0)
+        # What this run was actually given, which the summary reports. Two runs of the same
+        # configuration are only comparable if it is on the page: 20 minutes and 3 hours produce
+        # rows that otherwise look alike.
+        trained_hours = None
 
         if os.path.exists(winner):
             _log(f"{run['name']} already has a winner — measuring it, not retraining")
+        elif run["name"] not in shares:
+            continue
         else:
+            remaining = deadline - time.monotonic()
+
+            if remaining <= 300.0:
+                _log(f"skipping {run['name']}: only {remaining / 60.0:.0f} min of the campaign left")
+                continue
+
+            # The share, or whatever is left of the campaign — whichever is smaller. A run that
+            # overran must not be paid for by the run after it.
+            seconds = min(shares[run["name"]], remaining - 60.0)
+            trained_hours = seconds / 3600.0
             worker_arguments = ["--workers", WORKERS] if WORKERS else []
             trainer = run.get("trainer", "train.py")
 
-            _log(f"training {run['name']} with {trainer} for {seconds / 3600.0:.1f} h -> {log_path}")
+            _log(f"training {run['name']} with {trainer} for {seconds / 3600.0:.2f} h -> {log_path}")
 
             # `--checkpoint-every` is NEAT's, and only NEAT's: the evolution strategy has no
             # population to pickle, its whole state is a mean and a deviation.
             trainer_arguments = ["--checkpoint-every", "0"] if trainer == "train.py" else []
 
             with open(log_path, "w") as handle:
-                subprocess.run(
+                result = subprocess.run(
                     [_PYTHON, "-u", os.path.join(_HERE, trainer),
                      "--out", winner, "--max-seconds", str(seconds),
                      *trainer_arguments, *worker_arguments, *run["args"]],
@@ -280,17 +397,30 @@ def main() -> int:
                     stderr=subprocess.STDOUT,
                 )
 
+            # A trainer that died is not a trainer that found nothing, and the difference decides
+            # what to do next. It used to be invisible: three runs crashed on their first line one
+            # night, each took a second to do it, and the campaign reported them exactly the way it
+            # reports a run that trained for three hours and lost. The last lines of the log are
+            # quoted here so the reason is in front of whoever reads the campaign log.
+            if result.returncode != 0:
+                _log(f"{run['name']} FAILED: {trainer} exited {result.returncode} — {log_path} ends:")
+
+                with open(log_path) as handle:
+                    for line in handle.read().splitlines()[-5:]:
+                        _log(f"  | {line}")
+
         if not os.path.exists(winner):
             _log(f"{run['name']} produced no winner — see {log_path}")
             continue
 
         _log(f"measuring {run['name']}")
         text, numbers = _evaluate(winner)
-        rows.append({**run, **_describe(winner), "text": text, "numbers": numbers})
+        rows.append({**run, **_describe(winner), "text": text, "numbers": numbers,
+                     "budget_hours": trained_hours})
 
         # Written after every run rather than at the end, so an interrupted campaign still has a
         # readable summary of what it did manage.
-        _write_summary(rows)
+        _write_summary(rows, dropped, arguments.hours)
 
     _log("campaign finished")
 
@@ -298,4 +428,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

@@ -19,8 +19,15 @@
 #     ./dev.sh adopt-weights path/to/other.json # a campaign run's winner
 #     ./dev.sh adopt-weights --force ...        # adopt one that does not meet FR-037
 #
-#   Training in the container, detached — survives the terminal
+#   Training on this machine, detached — survives the terminal
+#     ./dev.sh train --hours 1     # a campaign that is finished in an hour
+#     ./dev.sh train               # the whole thing, which is a night
+#     ./dev.sh train --fresh       # ...after throwing away previous winners
+#     ./dev.sh train-stop          # stop it
+#
+#   Training in the container — the same campaign on a machine whose whole job it is
 #     ./dev.sh docker-train        # the campaign, in the background, logs followed
+#     ./dev.sh docker-train --hours 1 # the same budget switch
 #     ./dev.sh docker-train --fresh # ...after throwing away previous winners
 #     ./dev.sh docker-train-stop   # stop it
 #
@@ -402,6 +409,154 @@ require_docker() {
 }
 
 TRAIN_CONTAINER="micropac-train"
+TRAIN_PID_FILE="Training/campaign/campaign.pid"
+
+# The options both campaign commands take, parsed in one place because they have to mean the same
+# thing in both: an hour on this machine and a night on another are the same campaign.
+CAMPAIGN_FRESH=""
+CAMPAIGN_KEEP=""
+CAMPAIGN_HOURS=""
+
+parse_campaign_options() {
+    local command=$1
+    shift
+
+    CAMPAIGN_FRESH=""
+    CAMPAIGN_KEEP=""
+    CAMPAIGN_HOURS=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --fresh) CAMPAIGN_FRESH=yes ;;
+            --keep) CAMPAIGN_KEEP=yes ;;
+            --hours)
+                shift
+                CAMPAIGN_HOURS=${1:-}
+                [ -n "$CAMPAIGN_HOURS" ] || { fail "--hours needs a number of hours."; exit 2; }
+                ;;
+            --hours=*) CAMPAIGN_HOURS=${1#*=} ;;
+            *) fail "Unknown option for $command: $1"; exit 2 ;;
+        esac
+        shift
+    done
+}
+
+# A run whose winner exists is measured rather than repeated — deliberate, and what makes a campaign
+# resumable after a reboot. It is also the thing that silently halves a night when the leftovers were
+# not meant to be kept, so it is said out loud either way.
+check_campaign_leftovers() {
+    local command=$1
+    local -a leftovers=()
+
+    if [ -d Training/campaign ]; then
+        mapfile -t leftovers < <(find Training/campaign -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null | sort)
+    fi
+
+    [ "${#leftovers[@]}" -gt 0 ] || return 0
+    [ "$CAMPAIGN_KEEP" != yes ] || return 0
+
+    if [ "$CAMPAIGN_FRESH" = yes ]; then
+        step "Throwing away ${#leftovers[@]} previous winner(s): ${leftovers[*]}"
+        rm -f Training/campaign/*.json
+        return 0
+    fi
+
+    fail "Training/campaign already holds ${#leftovers[@]} winner(s): ${leftovers[*]}"
+    {
+        echo "  Those runs will be *measured, not trained* — which is what makes a campaign"
+        echo "  resumable, and what shortens a night when you did not mean it. Either keep"
+        echo "  them on purpose:"
+        echo ""
+        echo "    ./dev.sh $command --keep"
+        echo ""
+        echo "  ...or start over:"
+        echo ""
+        echo "    ./dev.sh $command --fresh"
+    } >&2
+    exit 2
+}
+
+# The campaign on this machine, no container involved: the one you start before lunch and read
+# afterwards. Detached for the same reason the container one is — an hour is longer than a terminal
+# stays open — and followed straight away, so the first thing seen is the campaign saying which runs
+# the budget could pay for.
+run_training() {
+    parse_campaign_options train "$@"
+
+    local python=Training/.venv/bin/python
+    [ -x "$python" ] || python=python3
+
+    if [ -f "$TRAIN_PID_FILE" ] && kill -0 "$(cat "$TRAIN_PID_FILE")" 2>/dev/null; then
+        fail "A campaign is already running (pid $(cat "$TRAIN_PID_FILE"))."
+        {
+            echo "  Follow it:  tail -f Training/campaign/campaign.log"
+            echo "  Stop it:    ./dev.sh train-stop"
+        } >&2
+        exit 2
+    fi
+
+    check_campaign_leftovers train
+
+    # Before starting, never during: the trainer loads libpacman_env.so through ctypes, and replacing
+    # that file under a running campaign replaces the game mid-experiment.
+    do_host_build
+
+    mkdir -p Training/campaign
+
+    local -a hours_argument=()
+    # An `if` and not `[ ... ] && ...`: under `set -e` a false test as the last statement of a
+    # function ends the script, and this one is false whenever no budget was given.
+    if [ -n "$CAMPAIGN_HOURS" ]; then
+        hours_argument=(--hours "$CAMPAIGN_HOURS")
+    fi
+
+    step "Starting the campaign"
+
+    # `setsid` puts it in a session of its own. That is what makes closing this terminal harmless,
+    # and what lets `train-stop` end the trainer's worker pool along with the campaign rather than
+    # leaving an hour of CPU running with nobody reading its output.
+    setsid nohup "$python" -u Training/campaign.py "${hours_argument[@]}" \
+        > Training/campaign/campaign.log 2>&1 &
+
+    local pid=$!
+    echo "$pid" > "$TRAIN_PID_FILE"
+
+    echo ""
+    echo "  Follow it:  tail -f Training/campaign/campaign.log"
+    echo "  Stop it:    ./dev.sh train-stop"
+    echo "  Read it:    Training/campaign/summary.md, rewritten after every run"
+    echo ""
+
+    # Ends by itself when the campaign does, rather than leaving a tail behind on a finished run.
+    tail -f --pid "$pid" Training/campaign/campaign.log
+}
+
+stop_training() {
+    if [ ! -f "$TRAIN_PID_FILE" ]; then
+        fail "There is no campaign to stop."
+        exit 2
+    fi
+
+    local pid
+    pid=$(cat "$TRAIN_PID_FILE")
+
+    if ! kill -0 "$pid" 2>/dev/null; then
+        fail "The campaign (pid $pid) is not running any more."
+        rm -f "$TRAIN_PID_FILE"
+        exit 2
+    fi
+
+    step "Stopping the campaign (process group $pid)"
+
+    # The group, not the process. campaign.py's trainer is a child with a worker pool of its own, and
+    # killing the parent alone leaves the pool running and the campaign unable to collect it — the
+    # same trap the campaign's own header describes about `pkill -f train.py`.
+    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid"
+    rm -f "$TRAIN_PID_FILE"
+
+    echo "Stopped. Nothing is lost — a trainer writes its winner on every improvement, and"
+    echo "'./dev.sh train' measures rather than repeats a run whose winner is on disk."
+}
 
 # The campaign, detached, so that closing the terminal does not end the night.
 #
@@ -410,17 +565,7 @@ TRAIN_CONTAINER="micropac-train"
 # over from last time makes the campaign *skip* that run — which shortens the night without looking
 # like anything went wrong.
 run_training_in_docker() {
-    local fresh=""
-    local keep=""
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            --fresh) fresh=yes ;;
-            --keep) keep=yes ;;
-            *) fail "Unknown option for docker-train: $1"; exit 2 ;;
-        esac
-        shift
-    done
+    parse_campaign_options docker-train "$@"
 
     require_docker
     build_docker_image
@@ -447,34 +592,7 @@ run_training_in_docker() {
         docker rm -f "$TRAIN_CONTAINER" >/dev/null
     fi
 
-    # A run whose winner exists is measured rather than repeated — deliberate, and what makes a
-    # campaign resumable after a reboot. It is also the thing that silently halves a night when the
-    # leftovers were not meant to be kept, so it is said out loud either way.
-    local -a leftovers=()
-    if [ -d Training/campaign ]; then
-        mapfile -t leftovers < <(find Training/campaign -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null | sort)
-    fi
-
-    if [ "${#leftovers[@]}" -gt 0 ] && [ "$keep" != yes ]; then
-        if [ "$fresh" = yes ]; then
-            step "Throwing away ${#leftovers[@]} previous winner(s): ${leftovers[*]}"
-            rm -f Training/campaign/*.json
-        else
-            fail "Training/campaign already holds ${#leftovers[@]} winner(s): ${leftovers[*]}"
-            {
-                echo "  Those runs will be *measured, not trained* — which is what makes a campaign"
-                echo "  resumable, and what shortens a night when you did not mean it. Either keep"
-                echo "  them on purpose:"
-                echo ""
-                echo "    ./dev.sh docker-train --keep"
-                echo ""
-                echo "  ...or start over:"
-                echo ""
-                echo "    ./dev.sh docker-train --fresh"
-            } >&2
-            exit 2
-        fi
-    fi
+    check_campaign_leftovers docker-train
 
     local repository_root
     repository_root=$(cd .. && pwd)
@@ -484,11 +602,18 @@ run_training_in_docker() {
 
     step "Starting the campaign in $TRAIN_CONTAINER"
 
+    local -a hours_argument=()
+    # An `if` and not `[ ... ] && ...`: under `set -e` a false test as the last statement of a
+    # function ends the script, and this one is false whenever no budget was given.
+    if [ -n "$CAMPAIGN_HOURS" ]; then
+        hours_argument=(--hours "$CAMPAIGN_HOURS")
+    fi
+
     docker run -d --name "$TRAIN_CONTAINER" \
         --user "$uid:$gid" \
         --volume "$repository_root:/work" \
         --workdir "$CONTAINER_WORKDIR" \
-        "$DOCKER_IMAGE" python3 Training/campaign.py >/dev/null
+        "$DOCKER_IMAGE" python3 Training/campaign.py "${hours_argument[@]}" >/dev/null
 
     echo ""
     echo "  Follow it:  ./dev.sh docker-train        (or docker logs -f $TRAIN_CONTAINER)"
@@ -587,6 +712,8 @@ case "$cmd" in
     check) do_check ;;
     format) ./format.sh "$@" ;;
     adopt-weights) do_adopt_weights "$@" ;;
+    train) run_training "$@" ;;
+    train-stop) stop_training ;;
     docker) run_in_docker "$@" ;;
     docker-train) run_training_in_docker "$@" ;;
     docker-train-stop) stop_training_in_docker ;;
@@ -611,6 +738,7 @@ case "$cmd" in
     *)
         fail "Unknown command: $cmd"
         echo "Try: test | format | check | host | build | flash | install-hook |" >&2
+        echo "     train | train-stop |" >&2
         echo "     docker | docker-build | docker-train | docker-train-stop |" >&2
         echo "     adopt-weights |" >&2
         echo "     all | suite | manual | display_id | display_test | joystick |" >&2
