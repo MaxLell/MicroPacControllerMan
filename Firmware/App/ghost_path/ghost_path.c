@@ -41,7 +41,6 @@ static direction_e prv_find_step(const playfield_t* const in_playfield, cell_t i
     direction_e best_direction = DIRECTION_NONE;
     uint32_t best_cost = 0U;
     direction_e dead_end_direction = DIRECTION_NONE;
-    direction_e only_way = DIRECTION_NONE;
 
     ASSERT(in_playfield != NULL);
     ASSERT(in_is_better != NULL);
@@ -153,6 +152,8 @@ static direction_e prv_find_route_step(const playfield_t* const in_playfield, ce
 {
     direction_e dead_end_direction = DIRECTION_NONE;
     direction_e only_way = DIRECTION_NONE;
+    const uint16_t target_index = prv_get_index(in_target);
+    const bool is_target_reachable = prv_is_open(in_playfield, in_target, in_may_pass_gate);
     uint16_t head = 0U;
     uint16_t tail = 0U;
     uint16_t best_index = 0U;
@@ -190,6 +191,11 @@ static direction_e prv_find_route_step(const playfield_t* const in_playfield, ce
         g_queue[tail] = neighbour_index;
         ++tail;
         only_way = candidate;
+
+        if (is_target_reachable && (neighbour_index == target_index))
+        {
+            return candidate;
+        }
     }
 
     /* Nothing to search for: with one way out that is not the way back, that way *is* the answer,
@@ -235,6 +241,25 @@ static direction_e prv_find_route_step(const playfield_t* const in_playfield, ce
             g_step_count[neighbour_index] = (uint16_t)(g_step_count[index] + 1U);
             g_queue[tail] = neighbour_index;
             ++tail;
+
+            /* Reached the target itself, so the ring expansion can stop here.
+             *
+             * The scan below picks the reached cell whose straight-line distance to the target is
+             * smallest, walking the queue in the order the rings filled it. The target's own
+             * distance to itself is zero and nothing can beat it, and the queue reaches it by the
+             * shortest route first and in the candidate order within that — which is exactly the
+             * tie-break the scan would apply. So the answer is the same one, found without
+             * expanding the rest of the maze.
+             *
+             * Only when the target is a cell a ghost could stand on. Pinky aims four cells ahead of
+             * Pacman and Inky at a reflection of Blinky, and both land in a wall or off the board
+             * routinely; the scatter targets sit in unreachable dead space on purpose. Those still
+             * need the full sweep, because "nearest reachable cell" is only answerable by looking
+             * at all of them. */
+            if (is_target_reachable && (neighbour_index == target_index))
+            {
+                return (direction_e)(g_first_direction[neighbour_index] - 1U);
+            }
         }
     }
 
