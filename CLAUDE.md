@@ -188,6 +188,16 @@ silently working around a wart.
     stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
     `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
     its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
+  - **The agent that ships now was trained against a continuous cost for danger** (M6 §14.6): the
+    fitness charges ten points for every decision taken with a killing ghost within four cells, and
+    it is the first thing that moved the wall — **the first agent in this project to finish a level**,
+    reaching level 2, with the worst of a hundred runs going from 990 points to 1,940. The mean, at
+    3,035, is statistically indistinguishable from what came before; what changed is that it stopped
+    dying badly. Three things were measured *not* to help and are recorded so they are not retried:
+    paying a bonus per ghost eaten (it cost score, and more training made it worse), a bonus for
+    finishing a level (identically zero until one is finished, so no gradient at all), and a bigger
+    population. Comparisons are made at **100 episodes**, not FR-037's twenty — at twenty the
+    standard error is larger than the differences being argued about.
   - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
     2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
     growth is the equivalence test's own recorded states and playfield.

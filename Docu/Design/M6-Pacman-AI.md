@@ -704,3 +704,56 @@ every forty generations and is at its 0.01 floor well inside an hour, so a longe
 less than its length suggests. And with deletion *and* disabling forbidden, the best genome's
 connection count still drifts down — 92 to 72 over fourteen generations where it used to be 92 to 26
 over nineteen. Much slower, not stopped, and the remaining mechanism is not yet identified.
+
+### 14.6 The night that found the wall: danger has to cost something before it kills you
+
+Everything §14.5 left open was measured across five runs of four hours each, all on the 23 features,
+all with restarts, all on the acceptance seeds at **100 episodes** rather than twenty. That change of
+sample size is the first result: at n=20 the standard error is about 170 points against differences
+of 150–350, and three conclusions drawn at that size had to be withdrawn. The figure FR-037 asks for
+is a mean of twenty runs, which is fine as an acceptance gate and far too few to compare two agents
+with.
+
+| run | objective | score | max level | worst of 100 | over 2,600 |
+|---|---|---|---|---|---|
+| the shipped table, for reference | — | 2,254 | 1 | — | — |
+| 23 features, 1 h, ghost bonus 500 | score + 500/ghost | 3,015 | 1 | 990 | 57 |
+| 23 features, 1.5 h, ghost bonus 500 | the same | **2,171** | 1 | — | — |
+| `arcade` | the plain arcade score | 2,753 | 1 | 670 | — |
+| `arcade_lvl` | + 500 a finished level | **2,753** | 1 | 670 | — |
+| **`arcade_danger`** | + 500 a level, **− 10 a decision spent in danger** | **3,035** | **2** | **1,940** | **77** |
+| `danger_pop64` | the same, population 64 | 2,069 | 1 | 1,180 | — |
+
+**The ghost bonus was costing score, and more training made it worse.** Two runs of the same
+configuration, one twice as long as the other: 938 generations reached a *fitness* of 5,917 and a
+*score* of 2,171, against 3,015 from a fifth of the search. The agent was doing exactly what it was
+paid to do — 2.5 ghosts a run against 0.6 — and the thing being measured got worse for it. None of
+the open-source Pac-Man agents this project was compared against pays anything for eating a ghost;
+they penalise ghosts and never reward them. FR-036's bonus is gone.
+
+**The level bonus was inert, and could not have been anything else.** `arcade_lvl` produced *the same
+weights* as `arcade`, to the byte apart from the metadata that records what it was paid. The term is
+`500 × (level − 1)` and no episode had ever finished a level, so it was identically zero and the
+search followed an identical path. A reward for finishing a level cannot teach an agent to finish
+one: there is no gradient until it has already happened by accident. It is kept because it is no
+longer identically zero — level 2 is now reached — but it earned nothing here.
+
+**The danger penalty is what moved the wall.** `env_api` counts the decisions taken with a
+ghost that can kill within four cells, and fitness charges ten points for each. That is the one thing
+every reference does and this project did not: the agent's whole lesson about danger used to be the
+episode ending when it died — a single event, at the end, saying nothing about the twenty decisions
+it spent walking beside a ghost beforehand.
+
+What it bought is not in the mean. Against the best previous agent the paired difference is **+20
+points, t = 0.12** — nothing. What changed is the shape of the distribution: the worst of a hundred
+runs went from 990 to **1,940**, the runs clearing level 1's worth of points went from 57 to 77, and
+for the first time in this project **an agent finished a level**. It stopped dying badly, which is a
+different achievement from scoring well and the one that a run to level 21 is made of.
+
+**Population 64 is worse than 32 at the same wall-clock**, by 966 points: twice the candidates is half
+the generations, and with restarts already supplying the exploration, the generations are worth more.
+
+Still true, and still the thing in the way: level 2 is not level 21, and the score is a long way from
+FR-037's 4,600. What the night established is which levers move it — a dense, continuous cost for
+being in danger — and which do not: a bigger population, a richer observation (§14.5), a sparse
+terminal bonus, or paying the agent for the ghosts it eats.
