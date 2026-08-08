@@ -60,6 +60,17 @@ HIDDEN_UNITS = 16
 POPULATION = 32
 ELITE = 8
 
+#: Generations without a better genome before the search is widened again. Long enough that an
+#: ordinary run of bad luck does not trigger it — a generation is twelve jittered episodes and the
+#: best of thirty-two candidates, so a handful of flat ones in a row is normal.
+RESTART_PATIENCE = 40
+
+#: How narrow the spread has to have become to count as converged, as a share of what it started
+#: at; and, times four, what a restart puts back. Restoring the *initial* spread would throw away
+#: the run — the mean is kept precisely so the search carries on from what it earned, and a step
+#: that large around it is a new run in all but name.
+RESTART_SIGMA_SHARE = 0.1
+
 
 class Strategy:
     """The search: a mean, a standard deviation per dimension, and ranked recombination.
@@ -109,6 +120,28 @@ class Strategy:
         #: search is one unlucky generation away from being unable to move in that direction ever.
         self.sigma_floor = 0.01
 
+        #: What `restart` puts back. Kept rather than recomputed, because the initial deviations are
+        #: not one number — they are He's per layer, and the output biases have their own.
+        self.initial_sigma = list(self.sigma)
+
+        self.restarts = 0
+
+    def restart(self, scale: float) -> None:
+        """Widen the search again around wherever it has got to.
+
+        **The mean is kept and only the spread is restored.** This is a local restart: the search
+        carries on exploring around the best region it found rather than throwing that away and
+        starting over, which is the point — the converged mean is the one thing a spent run has
+        definitely earned.
+
+        It exists because a run converges long before its budget is spent. Measured: `sigma` halves
+        about every forty generations and sits on its floor from roughly generation two hundred, and
+        a run given 1,748 generations scored 43 points *less* than the same configuration given 265.
+        Everything after convergence was wall-clock spent on a search that could no longer move.
+        """
+        self.sigma = [value * scale for value in self.initial_sigma]
+        self.restarts += 1
+
     def sample(self, count: int) -> List[List[float]]:
         return [[self.mean[index] + (self.sigma[index] * self.rng.gauss(0.0, 1.0))
                  for index in range(self.size)]
@@ -147,6 +180,12 @@ def main(argv: Sequence[str]) -> int:
                         help="stop an episode at the first death, or play the run out as FR-037 does")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
+    parser.add_argument("--ghost-bonus", type=int, default=GHOST_BONUS,
+                        help="fitness paid per ghost on top of the game's own score; 0 is the arcade")
+    parser.add_argument("--level-bonus", type=int, default=0,
+                        help="fitness paid per level finished, which the score only pays for indirectly")
+    parser.add_argument("--danger-penalty", type=int, default=0,
+                        help="fitness charged per decision taken within four cells of a killing ghost")
     parser.add_argument("--seed", type=int, default=1, help="the run's own draw")
     parser.add_argument("--out", default=os.path.join(_HERE, "winner.json"))
     parser.add_argument(
@@ -193,6 +232,7 @@ def main(argv: Sequence[str]) -> int:
         return seeds
 
     deadlines = stage_deadlines(started, arguments.max_seconds, stages)
+    initial_mean_sigma = sum(strategy.sigma) / float(strategy.size)
 
     try:
         for entry in stages:
@@ -213,12 +253,14 @@ def main(argv: Sequence[str]) -> int:
             # therefore a stage-1 walker that nothing later can ever beat, and it is what the file
             # would keep — train.py resets for the same reason, and the two must agree.
             stage_best = float("-inf")
+            stalled = 0
 
             for _ in range(generations):
                 seeds = draw_seeds()
                 candidates = strategy.sample(arguments.population)
                 nets = [net.dense(input_count, arguments.hidden, output_count, values) for values in candidates]
-                tasks = [(flat, seeds, stage, arguments.library, arguments.episode == "one-life")
+                tasks = [(flat, seeds, stage, arguments.library, arguments.episode == "one-life",
+                          arguments.ghost_bonus, arguments.level_bonus, arguments.danger_penalty)
                          for flat in nets]
 
                 at = time.perf_counter()
@@ -236,7 +278,10 @@ def main(argv: Sequence[str]) -> int:
                 mean_score = sum(scores) / float(len(scores))
                 mean_sigma = sum(strategy.sigma) / float(strategy.size)
 
-                if fitnesses[best] > stage_best:
+                improved = fitnesses[best] > stage_best
+                stalled = 0 if improved else (stalled + 1)
+
+                if improved:
                     stage_best = fitnesses[best]
                     best_net = nets[best]
 
@@ -258,6 +303,18 @@ def main(argv: Sequence[str]) -> int:
                       f"score {mean_score:7.1f}  ghosts {sum(ghosts):3d}  level {max(levels)}  "
                       f"sigma {mean_sigma:.3f}  {total_steps / elapsed:7.0f} decisions/s  {elapsed:5.1f}s",
                       flush=True)
+
+                # Converged, and there is budget left: widen the search again rather than spend the
+                # rest of the run sampling a point. Both conditions are needed — a spread still
+                # shrinking is a search still working, and a stall at a wide spread is a hard
+                # problem rather than an exhausted one.
+                if (stalled >= RESTART_PATIENCE) and (mean_sigma <= (RESTART_SIGMA_SHARE * initial_mean_sigma)):
+                    strategy.restart(RESTART_SIGMA_SHARE * 4.0)
+                    stalled = 0
+
+                    print(f"  restart {strategy.restarts}: {RESTART_PATIENCE} generations without a "
+                          f"better genome at sigma {mean_sigma:.3f} — widening around the best so far",
+                          flush=True)
 
                 if (promote_at is not None) and (stage_best >= promote_at):
                     print(f"  promoted: {stage_best:.1f} >= {promote_at:.1f}", flush=True)

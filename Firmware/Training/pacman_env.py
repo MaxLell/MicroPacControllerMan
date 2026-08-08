@@ -66,6 +66,7 @@ class PacmanEnv:
         self._steps = (ctypes.c_uint32 * count)()
         self._levels = (ctypes.c_uint8 * count)()
         self._ghosts_eaten = (ctypes.c_uint16 * count)()
+        self._danger = (ctypes.c_uint32 * count)()
 
     def _declare(self) -> None:
         lib = self._lib
@@ -91,6 +92,7 @@ class PacmanEnv:
         ]
         lib.env_scores.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
         lib.env_ghosts_eaten.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint16)]
+        lib.env_danger_decisions.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
         lib.env_set_episode_ends_at_first_death.argtypes = [ctypes.c_void_p, ctypes.c_bool]
         lib.env_levels.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint8)]
         lib.env_set_net.restype = ctypes.c_bool
@@ -222,6 +224,16 @@ class PacmanEnv:
         )
 
         return list(self._scores), list(self._steps), list(self._levels), list(self._ghosts_eaten)
+
+    def danger(self) -> List[int]:
+        """Decisions each episode spent within four cells of a ghost that could kill.
+
+        Read separately rather than returned by `run`, so that the callers which only want what
+        FR-037 measures are not touched by a figure only training has a use for.
+        """
+        self._lib.env_danger_decisions(self._batch, self._danger)
+
+        return list(self._danger)
 
     def scores(self) -> List[int]:
         self._lib.env_scores(self._batch, self._scores)

@@ -328,6 +328,18 @@ void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state);
 cell_t game_get_pacman_cell(const game_t* in_game);
 
 /*! \brief How the run stands. */
+/*! \brief Where one ghost is, and whether it can currently be eaten.
+ *
+ * The pair exists for the training environment, which has to know how much danger a decision was
+ * taken in without building a whole state message for every one of them (that message is 246 bytes
+ * and a run takes hundreds of decisions). Nothing in the firmware needs them.
+ *
+ * \param[in]       in_game: instance, must not be `NULL`
+ * \param[in]       in_index: 0..#GHOST_COUNT-1
+ */
+cell_t game_get_ghost_cell(const game_t* in_game, uint8_t in_index);
+bool game_is_ghost_frightened(const game_t* in_game, uint8_t in_index);
+
 game_state_e game_get_state(const game_t* in_game);
 
 /*! \brief The score so far, cumulative across levels (§10.9). */

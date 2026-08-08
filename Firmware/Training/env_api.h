@@ -143,6 +143,15 @@ void env_levels(const env_batch_t* in_batch, uint8_t* out_levels);
  * worth learning, and a fitness that only saw the score could not weight it differently from the
  * pellets that produced the same points.
  */
+/*! \brief Decisions each game took while a ghost that could kill was within four cells.
+ *
+ * What a fitness charges for danger, rather than only for dying. See the field it reads.
+ *
+ * \param[in]       in_batch: the batch
+ * \param[out]      out_danger_decisions: `count` long
+ */
+void env_danger_decisions(const env_batch_t* in_batch, uint32_t* out_danger_decisions);
+
 void env_ghosts_eaten(const env_batch_t* in_batch, uint16_t* out_ghosts_eaten);
 
 /*! \brief End every episode at the first life lost, rather than when the run is over (FR-036).

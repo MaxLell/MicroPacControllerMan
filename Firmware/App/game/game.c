@@ -1029,6 +1029,22 @@ void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state)
     out_state->level = in_game->level;
 }
 
+cell_t game_get_ghost_cell(const game_t* in_game, uint8_t in_index)
+{
+    ASSERT(in_game != NULL);
+    ASSERT(in_index < (uint8_t)GHOST_COUNT);
+
+    return ghost_get_cell(&in_game->ghosts[in_index]);
+}
+
+bool game_is_ghost_frightened(const game_t* in_game, uint8_t in_index)
+{
+    ASSERT(in_game != NULL);
+    ASSERT(in_index < (uint8_t)GHOST_COUNT);
+
+    return ghost_is_frightened(&in_game->ghosts[in_index]);
+}
+
 game_state_e game_get_state(const game_t* in_game)
 {
     ASSERT(in_game != NULL);

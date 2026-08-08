@@ -48,8 +48,24 @@ typedef struct
      *         the game itself did not have to grow an idle rule. */
     uint32_t idle_ms;
 
+    /*! \brief Decisions taken with a ghost that can kill within #DANGER_RADIUS_CELLS.
+     *
+     * Training's, not the game's. The agent's only lesson about danger used to be the episode
+     * ending when it died — one event, at the end, and nothing to say that it had been walking
+     * beside a ghost for twenty decisions before that. Every open-source Pac-Man agent this one
+     * was compared against penalises *proximity* rather than only collision, and this is the
+     * figure a fitness can charge for it.
+     *
+     * Straight-line rather than a maze route: a route would be truer and would cost a
+     * breadth-first search per decision on top of the four the observation already does. Being
+     * two cells away through a wall still means the ghost is about to be somewhere awkward. */
+    uint32_t danger_decisions;
+
     bool is_done;
 } env_game_t;
+
+/*! \brief How near a killing ghost has to be for a decision to count as taken in danger. */
+#define DANGER_RADIUS_CELLS (4)
 
 /*! \brief The network #env_set_net installed, with the arrays it points at owned here.
  *
@@ -176,6 +192,26 @@ static uint32_t prv_step_one(env_game_t* const inout_entry, pacman_ai_action_e i
         inout_entry->ends_at_first_death && (game_get_lives(&inout_entry->game) < GAME_STARTING_LIVES);
 
     inout_entry->is_done = is_over || is_idle || has_died;
+
+    const cell_t pacman = game_get_pacman_cell(&inout_entry->game);
+
+    for (uint8_t index = 0U; index < (uint8_t)GHOST_COUNT; ++index)
+    {
+        if (game_is_ghost_frightened(&inout_entry->game, index))
+        {
+            continue;
+        }
+
+        const cell_t ghost = game_get_ghost_cell(&inout_entry->game, index);
+        const int16_t dx = (int16_t)(ghost.x - pacman.x);
+        const int16_t dy = (int16_t)(ghost.y - pacman.y);
+
+        if (((dx * dx) + (dy * dy)) <= (DANGER_RADIUS_CELLS * DANGER_RADIUS_CELLS))
+        {
+            ++inout_entry->danger_decisions;
+            break;
+        }
+    }
 
     return gained;
 }
@@ -356,6 +392,7 @@ void env_reset(env_batch_t* inout_batch, const uint32_t* in_seeds, uint8_t in_st
             game_start_on_map_configured(&entry->game, &normal_maze, &config);
         }
 
+        entry->danger_decisions = 0U;
         entry->idle_ms = 0U;
         entry->is_done = false;
     }
@@ -400,6 +437,14 @@ void env_set_episode_ends_at_first_death(env_batch_t* inout_batch, bool in_ends_
     if (inout_batch != NULL)
     {
         inout_batch->ends_at_first_death = in_ends_at_first_death;
+    }
+}
+
+void env_danger_decisions(const env_batch_t* in_batch, uint32_t* out_danger_decisions)
+{
+    for (uint32_t index = 0U; index < in_batch->count; ++index)
+    {
+        out_danger_decisions[index] = in_batch->games[index].danger_decisions;
     }
 }
 

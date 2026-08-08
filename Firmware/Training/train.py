@@ -147,13 +147,19 @@ def _play(task):
     Returns the *fitness* alongside the raw figures, so that what selection sees and what a log line
     reports come out of one place.
     """
-    flat_net, seeds, stage, library_path, ends_at_first_death = task
+    flat_net, seeds, stage, library_path, ends_at_first_death, ghost_bonus, level_bonus, danger_penalty = task
     env = _worker_env(len(seeds), library_path)
     env.set_episode_ends_at_first_death(ends_at_first_death)
     env.set_net(flat_net)
     scores, steps, levels, ghosts = env.run(seeds, stage, MAZE_NORMAL)
 
-    fitness = sum(score + (GHOST_BONUS * eaten) for score, eaten in zip(scores, ghosts)) / float(len(scores))
+    # The two bonuses arrive in the task rather than being read from module scope, so that a run can
+    # be told what to value without editing the trainer — and so that what a winner file records is
+    # what that run actually optimised.
+    danger = env.danger()
+
+    fitness = sum(score + (ghost_bonus * eaten) + (level_bonus * (level - 1)) - (danger_penalty * near)
+                  for score, eaten, level, near in zip(scores, ghosts, levels, danger)) / float(len(scores))
 
     return fitness, scores, steps, levels, ghosts
 
@@ -196,7 +202,8 @@ class Trainer:
         flat = []
         for genome_id, genome in genomes:
             flat.append((net.from_genome(genome, config), seeds, self.stage, self.arguments.library,
-                         self.arguments.episode == "one-life"))
+                         self.arguments.episode == "one-life", self.arguments.ghost_bonus,
+                         self.arguments.level_bonus, self.arguments.danger_penalty))
 
         if self.pool is not None:
             results = self.pool.map(_play, flat, chunksize=1)
@@ -271,7 +278,9 @@ def _write_winner(path: str, flat_net, report: dict, arguments) -> None:
         "node_keys": flat_net.node_keys,
         "training": {**report, "population": arguments.population_size, "maze": "normal",
                      "seed": arguments.seed, "episodes": arguments.episodes,
-                     "ghost_bonus": GHOST_BONUS, "episode": arguments.episode,
+                     "ghost_bonus": arguments.ghost_bonus, "level_bonus": arguments.level_bonus,
+                     "danger_penalty": arguments.danger_penalty,
+                     "episode": arguments.episode,
                      # Shared with train_es.py, whose search has no deletion to forbid and
                      # therefore no such flag.
                      "no_deletion": getattr(arguments, "no_deletion", False)},
@@ -294,6 +303,12 @@ def main(argv: Sequence[str]) -> int:
                         help="forbid NEAT from removing nodes and connections: grow only")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
+    parser.add_argument("--ghost-bonus", type=int, default=GHOST_BONUS,
+                        help="fitness paid per ghost on top of the game's own score; 0 is the arcade")
+    parser.add_argument("--level-bonus", type=int, default=0,
+                        help="fitness paid per level finished, which the score only pays for indirectly")
+    parser.add_argument("--danger-penalty", type=int, default=0,
+                        help="fitness charged per decision taken within four cells of a killing ghost")
     parser.add_argument("--seed", type=int, default=1,
                         help="the run's own draw: NEAT's initial population and its mutations")
     parser.add_argument("--config", default=_DEFAULT_CONFIG)
