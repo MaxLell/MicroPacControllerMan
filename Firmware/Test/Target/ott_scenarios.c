@@ -6,6 +6,7 @@
 
 #include "custom_assert.h"
 #include "ott_ai_equivalence.h"
+#include "ott_ai_frame_cost.h"
 #include "ott_ai_high_score.h"
 #include "ott_animation.h"
 #include "ott_display_id.h"
@@ -26,6 +27,7 @@
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
     {"ai_equivalence", NULL, ott_ai_equivalence_run},
+    {"ai_frame_cost", NULL, ott_ai_frame_cost_run},
     {"ai_high_score", NULL, ott_ai_high_score_run},
     {"animation", NULL, ott_animation_run},
     {"display_id", NULL, ott_display_id_run},

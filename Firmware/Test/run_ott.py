@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_high_score"]
+AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
@@ -52,7 +52,7 @@ LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
 
 # An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
 # because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
-LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0}
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0}
 
 
 def detect_port() -> str:
