@@ -188,6 +188,15 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
         write_command(fd, f"ott {test}\r\n")
         match, text = read_until(fd, [passed, failed, unknown], timeout, echo=interactive)
         if match == passed:
+            # The detail lines a test printed, not only the verdict. Several tests exist to
+            # *measure* something — a frame budget, the cost of a route search — and their number
+            # is the whole point of running them; a bare PASS throws it away and the only way to
+            # see it was to make the test fail on purpose. Two leading spaces is the convention
+            # those lines already follow.
+            for line in text.splitlines():
+                if line.startswith("  ") and line.strip():
+                    print(line.rstrip())
+
             print(f"\nPASS: {test}")
             return 0
         if match == failed:

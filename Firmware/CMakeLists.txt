@@ -264,6 +264,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/ott.c
     Test/Target/scripts/ott_ai_equivalence.c
     Test/Target/scripts/ott_ai_frame_cost.c
+    Test/Target/scripts/ott_search_budget.c
     Test/Target/scripts/ott_ai_high_score.c
     Test/Target/scripts/ott_ai_equivalence_states.c
     Test/Target/scripts/ott_pacman_ai.c
