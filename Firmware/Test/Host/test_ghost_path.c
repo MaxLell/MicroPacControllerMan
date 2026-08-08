@@ -140,19 +140,22 @@ void test_ties_break_up_before_left(void)
     TEST_ASSERT_EQUAL(DIRECTION_NORTH, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
-void test_the_route_decides_where_the_neighbours_are_a_tie(void)
+void test_a_tie_between_neighbours_falls_to_the_arcade_order(void)
 {
-    /* This is what the route search buys, in one case.
+    /* This is what the arcade rule costs, in one case — and it is the case that bought the route
+     * search in the first place (DEC-023), so it is worth keeping as the record of what was traded
+     * away when that was rolled back (DEC-049).
      *
-     * From here, north is walled and the target is straight up and off the board. West and
-     * East are mirror images, so the two neighbours are *exactly* equidistant — the greedy
-     * rule this replaced had nothing to go on and fell through to its tie-break, taking West
-     * because Left beats Right.
+     * From here, north is walled and the target is straight up and off the board. West and East are
+     * mirror images, so the two neighbours are *exactly* equidistant and the greedy rule has
+     * nothing to separate them: it falls through to the tie-break and takes West, because Left
+     * beats Right.
      *
-     * But the ways up are not mirror images. Row 4 opens at columns 1 and 6, and from here
-     * that is eight steps round by column 6 against ten by column 1. So East is the better
-     * move and the search takes it, which is the answer a player would give and the old rule
-     * could not reach. */
+     * The ways up are not mirror images, though. Row 4 opens at columns 1 and 6, and from here that
+     * is eight steps round by column 6 against ten by column 1 — so East is the better move, and a
+     * player would give that answer. A ghost with one cell of sight cannot, and now does not. That
+     * shortsightedness is the whole reason the arcade's ghosts can be baited, and it is what makes
+     * a step cost one microsecond instead of three hundred. */
     const cell_t from = prv_cell(OPEN_CELL_X, JUNCTION_Y);
     const cell_t west_neighbour = playfield_step(from, DIRECTION_WEST);
     const cell_t east_neighbour = playfield_step(from, DIRECTION_EAST);
@@ -163,7 +166,7 @@ void test_the_route_decides_where_the_neighbours_are_a_tie(void)
     TEST_ASSERT_EQUAL_UINT32(playfield_get_squared_distance(west_neighbour, target),
                              playfield_get_squared_distance(east_neighbour, target));
 
-    TEST_ASSERT_EQUAL(DIRECTION_EAST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
+    TEST_ASSERT_EQUAL(DIRECTION_WEST, ghost_path_find_step_towards(&g_playfield, from, target, DIRECTION_NONE, false));
 }
 
 void test_a_step_that_is_really_further_loses_rather_than_tying(void)
