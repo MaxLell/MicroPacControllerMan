@@ -34,12 +34,14 @@ so far on disk.
 **It is resumable.** A run whose winner file already exists is skipped, so if the machine is
 rebooted the campaign can simply be started again and will carry on where it left off.
 
-**One thing it is not safe against: rebuilding `build-host` while it runs.** The trainer loads
-`libpacman_env.so` through ctypes, so replacing that file under a running campaign is replacing the
-game mid-experiment. It has already cost one run: a `git stash` during a campaign reverted
-`env_api.c`, an unrelated `./dev.sh check` rebuilt the library from it, and the next process to start
-died on `undefined symbol: env_ghosts_eaten`. The already-running workers kept their mapping and
-finished, which is what made it look fine until the measurement.
+**A rebuild of `build-host` no longer reaches it.** The campaign copies `libpacman_env.so` into its
+own output directory on the way in and hands every trainer and every measurement that copy, so the
+game a campaign is run against is the game it started with. It used to load the live build through
+ctypes, and that cost a run: a `git stash` during a campaign reverted `env_api.c`, an unrelated
+`./dev.sh check` rebuilt the library from it, and the next process to start died on `undefined
+symbol: env_ghosts_eaten`. The already-running workers kept their mapping and finished, which is what
+made it look fine until the measurement. The snapshot is taken once per campaign and reused by a
+resumed one, so carrying on after a reboot also carries on against the same game.
 
 **The runs vary one thing each**, against a baseline that is already measured. They no longer vary the
 seed: whether a given configuration got lucky is a question worth asking *after* one of them works,
@@ -55,6 +57,7 @@ See Docu/Design/M6-Pacman-AI.md §14.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -62,6 +65,11 @@ import time
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _OUT_DIR = os.path.join(_HERE, "campaign")
 _PYTHON = sys.executable
+
+#: The game the trainers play, as it was when the campaign started. See the header: this is a copy
+#: on purpose, so that building the host tree while a campaign runs is an ordinary thing to do.
+_LIVE_LIBRARY = os.path.join(os.path.dirname(_HERE), "build-host", "libpacman_env.so")
+_CAMPAIGN_LIBRARY = os.path.join(_OUT_DIR, "libpacman_env.so")
 
 #: One entry per run. `args` goes to the trainer.
 #:
@@ -76,54 +84,45 @@ _PYTHON = sys.executable
 #: six times. `--episode whole-run` plays three lives instead of one, so its generations cost
 #: roughly three times what the one-life ones do.
 #:
-#: One variable at a time, against one baseline that is **already measured** and costs no time to
-#: reuse: NEAT, the one-life objective, deletion on — 1,746 points, with a winner that used 6
-#: connections against 23 inputs.
+#: **Every earlier result was measured against ghosts that no longer exist.** DEC-049 rolled the
+#: ghosts back to the arcade's greedy one-cell rule, so a ghost walks into the wall between it and
+#: its target instead of routing around it — a different game, and an easier one. The agent that ships
+#: scored 3,035 against the route-searching ghosts and 2,706 against these. Nothing below is compared
+#: against a figure taken before that change; the first run *is* the new baseline.
 #:
-#:   neat-no-deletion   against that baseline, only the pruning changed
-#:   es-one-life        against that baseline, only the search changed
-#:   es-whole-run       against es-one-life, only the objective changed
-#:   es-whole-run-wide  against es-whole-run, only the capacity changed
+#: Only two runs, because a campaign that varies four things over twelve hours gives each of them
+#: three — and three hours of ES is where the sigma restarts have only just started working. Two
+#: runs of six differ in exactly one thing:
 #:
-#: `neat-no-deletion` is here because it is the literal reading of "give the search more freedom and
-#: more time": NEAT may add structure and may not remove it. The measured collapse was deletion, and
-#: DEC-044 had already halved these probabilities once; zero is where that road ends. Whether
-#: unchecked growth helps is genuinely unknown — a network that only ever grows can bloat without
-#: playing better — which is why it is a run and not a decision.
+#:   arcade-danger        the best recipe there is, re-measured against the ghosts it will play
+#:   arcade-danger-wide   the same, with 32 hidden units instead of 16
+#:
+#: What is *not* varied, and why — each was measured and is not worth another twelve hours. The
+#: search: NEAT deletes structure whenever the fitness is noisy and FR-044's jitter is noise, so its
+#: winner used 6 of 23 inputs (DEC-048). The objective: the ghost bonus cost score and more training
+#: made it worse, a level bonus is identically zero until a level is finished so it has no gradient,
+#: and a danger penalty of 25 scored 2,261 against 10's 3,035. The population: 64 was worse than 32
+#: at equal wall-clock. What is left untested is capacity, and it is the one with a reason to be
+#: retested now — a greedy ghost is a *predictable* ghost, and patterns worth learning are exactly
+#: what a network runs out of room for.
 #:
 #: `trainer` says which script runs. Both take the same arguments for the things they share, because
 #: they share the episode, the fitness and the curriculum — see train_es.py.
 RUNS = [
     {
-        "name": "neat-no-deletion",
-        "trainer": "train.py",
-        "hours": 3.0,
-        "min_hours": 1.5,
-        "args": ["--seed", "1", "--episode", "one-life", "--no-deletion"],
-        "what": "NEAT, but forbidden to remove nodes or connections",
-    },
-    {
-        "name": "es-one-life",
+        "name": "arcade-danger",
         "trainer": "train_es.py",
-        "hours": 3.0,
+        "hours": 6.0,
         "min_hours": 0.25,
-        "args": ["--seed", "1", "--episode", "one-life"],
-        "what": "fixed 23-16-4 network, an episode ends at the first death",
+        "args": ["--seed", "1", "--episode", "one-life", "--danger-penalty", "10"],
+        "what": "the shipped recipe — 23-16-4, one life, ten points a dangerous decision",
     },
     {
-        "name": "es-whole-run",
+        "name": "arcade-danger-wide",
         "trainer": "train_es.py",
-        "hours": 3.0,
-        "min_hours": 0.75,
-        "args": ["--seed", "1", "--episode", "whole-run"],
-        "what": "the same, but an episode is the three-life run FR-037 measures",
-    },
-    {
-        "name": "es-whole-run-wide",
-        "trainer": "train_es.py",
-        "hours": 3.0,
-        "min_hours": 0.75,
-        "args": ["--seed", "1", "--episode", "whole-run", "--hidden", "32"],
+        "hours": 6.0,
+        "min_hours": 0.25,
+        "args": ["--seed", "1", "--episode", "one-life", "--danger-penalty", "10", "--hidden", "32"],
         "what": "the same again with 32 hidden units, to see whether 16 was the ceiling",
     },
 ]
@@ -162,6 +161,32 @@ def _log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
+def _snapshot_library() -> bool:
+    """Take the campaign's own copy of the game, or keep the one a previous start took.
+
+    Kept rather than refreshed, and that is the whole point: a campaign resumed after a reboot is
+    the *same* experiment as the one that was interrupted, so it has to play the same game — even
+    if the tree has been built since. A fresh campaign is what `--fresh` gives, and that clears
+    this directory with the winners.
+    """
+    if os.path.exists(_CAMPAIGN_LIBRARY):
+        _log(f"playing the campaign's own copy of the game, taken "
+             f"{time.strftime('%d %b %H:%M', time.localtime(os.path.getmtime(_CAMPAIGN_LIBRARY)))}")
+        return True
+
+    if not os.path.exists(_LIVE_LIBRARY):
+        _log(f"{_LIVE_LIBRARY} does not exist, and every trainer loads it — build the host tree "
+             f"first: ./dev.sh host")
+        return False
+
+    # copy2, so the snapshot carries the build's own timestamp and the line above says when the
+    # game was built rather than when this campaign happened to start.
+    shutil.copy2(_LIVE_LIBRARY, _CAMPAIGN_LIBRARY)
+    _log(f"took a copy of the game to play against: {os.path.relpath(_CAMPAIGN_LIBRARY, _HERE)} — "
+         f"building the host tree from here on does not reach this campaign")
+    return True
+
+
 def _evaluate(winner_path: str) -> "tuple[str, dict]":
     """Run evaluate.py against a winner and pull the two numbers out of what it printed.
 
@@ -169,7 +194,8 @@ def _evaluate(winner_path: str) -> "tuple[str, dict]":
     spread, and a verdict without them cannot be argued with afterwards.
     """
     result = subprocess.run(
-        [_PYTHON, os.path.join(_HERE, "evaluate.py"), "--winner", winner_path],
+        [_PYTHON, os.path.join(_HERE, "evaluate.py"), "--winner", winner_path,
+         "--library", _CAMPAIGN_LIBRARY],
         capture_output=True,
         text=True,
     )
@@ -322,6 +348,10 @@ def main(argv: "list[str]") -> int:
     arguments = parser.parse_args(argv)
 
     os.makedirs(_OUT_DIR, exist_ok=True)
+
+    if not _snapshot_library():
+        return 2
+
     deadline = time.monotonic() + (arguments.hours * 3600.0)
     rows = []
 
@@ -392,6 +422,7 @@ def main(argv: "list[str]") -> int:
                 result = subprocess.run(
                     [_PYTHON, "-u", os.path.join(_HERE, trainer),
                      "--out", winner, "--max-seconds", str(seconds),
+                     "--library", _CAMPAIGN_LIBRARY,
                      *trainer_arguments, *worker_arguments, *run["args"]],
                     stdout=handle,
                     stderr=subprocess.STDOUT,

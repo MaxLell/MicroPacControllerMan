@@ -457,7 +457,11 @@ check_campaign_leftovers() {
 
     if [ "$CAMPAIGN_FRESH" = yes ]; then
         step "Throwing away ${#leftovers[@]} previous winner(s): ${leftovers[*]}"
-        rm -f Training/campaign/*.json
+        # The snapshot of the game goes with them. A campaign keeps its own copy of
+        # libpacman_env.so so that building the tree while it runs is harmless, and a *resumed*
+        # campaign reusing it is the point; a fresh one reusing it would silently play whatever
+        # the tree held the last time somebody started a campaign.
+        rm -f Training/campaign/*.json Training/campaign/libpacman_env.so
         return 0
     fi
 
@@ -524,8 +528,9 @@ run_training() {
 
     check_campaign_leftovers train
 
-    # Before starting, never during: the trainer loads libpacman_env.so through ctypes, and replacing
-    # that file under a running campaign replaces the game mid-experiment.
+    # So that the campaign's snapshot of libpacman_env.so is taken from a current build rather than
+    # from whatever was last built here. Once it has that copy, building this tree again is an
+    # ordinary thing to do — which it was not before, see campaign.py's header.
     do_host_build
 
     mkdir -p Training/campaign
