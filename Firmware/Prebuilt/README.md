@@ -14,14 +14,19 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | `f1c50e1` on `feat/m6-lookahead` |
+| built from | the commit that added this file, on `feat/m6-lookahead` |
 | built on | 2026-08-09 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 118,988 B of 504 kB — 23.0 % |
+| flash | 119,144 B of 504 kB — 23.1 % |
 | RAM | 235,672 B of 256 kB — 89.9 % |
-| `pacman.hex` | sha256 `790e69d127db22df2a381b8e40cf4729d8dfe32edb35999a4ce0f878e4c0b4fe` |
-| `pacman.bin` | sha256 `578316ad7909b56b1e8de7038ce6715e32f43a568d5751ff43e0a4440d88e3ea` |
+| weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — **3,531 against FR-037's 4,600** |
+| `pacman.hex` | sha256 `13cb08e2cad799587d381b9ca6edc687f68b93644155e0294452a0fb2470d16e` |
+| `pacman.bin` | sha256 `cfbba9fd3f6ebf611de89f530e6dad1cb57861751cd4a22f30c5323873c8448f` |
+
+**Not verified on hardware.** The board was on another machine when this was built, so nothing here
+has been through `run_ott.py`. The host side is green — 468 unit tests, both builds — and that is a
+different claim.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -48,17 +53,35 @@ on its firmware version. If no drive appears, use CubeProgrammer.
 Use `pacman.hex` for either. `pacman.bin` is the same image without addresses in it and has to be
 written to `0x08000000` explicitly; it is here only for a tool that insists on raw binary.
 
-## What you will see, and what you will not
+## What to press
 
-**The game, exactly as before.** The look-ahead player this branch adds
-([DEC-050](../../Docu/PrePlanning/11-Decisions-and-As-Built.md),
-[M6 §15](../../Docu/Design/M6-Pacman-AI.md)) is **not wired into the game**: no menu entry, no
-button, `game_session` never calls it. On the panel this image is indistinguishable from the
-previous one. That is deliberate and it is why the RAM figure above is 89.9 % — the on-target test
-calls the module, so the linker can no longer drop it.
+Pick **`NORMAL MAZE`** on the menu and start. **B1 — the blue button on the Nucleo — now cycles
+three players** rather than toggling one:
 
-The look-ahead is visible over the **serial console** only. The ST-LINK's virtual COM port appears
-on a Mac as `/dev/cu.usbmodem…` at 115200 8N1:
+| presses | who is steering | HUD |
+|---|---|---|
+| 0 | you, on the joystick | blank |
+| 1 | the trained network, `arcade-danger` | `AI` |
+| 2 | the look-ahead search | `LA` |
+| 3 | you again | blank |
+
+Pac-Man turns **green** for both machines — that says "this is no longer you" — and the two glyphs
+beside `LEVEL` say which one. Same maze, same ghosts, same run: that is the comparison, and it is
+why this is a cycle on one button rather than two firmware images.
+
+Expect the search to look obviously better. It averages 7,076 over FR-037's twenty draws against the
+network's 3,531, and it reached level 4 where the network clears level 1. It is also *slower to
+decide* — about 10 ms of each frame — which you will not see, because a frame has 20.
+
+Any run you touch B1 in stays out of the high-score table (FR-034), whichever machine you handed it
+to. That is deliberate: a search earns a score no more than a network does.
+
+`PAC-MAN AI` on the menu is unchanged — the trained network from the first frame, no takeover, B1
+there switches the endless mode.
+
+## The console, if you want the numbers
+
+The ST-LINK's virtual COM port appears on a Mac as `/dev/cu.usbmodem…` at 115200 8N1:
 
 ```sh
 ls /dev/cu.usbmodem*

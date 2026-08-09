@@ -193,15 +193,17 @@ silently working around a wart.
     stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
     `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
     its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
-  - **The agent that ships now was trained against a continuous cost for danger** (M6 §14.6): the
-    fitness charges ten points for every decision taken with a killing ghost within four cells, and
-    it is the first thing that moved the wall — **the first agent in this project to finish a level**,
-    reaching level 2, with the worst of a hundred runs going from 990 points to 1,940. The mean, at
-    3,035, is statistically indistinguishable from what came before; what changed is that it stopped
-    dying badly. Three things were measured *not* to help and are recorded so they are not retried:
-    paying a bonus per ghost eaten (it cost score, and more training made it worse), a bonus for
-    finishing a level (identically zero until one is finished, so no gradient at all), and a bigger
-    population. Comparisons are made at **100 episodes**, not FR-037's twenty — at twenty the
+  - **The agent that ships is `arcade-danger`, at 3,531, and it does not meet FR-037** (DEC-051).
+    Adopted deliberately with `--force`, because 4,600 is the requirement and 3,531 is the best
+    trained agent this project has had — up from 2,827, which is the largest step any single change
+    has bought. The change is a continuous cost for danger (M6 §14.6): the fitness charges ten
+    points for every decision taken with a killing ghost within four cells. It stopped the agent
+    dying badly rather than making it score well.
+    **Four things are measured *not* to help** and are recorded so they are not retried: paying a
+    bonus per ghost eaten (it cost score, and more training made it worse), a bonus for finishing a
+    level (identically zero until one is finished, so no gradient at all), a bigger population, and
+    — the night of 2026-08-09 — **more capacity**: 32 hidden units scored 2,634, *below* the
+    16-unit baseline. Comparisons are made at **100 episodes**, not FR-037's twenty — at twenty the
     standard error is larger than the differences being argued about.
   - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
     2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
@@ -233,7 +235,7 @@ silently working around a wart.
     answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
 
-- **A look-ahead player is in the tree, and it scores 7,076 (DEC-050).** `App/pacman_lookahead`
+- **A look-ahead player is in the game, and it scores 7,076 (DEC-050/051).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -243,7 +245,9 @@ silently working around a wart.
   so thinking would change the future; `game_freeze_timings` stops it and a unit test counts the
   draws and requires none.
   - **It is not FR-038's agent and does not replace it** — that asks for trained weights on the
-    target. This is the reference M6 §2 kept in reserve, and **nothing in the game calls it yet**.
+    target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* beside the
+    trained agent on B1 so the two can be compared inside one run, which is not the same as
+    shipping it as the agent.
   - **What it settles:** 7,076 over FR-037's own twenty draws, against 4,600 asked for, 2,706 from
     the shipped trained agent and 518 from a random policy; best run 16,560, reaching level 4. So
     the score is reachable and **the gap is the agent's, not the game's**.
@@ -269,8 +273,11 @@ silently working around a wart.
   (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
   screen) and start plays what is selected.
   - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
-    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 hands Pac-Man to the
-    agent and takes him back** (FR-030); Pac-Man is **green** while it plays.
+    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 cycles three players**
+    (FR-030, DEC-051): the person, then the trained network, then the **look-ahead search**, then
+    back. Pac-Man is **green** for both machines — the colour answers "is this still me" — and the
+    HUD says which: `AI` or `LA`. A player that refuses is skipped, so a firmware whose weight table
+    will not evaluate still reaches the search.
   - `PAC-MAN AI` — the same maze, the agent from the first frame, and no way to take over (FR-042).
     **B1 here toggles the endless mode** (FR-043): a finished run starts the next one instead of
     returning to the menu, and the HUD says `LOOP`. It refuses to start at all if the weight table
