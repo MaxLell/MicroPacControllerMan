@@ -1113,7 +1113,7 @@ void test_the_hud_spells_out_ai_while_the_agent_plays(void)
     game_view_set_state(&g_view, &g_state);
     (void)prv_settle();
 
-    game_view_set_ai_active(&g_view, true);
+    game_view_set_player(&g_view, 1U);
 
     const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
 
@@ -1141,10 +1141,10 @@ void test_the_ai_indication_is_wiped_when_the_player_takes_over(void)
     int16_t y;
 
     game_view_set_state(&g_view, &g_state);
-    game_view_set_ai_active(&g_view, true);
+    game_view_set_player(&g_view, 1U);
     (void)prv_settle();
 
-    game_view_set_ai_active(&g_view, false);
+    game_view_set_player(&g_view, 0U);
 
     const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
 

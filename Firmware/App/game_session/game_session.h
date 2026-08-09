@@ -89,21 +89,54 @@ void game_session_start_on_normal_maze(void);
  */
 void game_session_set_direction(direction_e in_direction);
 
-/*! \brief Hand Pacman to the trained agent, or take him back (FR-030).
+/*! \brief Who is steering Pacman.
  *
- * Refused, and reported as refused, when the generated weight table cannot be evaluated: better a
- * run that stays under the player's control than one where the stick is dead and nothing plays.
+ * Two of these are machines and they are *different* machines, which is the whole reason this is
+ * an enumeration and not the flag it replaced. The trained network answers from what it can see at
+ * the moment it is asked; the search answers from what actually happens when the run is played
+ * forward. Being able to swap between them inside one run is what makes them comparable — the same
+ * maze, the same ghosts, the same seed.
+ */
+typedef enum
+{
+    GAME_SESSION_PLAYER_HUMAN = 0, /*!< The joystick (FR-030)                                    */
+    GAME_SESSION_PLAYER_NETWORK,   /*!< The trained weights `pacman_ai` carries (FR-038)         */
+    GAME_SESSION_PLAYER_LOOKAHEAD  /*!< The search of `pacman_lookahead` (DEC-050)               */
+} game_session_player_e;
+
+/*! \brief Hand Pacman to one of the machines, or take him back (FR-030).
  *
- * The flag is the *run's*, so it survives a level change and a lost life (FR-033) — neither of
- * those goes near it. #game_session_start clears it, which is what makes every new run start under
+ * Refused, and reported as refused, when the player asked for cannot play: the generated weight
+ * table may fail to evaluate, and the search needs a run in progress to clone. Better a run that
+ * stays under the player's control than one where the stick is dead and nothing plays.
+ *
+ * The choice is the *run's*, so it survives a level change and a lost life (FR-033) — neither of
+ * those goes near it. #game_session_start resets it, which is what makes every new run start under
  * player control.
  *
- * \param[in]       in_is_enabled: `true` to let the AI play
+ * \param[in]       in_player: who should be steering
+ * \return          `true` when control is now where the caller asked for it
+ */
+bool game_session_set_player(game_session_player_e in_player);
+
+/*! \brief Who is steering Pacman right now. */
+game_session_player_e game_session_get_player(void);
+
+/*! \brief Hand Pacman to the trained agent, or take him back.
+ *
+ * #game_session_set_player said as a yes or no, kept because most callers only care whether a
+ * *person* is playing — FR-034's high-score lockout, the joystick door, the on-target tests. It
+ * cannot select the search; that needs the enumeration.
+ *
+ * \param[in]       in_is_enabled: `true` to let the trained agent play
  * \return          `true` when control is now where the caller asked for it
  */
 bool game_session_set_ai_enabled(bool in_is_enabled);
 
-/*! \brief Whether the AI is playing right now. */
+/*! \brief Whether *any* machine is playing right now, network or search.
+ *
+ * Deliberately not "is the network playing". Everything that reads this is asking the FR-034
+ * question — did a person earn this score — and a search earns it no more than a network does. */
 bool game_session_is_ai_enabled(void);
 
 /*! \brief Tell the frame whether the endless mode is on, so the HUD can say so (FR-043).

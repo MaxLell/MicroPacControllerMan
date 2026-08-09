@@ -470,7 +470,11 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 
 static const char* const g_hud_player_label = "1UP";
 static const char* const g_hud_level_label = "LEVEL";
-static const char* const g_hud_ai_label = "AI";
+/*! \brief One label per steering machine, indexed by `game_session_player_e`.
+ *
+ * Two glyphs each, and the player's own entry is two spaces rather than nothing — for the same
+ * reason a spent life is a blank: the slot exists either way and a hole in it reads as a fault. */
+static const char* const g_hud_player_labels[] = {"  ", "AI", "LA"};
 static const char* const g_hud_loop_label = "LOOP";
 
 _Static_assert(HUD_LOOP_INDEX + GAME_VIEW_HUD_LOOP_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
@@ -565,13 +569,15 @@ static void prv_describe_hud_item(const game_view_t* const in_view, uint8_t in_i
     }
     else if (in_index < HUD_LOOP_INDEX)
     {
-        /* The AI indication (FR-032): `AI` while the agent plays, the font's space while the
-         * player does. A space rather than nothing, for the same reason a spent life is a blank. */
+        /* Which machine is playing, if either (FR-032). */
         const uint8_t offset = (uint8_t)(in_index - HUD_AI_INDEX);
+        const uint8_t player =
+            (in_view->player < (uint8_t)(sizeof(g_hud_player_labels) / sizeof(g_hud_player_labels[0])))
+                ? in_view->player
+                : 0U;
 
-        prv_set_hud_text_item(in_view->is_ai_active ? g_hud_ai_label[offset] : ' ',
-                              (uint8_t)(HUD_AI_FIRST_COLUMN + offset), GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite,
-                              out_palette, out_x, out_y);
+        prv_set_hud_text_item(g_hud_player_labels[player][offset], (uint8_t)(HUD_AI_FIRST_COLUMN + offset),
+                              GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite, out_palette, out_x, out_y);
     }
     else
     {
@@ -717,7 +723,7 @@ static void prv_fill_actor_items(const game_view_t* const in_view, msg_display_l
     prv_add_item(
         inout_list, DISPLAY_ITEM_ACTOR,
         sprite_set_get_pacman_sprite((direction_e)in_view->state.pacman.direction, in_view->state.pacman.progress),
-        in_view->is_ai_active ? SPRITE_SET_PALETTE_PACMAN_AI : SPRITE_SET_PALETTE_PACMAN, x, y);
+        (in_view->player != 0U) ? SPRITE_SET_PALETTE_PACMAN_AI : SPRITE_SET_PALETTE_PACMAN, x, y);
 }
 
 /* ==========================================================================
@@ -778,11 +784,11 @@ void game_view_set_infinite(game_view_t* inout_view, bool in_is_infinite)
     inout_view->is_infinite = in_is_infinite;
 }
 
-void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active)
+void game_view_set_player(game_view_t* inout_view, uint8_t in_player)
 {
     ASSERT(inout_view != NULL);
 
-    inout_view->is_ai_active = in_is_active;
+    inout_view->player = in_player;
 }
 
 bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out_list)

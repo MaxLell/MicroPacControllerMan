@@ -699,16 +699,42 @@ bool shell_toggle_ai(void)
         return false;
     }
 
-    if (!game_session_set_ai_enabled(!game_session_is_ai_enabled()))
+    /* A cycle rather than a toggle, because there are two machines now and they are worth
+     * comparing: player, then the trained network, then the look-ahead search, then back. The
+     * comparison is the point — the same maze, the same ghosts, the same run — and it is the only
+     * way to see the two play the same game without reflashing between them.
+     *
+     * Skipping a player that refuses is what keeps the cycle honest: a firmware whose weight table
+     * will not evaluate should still reach the search, and pressing the button twice to get past a
+     * thing that is not there would be a worse answer than not offering it. */
+    static const game_session_player_e k_cycle[] = {GAME_SESSION_PLAYER_HUMAN, GAME_SESSION_PLAYER_NETWORK,
+                                                    GAME_SESSION_PLAYER_LOOKAHEAD};
+    const uint8_t count = (uint8_t)(sizeof(k_cycle) / sizeof(k_cycle[0]));
+    const game_session_player_e current = game_session_get_player();
+    uint8_t position = 0U;
+
+    for (uint8_t index = 0U; index < count; ++index)
     {
-        return false;
+        if (k_cycle[index] == current)
+        {
+            position = index;
+            break;
+        }
     }
 
-    /* Latched here rather than where the AI is switched off, so that the run remembers what it
-     * cannot be told again. */
-    g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
+    for (uint8_t step = 1U; step <= count; ++step)
+    {
+        if (game_session_set_player(k_cycle[(position + step) % count]))
+        {
+            /* Latched here rather than where control goes back to the player, so that the run
+             * remembers what it cannot be told again. */
+            g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
 
-    return true;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool shell_is_ai_playing(void)

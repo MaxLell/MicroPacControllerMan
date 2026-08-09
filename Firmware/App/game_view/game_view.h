@@ -156,7 +156,12 @@ typedef struct
      *   `msg_game_state_t` describes the game. The diffing needs no help with it — a slot is
      *   compared against the sprite that was last drawn there, not against an older state, so
      *   flipping this redraws the two slots on the next frame and nothing else. */
-    bool is_ai_active;
+    /*! \brief Which of the three is steering, so the HUD can say *which* machine it is.
+     *
+     * A `uint8_t` rather than the session's own enumeration, because the view is below the session
+     * and must not include it — the same reason nothing here knows what a `game_t` is. The values
+     * are `game_session_player_e`'s and \ref game_view_set_player is where they arrive. */
+    uint8_t player;
 
     /*!< Whether a finished run will be followed by another (FR-043). The view only draws it; the
      *   shell owns whether it is true. */
@@ -206,7 +211,17 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
  * \param[in,out]   inout_view: the view, must not be `NULL`
  * \param[in]       in_is_active: `true` while the agent is playing
  */
-void game_view_set_ai_active(game_view_t* inout_view, bool in_is_active);
+/*! \brief Say who is steering, so the HUD can label it (FR-032).
+ *
+ * `AI` while the trained network plays and `LA` while the look-ahead search does — two glyphs
+ * either way, so the slot the HUD already reserved is enough and no layout moves. Pac-Man is drawn
+ * in the agent's colour for both: the colour answers "is this still me", which is one question,
+ * and the label answers which machine, which is the other.
+ *
+ * \param[in,out]   inout_view: instance, must not be `NULL`
+ * \param[in]       in_player: a `game_session_player_e`
+ */
+void game_view_set_player(game_view_t* inout_view, uint8_t in_player);
 
 /*! \brief Tell the view whether the endless mode is on, so the HUD can say so (FR-043).
  *

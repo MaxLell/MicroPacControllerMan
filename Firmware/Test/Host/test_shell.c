@@ -44,6 +44,7 @@
 #include "neural_net.h"
 #include "pacman.h"
 #include "pacman_ai.h"
+#include "pacman_lookahead.h"
 #include "playfield.h"
 #include "render.h"
 #include "score.h"
@@ -633,17 +634,29 @@ void test_the_ai_cannot_be_toggled_in_a_random_maze_run(void)
     TEST_ASSERT_FALSE(shell_has_ai_played());
 }
 
-void test_the_ai_takes_over_and_hands_back_during_a_run(void)
+/* The button is a cycle of three, not a toggle of two: there are two machines to compare and the
+ * only way to see them play the same run is to step between them without reflashing. */
+void test_the_button_cycles_the_player_the_network_and_the_search(void)
 {
     prv_reach_the_menu();
     shell_press_start();
 
     TEST_ASSERT_FALSE(shell_is_ai_playing());
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_HUMAN, game_session_get_player());
 
     TEST_ASSERT_TRUE(shell_toggle_ai());
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_NETWORK, game_session_get_player());
     TEST_ASSERT_TRUE(shell_is_ai_playing());
 
     TEST_ASSERT_TRUE(shell_toggle_ai());
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
+
+    /* Still "the AI is playing" — the question everything asks this is FR-034's, did a person earn
+     * the score, and a search earns it no more than a network does. */
+    TEST_ASSERT_TRUE(shell_is_ai_playing());
+
+    TEST_ASSERT_TRUE(shell_toggle_ai());
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_HUMAN, game_session_get_player());
     TEST_ASSERT_FALSE(shell_is_ai_playing());
 }
 
@@ -656,6 +669,8 @@ void test_the_lockout_survives_handing_control_back(void)
 
     TEST_ASSERT_FALSE(shell_has_ai_played());
 
+    /* All the way round the cycle, so control is back with the player. */
+    (void)shell_toggle_ai();
     (void)shell_toggle_ai();
     (void)shell_toggle_ai();
 

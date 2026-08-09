@@ -39,6 +39,7 @@
 #include "neural_net.h"
 #include "pacman.h"
 #include "pacman_ai.h"
+#include "pacman_lookahead.h"
 #include "playfield.h"
 #include "render.h"
 #include "score.h"
@@ -333,6 +334,55 @@ void test_the_ai_gets_pacman_moving(void)
     game_session_get_state_message(&state);
 
     TEST_ASSERT_NOT_EQUAL_UINT8((uint8_t)DIRECTION_NONE, state.pacman.direction);
+}
+
+/* The same, for the other machine. The search is wired to the same door the network is, and the
+ * failure this catches is the wiring rather than the search: a session that selected the look-ahead
+ * and then went on asking `pacman_ai` would look exactly like this test passing, so it is the
+ * *score* that is checked and not merely that Pacman moved. A search that is playing eats. */
+void test_the_search_gets_pacman_eating(void)
+{
+    prv_start_run();
+    (void)prv_run_one_frame();
+
+    const uint32_t score_at_the_start = game_session_get_score();
+
+    TEST_ASSERT_TRUE(game_session_set_player(GAME_SESSION_PLAYER_LOOKAHEAD));
+
+    for (uint16_t frame = 0U; frame < 200U; ++frame)
+    {
+        (void)prv_run_one_frame();
+    }
+
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
+    TEST_ASSERT_GREATER_THAN_UINT32(score_at_the_start, game_session_get_score());
+}
+
+/* FR-031 is about a *machine* playing, not about which one: the stick has to be dead for the search
+ * too. It is one door and this is the second key tried on it. */
+void test_the_stick_is_dead_while_the_search_plays(void)
+{
+    msg_game_state_t state;
+
+    prv_start_run();
+    (void)prv_run_one_frame();
+
+    TEST_ASSERT_TRUE(game_session_set_player(GAME_SESSION_PLAYER_LOOKAHEAD));
+
+    game_session_get_state_message(&state);
+
+    const uint8_t direction_before = state.pacman.direction;
+
+    /* Pushed hard the other way, repeatedly, and it must change nothing: the search decides once a
+     * cell, so a stick that got through would show up within a few frames. */
+    for (uint8_t frame = 0U; frame < 4U; ++frame)
+    {
+        game_session_set_direction(playfield_get_opposite_direction((direction_e)direction_before));
+    }
+
+    game_session_get_state_message(&state);
+
+    TEST_ASSERT_EQUAL_UINT8(direction_before, state.pacman.direction);
 }
 
 /* The tick as a stub rather than as an expectation, for the one test that needs thousands of

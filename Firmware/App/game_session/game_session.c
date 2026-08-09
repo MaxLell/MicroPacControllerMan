@@ -8,6 +8,7 @@
 #include "game_view.h"
 #include "msg.h"
 #include "pacman_ai.h"
+#include "pacman_lookahead.h"
 #include "render.h"
 #include "sw_timer.h"
 
@@ -36,7 +37,7 @@ static bool g_is_timer_created;
  * turn on a cell boundary (§10.1), so a decision taken inside one would be thrown away. At level-1
  * speed a cell lasts about ten frames, which makes deciding per cell ten times cheaper than
  * deciding per frame and costs nothing at all in play. */
-static bool g_is_ai_enabled;
+static game_session_player_e g_player;
 static uint8_t g_ai_decided_column;
 static uint8_t g_ai_decided_row;
 static bool g_has_ai_decided;
@@ -58,7 +59,7 @@ static void prv_on_frame_due(void)
  * purpose: that door is shut while the AI plays (FR-031), and the AI must not be shut out of it. */
 static void prv_service_ai(const msg_game_state_t* const in_state)
 {
-    if (!g_is_ai_enabled)
+    if (g_player == GAME_SESSION_PLAYER_HUMAN)
     {
         return;
     }
@@ -75,7 +76,14 @@ static void prv_service_ai(const msg_game_state_t* const in_state)
     g_ai_decided_column = in_state->pacman.column;
     g_ai_decided_row = in_state->pacman.row;
 
-    game_set_direction(&g_game, pacman_ai_decide(in_state, game_get_playfield(&g_game)));
+    /* The two machines are asked the same question at the same moment and their answers go to the
+     * same door. That is what makes swapping between them mid-run a comparison rather than two
+     * different experiments. */
+    const direction_e chosen = (g_player == GAME_SESSION_PLAYER_LOOKAHEAD)
+                                   ? pacman_lookahead_decide(&g_game)
+                                   : pacman_ai_decide(in_state, game_get_playfield(&g_game));
+
+    game_set_direction(&g_game, chosen);
 }
 
 /* ==========================================================================
@@ -106,10 +114,10 @@ void game_session_init(void)
  * last word about it carries over. */
 static void prv_start_under_player_control(void)
 {
-    g_is_ai_enabled = false;
+    g_player = GAME_SESSION_PLAYER_HUMAN;
     g_has_ai_decided = false;
 
-    game_view_set_ai_active(&g_view, false);
+    game_view_set_player(&g_view, GAME_SESSION_PLAYER_HUMAN);
 }
 
 void game_session_start(uint32_t in_maze_seed)
@@ -142,8 +150,8 @@ void game_session_start_on_normal_maze(void)
 
 void game_session_set_direction(direction_e in_direction)
 {
-    /* FR-031: while the AI plays, the stick is dead. One place, so every caller is covered. */
-    if (g_is_ai_enabled)
+    /* FR-031: while a machine plays, the stick is dead. One place, so every caller is covered. */
+    if (g_player != GAME_SESSION_PLAYER_HUMAN)
     {
         return;
     }
@@ -151,22 +159,35 @@ void game_session_set_direction(direction_e in_direction)
     game_set_direction(&g_game, in_direction);
 }
 
-bool game_session_set_ai_enabled(bool in_is_enabled)
+bool game_session_set_player(game_session_player_e in_player)
 {
-    if (in_is_enabled && !pacman_ai_is_available())
+    /* The network is the only one of the three that can be *unavailable*: its weights are
+     * generated and a generator can be wrong. The search has nothing to be wrong about — it reads
+     * the run it is given — and the joystick is always there. */
+    if ((in_player == GAME_SESSION_PLAYER_NETWORK) && !pacman_ai_is_available())
     {
         return false;
     }
 
-    g_is_ai_enabled = in_is_enabled;
+    g_player = in_player;
 
     /* So that taking over acts at the next boundary rather than waiting for Pacman to leave the
      * cell he was already in when the button was pressed. */
     g_has_ai_decided = false;
 
-    game_view_set_ai_active(&g_view, in_is_enabled);
+    game_view_set_player(&g_view, in_player);
 
     return true;
+}
+
+bool game_session_set_ai_enabled(bool in_is_enabled)
+{
+    return game_session_set_player(in_is_enabled ? GAME_SESSION_PLAYER_NETWORK : GAME_SESSION_PLAYER_HUMAN);
+}
+
+game_session_player_e game_session_get_player(void)
+{
+    return g_player;
 }
 
 void game_session_set_infinite(bool in_is_infinite)
@@ -179,7 +200,7 @@ void game_session_set_infinite(bool in_is_infinite)
 
 bool game_session_is_ai_enabled(void)
 {
-    return g_is_ai_enabled;
+    return g_player != GAME_SESSION_PLAYER_HUMAN;
 }
 
 bool game_session_service(void)
