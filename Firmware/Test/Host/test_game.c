@@ -1517,3 +1517,149 @@ void test_a_null_config_asserts(void)
     ASSERT_PROBE_EXPECT(game_start_configured(NULL, 1U, &config), "inout_game != NULL");
     ASSERT_PROBE_EXPECT(game_start_configured(&g_game, 1U, NULL), "in_config != NULL");
 }
+
+/* --- the clone (game_clone) ------------------------------------------------
+ *
+ * The forward model a look-ahead player is built on. Three things have to hold, and only the
+ * first is obvious:
+ *
+ * - a clone starts out as the same game;
+ * - ticking the clone leaves the original untouched — **including its score**, which is the
+ *   failure a byte copy would produce and the reason the function exists at all;
+ * - a clone ticked the same way as the original reaches the same place, so a simulated future is
+ *   the future.
+ */
+
+/* Play a game far enough into a level that a clone has something to be wrong about: pellets
+ * eaten, ghosts out of the house, timers part-way through.
+ *
+ * The desired direction cycles through all four so Pacman takes whichever turn the corridor
+ * offers and keeps finding pellets. Steering him one way only was tried first and does not
+ * work — he ends up against a wall in a stretch he has already eaten, and a test asserting
+ * that a simulation *did* something then measures a Pacman standing still. */
+static void prv_play_a_while(game_t* inout_game, uint16_t in_steps)
+{
+    static const direction_e k_directions[] = {DIRECTION_WEST, DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_SOUTH};
+
+    for (uint16_t step = 0U; step < in_steps; ++step)
+    {
+        game_set_direction(inout_game, k_directions[step % 4U]);
+        game_tick(inout_game, 16U);
+    }
+}
+
+void test_a_clone_starts_out_as_the_same_game(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    TEST_ASSERT_EQUAL_UINT32(game_get_score(&g_game), game_get_score(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_lives(&g_game), game_get_lives(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_level(&g_game), game_get_level(&clone));
+    TEST_ASSERT_EQUAL_UINT16(g_game.playfield.remaining_pellet_count, clone.playfield.remaining_pellet_count);
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(game_get_pacman_cell(&g_game), game_get_pacman_cell(&clone)));
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(
+            playfield_are_cells_equal(game_get_ghost_cell(&g_game, index), game_get_ghost_cell(&clone, index)));
+    }
+}
+
+/* The one a `memcpy` would fail. The clone's bus must be the clone's: eating a pellet in the
+ * simulation raises the simulation's score and nothing else. */
+void test_playing_a_clone_leaves_the_original_alone(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    const uint32_t score_before = game_get_score(&g_game);
+    const uint16_t pellets_before = g_game.playfield.remaining_pellet_count;
+    const cell_t cell_before = game_get_pacman_cell(&g_game);
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_clone(&clone, &g_game);
+
+    prv_play_a_while(&clone, 600U);
+
+    /* The simulation has to have *done* something, or this test would pass on a clone that
+     * never ran. */
+    TEST_ASSERT_GREATER_THAN_UINT32(score_before, game_get_score(&clone));
+
+    TEST_ASSERT_EQUAL_UINT32(score_before, game_get_score(&g_game));
+    TEST_ASSERT_EQUAL_UINT16(pellets_before, g_game.playfield.remaining_pellet_count);
+    TEST_ASSERT_EQUAL_UINT8(lives_before, game_get_lives(&g_game));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(cell_before, game_get_pacman_cell(&g_game)));
+}
+
+/* And the other way round: the original carrying on must not disturb a clone already taken. */
+void test_playing_the_original_leaves_a_clone_alone(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    const uint32_t clone_score = game_get_score(&clone);
+    const cell_t clone_cell = game_get_pacman_cell(&clone);
+
+    prv_play_a_while(&g_game, 600U);
+
+    TEST_ASSERT_EQUAL_UINT32(clone_score, game_get_score(&clone));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(clone_cell, game_get_pacman_cell(&clone)));
+}
+
+/* What makes a simulated future worth anything: played the same way, it comes out the same
+ * place. The jitter is off, because with it on the clone draws its own timings — which is
+ * correct behaviour, and the reason this test says so explicitly. */
+void test_a_clone_played_the_same_way_reaches_the_same_place(void)
+{
+    static game_t clone;
+    game_config_t config;
+
+    game_get_default_config(&config);
+    config.has_timing_jitter = false;
+
+    game_start_on_map_configured(&g_game, game_get_maze(&g_game), &config);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    for (uint16_t step = 0U; step < 400U; ++step)
+    {
+        const direction_e direction = (step % 3U) == 0U ? DIRECTION_NORTH : DIRECTION_WEST;
+
+        game_set_direction(&g_game, direction);
+        game_tick(&g_game, 16U);
+
+        game_set_direction(&clone, direction);
+        game_tick(&clone, 16U);
+    }
+
+    TEST_ASSERT_EQUAL_UINT32(game_get_score(&g_game), game_get_score(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_lives(&g_game), game_get_lives(&clone));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(game_get_pacman_cell(&g_game), game_get_pacman_cell(&clone)));
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(
+            playfield_are_cells_equal(game_get_ghost_cell(&g_game, index), game_get_ghost_cell(&clone, index)));
+    }
+}
+
+void test_cloning_nothing_asserts(void)
+{
+    static game_t clone;
+
+    ASSERT_PROBE_EXPECT(game_clone(NULL, &g_game), "out_clone != NULL");
+    ASSERT_PROBE_EXPECT(game_clone(&clone, NULL), "in_source != NULL");
+    ASSERT_PROBE_EXPECT(game_clone(&g_game, &g_game), "out_clone != in_source");
+}
