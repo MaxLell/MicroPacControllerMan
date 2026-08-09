@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "search_budget", "ai_high_score"]
+AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "search_budget", "lookahead_cost", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
@@ -52,7 +52,7 @@ LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
 
 # An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
 # because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
-LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0}
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0, "lookahead_cost": 60.0}
 
 
 def detect_port() -> str:
@@ -187,15 +187,22 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
         wait_until_idle(fd)
         write_command(fd, f"ott {test}\r\n")
         match, text = read_until(fd, [passed, failed, unknown], timeout, echo=interactive)
-        if match == passed:
-            # The detail lines a test printed, not only the verdict. Several tests exist to
-            # *measure* something — a frame budget, the cost of a route search — and their number
-            # is the whole point of running them; a bare PASS throws it away and the only way to
-            # see it was to make the test fail on purpose. Two leading spaces is the convention
-            # those lines already follow.
-            for line in text.splitlines():
+        # The detail lines a test printed, not only the verdict. Several tests exist to
+        # *measure* something — a frame budget, the cost of a route search, what a look-ahead
+        # decision costs — and their number is the whole point of running them. Two leading
+        # spaces is the convention those lines already follow.
+        #
+        # Printed whatever the verdict, and that is the second half of the same lesson: a
+        # measurement test *fails by measuring something too big*, so a failure is exactly when
+        # the numbers are wanted. They were shown on PASS only, and a look-ahead search that
+        # overran its frame reported the one figure it had blown and hid the five that said why.
+        def show_measurements(from_text: str) -> None:
+            for line in from_text.splitlines():
                 if line.startswith("  ") and line.strip():
                     print(line.rstrip())
+
+        if match == passed:
+            show_measurements(text)
 
             print(f"\nPASS: {test}")
             return 0
@@ -205,6 +212,8 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
             # point of a failure report. Give the rest of the line a moment.
             _, tail = read_until(fd, ["\n"], 1.0, echo=interactive)
             text += tail
+            show_measurements(text)
+
             for line in text.splitlines():
                 if line.startswith(failed):
                     print(f"\n{line}")

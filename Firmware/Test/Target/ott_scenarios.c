@@ -14,6 +14,7 @@
 #include "ott_high_score.h"
 #include "ott_joystick.h"
 #include "ott_joystick_dot.h"
+#include "ott_lookahead_cost.h"
 #include "ott_pacman.h"
 #include "ott_pacman_ai.h"
 #include "ott_rng.h"
@@ -27,13 +28,21 @@
 /* To add a test: write ott_<name>.c/.h with a setup and a run function, add one
  * row here, and add the source to CMakeLists.txt. */
 static const ott_scenario_t g_scenarios[] = {
-    {"ai_equivalence", NULL, ott_ai_equivalence_run}, {"ai_frame_cost", NULL, ott_ai_frame_cost_run},
-    {"ai_high_score", NULL, ott_ai_high_score_run},   {"animation", NULL, ott_animation_run},
-    {"display_id", NULL, ott_display_id_run},         {"rng", NULL, ott_rng_run},
-    {"search_budget", NULL, ott_search_budget_run},   {"display_test", NULL, ott_display_test_run},
-    {"high_score", NULL, ott_high_score_run},         {"joystick", NULL, ott_joystick_run},
-    {"joystick_dot", NULL, ott_joystick_dot_run},     {"pacman", NULL, ott_pacman_run},
-    {"pacman_ai", NULL, ott_pacman_ai_run},           {"user_button", NULL, ott_user_button_run},
+    {"ai_equivalence", NULL, ott_ai_equivalence_run},
+    {"ai_frame_cost", NULL, ott_ai_frame_cost_run},
+    {"ai_high_score", NULL, ott_ai_high_score_run},
+    {"animation", NULL, ott_animation_run},
+    {"display_id", NULL, ott_display_id_run},
+    {"rng", NULL, ott_rng_run},
+    {"search_budget", NULL, ott_search_budget_run},
+    {"display_test", NULL, ott_display_test_run},
+    {"lookahead_cost", NULL, ott_lookahead_cost_run},
+    {"high_score", NULL, ott_high_score_run},
+    {"joystick", NULL, ott_joystick_run},
+    {"joystick_dot", NULL, ott_joystick_dot_run},
+    {"pacman", NULL, ott_pacman_run},
+    {"pacman_ai", NULL, ott_pacman_ai_run},
+    {"user_button", NULL, ott_user_button_run},
 };
 
 #define OTT_SCENARIO_COUNT (sizeof(g_scenarios) / sizeof(g_scenarios[0]))
