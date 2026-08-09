@@ -777,6 +777,47 @@ static msg_actor_t prv_describe_actor(cell_t in_cell, direction_e in_direction, 
  * game - public
  * ========================================================================= */
 
+void game_clone(game_t* out_clone, const game_t* in_source)
+{
+    uint32_t total;
+    uint8_t chain_index;
+
+    ASSERT(out_clone != NULL);
+    ASSERT(in_source != NULL);
+    ASSERT(out_clone != in_source);
+
+    total = in_source->score.total;
+    chain_index = in_source->score.ghost_chain_index;
+
+    /* A `game_t` is a value in every field that describes the *game*, and a set of
+     * self-referential pointers in the ones that describe its *bus*: the broker holds the address
+     * of each subscriber, every queue holds the address of its own storage, and Score's active
+     * object holds its own address as its handler context. Copying the bytes copies those
+     * addresses, so the copy's bus would be the *original's* bus — and the first pellet a
+     * simulation ate would score in the game being played. That is not a crash; it is a wrong score
+     * with no symptom, which is worse.
+     *
+     * So: copy everything, then give the copy a bus of its own. #prv_init_bus is the same call
+     * starting a run makes, which is what keeps the two from drifting apart. */
+    memcpy(out_clone, in_source, sizeof(*out_clone));
+
+    prv_init_bus(out_clone);
+
+    /* #score_init zeroes the total, and a clone that forgot the score is not a clone: a caller
+     * measuring what a simulated future is worth compares the two scores, and a reset one makes
+     * every future look the same. The bonus chain goes with it — mid-frightened the next ghost is
+     * worth 400 rather than 200, and a search that thinks otherwise mis-prices a chase. */
+    out_clone->score.total = total;
+    out_clone->score.ghost_chain_index = chain_index;
+}
+
+void game_freeze_timings(game_t* inout_game)
+{
+    ASSERT(inout_game != NULL);
+
+    inout_game->config.has_timing_jitter = false;
+}
+
 void game_init(game_t* inout_game)
 {
     ASSERT(inout_game != NULL);

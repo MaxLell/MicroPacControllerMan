@@ -61,6 +61,23 @@ void pacman_set_intent(pacman_t* inout_pacman, direction_e in_direction);
  */
 bool pacman_advance(pacman_t* inout_pacman, const playfield_t* in_playfield);
 
+/*! \brief Whether a step that way is one Pacman is allowed to take.
+ *
+ * Walls **and** the ghost house: §10.2 puts the house off-limits to him altogether, and the gate
+ * is the only way across its boundary, so barring him at the gate bars him from all of it without
+ * the house having to be a wall to the ghosts who live in it.
+ *
+ * Public because a caller that has to enumerate his options — a look-ahead search asking which
+ * ways out of this cell are worth simulating — must ask the same question #pacman_advance asks
+ * itself. Two copies of this rule would be two answers the day one of them is edited.
+ *
+ * \param[in]       in_pacman: instance, must not be `NULL`
+ * \param[in]       in_playfield: the maze, must not be `NULL`
+ * \param[in]       in_direction: direction to test; \ref DIRECTION_NONE is never a step
+ * \return          `true` when he may step that way
+ */
+bool pacman_may_step(const pacman_t* in_pacman, const playfield_t* in_playfield, direction_e in_direction);
+
 /*! \brief The cell Pacman occupies. */
 cell_t pacman_get_cell(const pacman_t* in_pacman);
 

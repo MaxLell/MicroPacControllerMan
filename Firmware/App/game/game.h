@@ -208,6 +208,54 @@ typedef struct
  */
 void game_init(game_t* inout_game);
 
+/*! \brief Copy a run so it can be played forward without touching the original.
+ *
+ * This is what makes the game its own forward model: a caller can clone the run in progress, tick
+ * the clone to see where a choice leads, and throw it away — the game being played never learns
+ * that any of it happened. `pacman_lookahead` is built on exactly this.
+ *
+ * **A `memcpy` is not enough and this is the reason the function exists.** Most of a `game_t` is
+ * values, but its internal bus is pointers into itself: the broker knows each subscriber by
+ * address, each queue knows its own storage by address, and Score's active object carries its own
+ * address as context. A byte copy would leave the copy publishing into the *original's* Score, so
+ * a simulated pellet would raise the real player's score with nothing to show it happened. This
+ * copies the values and then gives the clone a bus of its own.
+ *
+ * What a clone reproduces exactly: the maze and what has been eaten off it, every actor's cell,
+ * facing and movement phase, the score and its bonus chain, lives, level, the mode timers and the
+ * dot counters. So a clone ticked with the same elapsed times replays the same game — **as long as
+ * the jitter of FR-044 is off**. With it on the clone draws its own timings, which is the right
+ * behaviour for a search that must not assume the future it planned for is the one that arrives.
+ *
+ * The clone is 15 kB. It belongs in static storage, not on the stack — the target reserves a
+ * kilobyte of it.
+ *
+ * \param[out]      out_clone: receives the copy, must not be `NULL` and must not be `in_source`
+ * \param[in]       in_source: the run to copy, must not be `NULL`
+ */
+void game_clone(game_t* out_clone, const game_t* in_source);
+
+/*! \brief Stop this game drawing any more of FR-044's jitter, leaving the timings it already has.
+ *
+ * **Meant for a clone, and the reason it exists is not tidiness.** The jitter is drawn from
+ * `rng_bsp`, which is one generator for the whole program: a search that ticks a clone forward
+ * would pull words out of the stream the *played* game is going to draw from, so simulating a
+ * future would change it. On the host that also breaks FR-114 — a training episode replays from
+ * its seed only if nothing else is drawing.
+ *
+ * What a frozen game keeps is everything already drawn: this level's idle limit and dot limits
+ * stand, and the phase and frightened timers run down from where they are. What it loses is the
+ * variation on the *next* phase, which then lasts exactly what the difficulty table says. So a
+ * simulation assumes the ghosts keep to their nominal pacing from here on — the honest assumption,
+ * because the draw it would otherwise make is not the draw the real game will make.
+ *
+ * There is no way back on purpose. A run being played must never be frozen, and a clone has no
+ * reason to thaw.
+ *
+ * \param[in,out]   inout_game: the game to freeze, must not be `NULL`
+ */
+void game_freeze_timings(game_t* inout_game);
+
 /*! \brief Begin a new run at level 1 with a full set of lives (FR-003/006).
  *
  * Every level of the run gets its **own generated maze** (FR-029), derived from `in_maze_seed`

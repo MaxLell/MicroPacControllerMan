@@ -99,6 +99,7 @@ if(PACMAN_HOST_BUILD)
         App/pacman/pacman.c
         App/pacman_ai/ai_weights.c
         App/pacman_ai/pacman_ai.c
+        App/pacman_lookahead/pacman_lookahead.c
         App/playfield/playfield.c
         App/score/score.c
         App/shell/shell.c
@@ -135,6 +136,7 @@ if(PACMAN_HOST_BUILD)
         App/maze_gen
         App/pacman
         App/pacman_ai
+        App/pacman_lookahead
         App/playfield
         App/score
         App/shell
@@ -232,6 +234,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/pacman/pacman.c
     App/pacman_ai/ai_weights.c
     App/pacman_ai/pacman_ai.c
+    App/pacman_lookahead/pacman_lookahead.c
     App/playfield/playfield.c
     App/render/render.c
     App/score/score.c
@@ -264,6 +267,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Test/Target/ott.c
     Test/Target/scripts/ott_ai_equivalence.c
     Test/Target/scripts/ott_ai_frame_cost.c
+    Test/Target/scripts/ott_lookahead_cost.c
     Test/Target/scripts/ott_search_budget.c
     Test/Target/scripts/ott_ai_high_score.c
     Test/Target/scripts/ott_ai_equivalence_states.c
@@ -299,6 +303,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/maze_gen
     App/pacman
     App/pacman_ai
+    App/pacman_lookahead
     App/playfield
     App/render
     App/score
