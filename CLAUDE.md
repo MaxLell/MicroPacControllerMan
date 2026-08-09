@@ -314,6 +314,10 @@ cmake --build build -j                                   # -> build/pacman.elf, 
 # Flash over ST-LINK V3E. NOT openocd — see "Hardware facts" below.
 STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 
+# A machine with no cross-toolchain flashes the committed image instead. It is a copy, it goes
+# stale silently, and Firmware/Prebuilt/README.md carries the commit it was built from.
+STM32_Programmer_CLI -c port=SWD -w Prebuilt/pacman.hex -v -rst
+
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
 python3 Test/run_ott.py --suite                          # the automatic ones, unattended
 python3 Test/run_ott.py --manual                         # the ones needing you at the board

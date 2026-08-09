@@ -10,6 +10,12 @@ build-test/
 *.map
 *.list
 
+# The exception: one flashable image is committed, for a machine that has no cross-toolchain — see
+# Prebuilt/README.md, which also says why that is a copy and how it goes stale. Named files under a
+# directory that is not itself excluded, so the negation is actually reached.
+!Prebuilt/*.hex
+!Prebuilt/*.bin
+
 # CubeMX cache / generation metadata
 .mxproject
 

@@ -1,0 +1,93 @@
+# A flashable image, committed on purpose
+
+For flashing the board from a machine that has **no cross-toolchain** — a Mac with nothing
+installed, the case this exists for. Everything else in this repository builds the firmware from
+source, and that is still the way to get one; this is a convenience, not an artefact the build
+depends on.
+
+**It is a copy and it goes stale silently.** Nothing rebuilds it and no test checks it against the
+tree. The provenance below is the only thing that says whether it is still the firmware this
+repository describes — check the commit before trusting the image, and re-export it (see the bottom)
+rather than assuming.
+
+## What this image is
+
+| | |
+|---|---|
+| built from | `f1c50e1` on `feat/m6-lookahead` |
+| built on | 2026-08-09 |
+| target | STM32U545RE-Q Nucleo-64, TrustZone off |
+| toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
+| flash | 118,988 B of 504 kB — 23.0 % |
+| RAM | 235,672 B of 256 kB — 89.9 % |
+| `pacman.hex` | sha256 `790e69d127db22df2a381b8e40cf4729d8dfe32edb35999a4ce0f878e4c0b4fe` |
+| `pacman.bin` | sha256 `578316ad7909b56b1e8de7038ce6715e32f43a568d5751ff43e0a4440d88e3ea` |
+
+The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
+from it that the two files here cannot flash — it is worth having only with a debugger attached, and
+a machine with a debugger attached can build.
+
+## Flashing it from a Mac
+
+**STM32CubeProgrammer** is the supported way and the one this project uses on Linux
+(`Docu`/`CLAUDE.md` explain why openocd cannot program this part — its flash driver does not know
+device ID 0x455). It is a free download from st.com and needs an ST account.
+
+```sh
+STM32_Programmer_CLI -c port=SWD -w pacman.hex -v -rst
+```
+
+The GUI does the same thing: connect over ST-LINK, open `pacman.hex`, *Download*.
+
+**The drag-and-drop route**, if the board's ST-LINK presents itself as a USB drive: copy
+`pacman.hex` onto that volume and wait for its LED to stop blinking. It is much the easier path when
+it works — but **this was not verified**, because the board was unplugged from the build machine
+before it could be checked, and whether the ST-LINK V3E on this Nucleo exposes mass storage depends
+on its firmware version. If no drive appears, use CubeProgrammer.
+
+Use `pacman.hex` for either. `pacman.bin` is the same image without addresses in it and has to be
+written to `0x08000000` explicitly; it is here only for a tool that insists on raw binary.
+
+## What you will see, and what you will not
+
+**The game, exactly as before.** The look-ahead player this branch adds
+([DEC-050](../../Docu/PrePlanning/11-Decisions-and-As-Built.md),
+[M6 §15](../../Docu/Design/M6-Pacman-AI.md)) is **not wired into the game**: no menu entry, no
+button, `game_session` never calls it. On the panel this image is indistinguishable from the
+previous one. That is deliberate and it is why the RAM figure above is 89.9 % — the on-target test
+calls the module, so the linker can no longer drop it.
+
+The look-ahead is visible over the **serial console** only. The ST-LINK's virtual COM port appears
+on a Mac as `/dev/cu.usbmodem…` at 115200 8N1:
+
+```sh
+ls /dev/cu.usbmodem*
+screen /dev/cu.usbmodem1103 115200        # your number will differ
+```
+
+Then type, at the prompt:
+
+```
+ott lookahead_cost
+```
+
+The board reboots into the test, plays 200 decisions and prints what each one cost — expect a mean
+near 9.5 ms and a worst near 11 ms of the 13 a frame has spare, about 500 simulated ticks per
+decision. `reset` returns it to the game. `help` lists the rest; `ott pacman` starts a run with no
+menu in front of it.
+
+(`Test/run_ott.py` drives all of this unattended and is stdlib-only, so it needs no pip install —
+but its serial setup is written against Linux `stty` and has never been run on macOS. `screen` and
+typing the command is the route that is known to work.)
+
+## Re-exporting it
+
+```sh
+cd Firmware
+cmake --build build -j
+cp build/pacman.hex build/pacman.bin Prebuilt/
+shasum -a 256 Prebuilt/pacman.hex Prebuilt/pacman.bin   # update the table above
+```
+
+`.gitignore` excludes `*.hex` and `*.bin` everywhere else in the tree; the two exceptions naming
+this directory are what let these be committed at all.
