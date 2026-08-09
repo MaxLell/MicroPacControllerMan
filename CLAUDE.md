@@ -109,8 +109,13 @@ silently working around a wart.
   and shy radius, a ghost house nobody may
   re-enter and Pacman may never enter, arcade spawn positions and dot-counter release, and
   the scatter targets in the unreachable dead space with the corners assigned the right way
-  round. **Two deliberate departures, both asked for by the owner:** seeking is a route search
-  rather than the arcade's one-cell greedy choice, and **a ghost never turns around** — the
+  round. Seeking is the arcade's own **one greedy cell at a time**, tie-broken up-left-down-right:
+  DEC-023 had replaced it with a breadth-first route search at the owner's request, and **DEC-049
+  rolled that back** because a route search costs 300 µs a ghost step against the greedy rule's 10,
+  which is the difference between 1 and 312 cells of simulated future in a frame's spare 13 ms. What
+  it buys back is the arcade's shortsightedness — a ghost walks at the wall between it and its
+  target, which is why its ghosts can be baited. **One deliberate departure remains, asked for by
+  the owner: a ghost never turns around** — the
   arcade's forced reversal on a mode change is gone (DEC-037), so a mode change moves a ghost's
   target and takes effect from the next junction. Only a dead-end stub still forces the way
   back, and no generated maze has one. Measured either side: 86 reversals over 25 runs became 0.
@@ -227,6 +232,36 @@ silently working around a wart.
     `evaluate.py --maze generated` still asks the generalisation question and says out loud that the
     answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
+
+- **A look-ahead player is in the tree, and it scores 7,076 (DEC-050).** `App/pacman_lookahead`
+  decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
+  each way out to the next junction, and the branch whose end position is worth most wins. There is
+  no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
+  drift. Two things made that true rather than nearly true: a `memcpy` is **not** a clone (the
+  game's bus is pointers into itself, so a byte copy would score simulated pellets on the real
+  player), and a simulation must **not draw** — FR-044's jitter comes from the one shared generator,
+  so thinking would change the future; `game_freeze_timings` stops it and a unit test counts the
+  draws and requires none.
+  - **It is not FR-038's agent and does not replace it** — that asks for trained weights on the
+    target. This is the reference M6 §2 kept in reserve, and **nothing in the game calls it yet**.
+  - **What it settles:** 7,076 over FR-037's own twenty draws, against 4,600 asked for, 2,706 from
+    the shipped trained agent and 518 from a random policy; best run 16,560, reaching level 4. So
+    the score is reachable and **the gap is the agent's, not the game's**.
+  - **DEC-049's arithmetic was six times too kind** and the board said so: a simulated cell costs
+    **250 us**, not the 40 the four greedy ghost steps suggested, because a cell is seven
+    `game_tick` calls of Pacman, four ghosts, the timers and the bus. A frame's spare 13 ms buys
+    about 50 cells, not 312.
+  - **The budget counts ticks, not cells**, because a branch walking into a wall spends ticks and
+    reaches no cell — bounding cells left the waste unbounded, and a search keeping to 48 cells
+    still took 19 ms of a 13 ms allowance. And the search **deepens iteratively**: depth-first at a
+    tight budget spends everything on the first branch, and the player that produced scored *worse*
+    than one walking in a straight line.
+  - Ceiling 3 junctions, budget 500 ticks, **two junctions actually reached**; **9.7 ms mean, 11 ms
+    worst** of 13, verified by `ott lookahead_cost`. **RAM is the ceiling**: a level of depth is a
+    15 kB `game_t`, and calling the module takes the target from 71.6 % to **89.9 %**. Until
+    something calls it the linker drops it whole. SRAM4's 16 kB is still entirely unused and holds
+    exactly one clone.
+    See [M6 §15](Docu/Design/M6-Pacman-AI.md).
 
 - **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
   and the high scores of the selected one, and nothing else: the title and the row of actors are the

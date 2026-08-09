@@ -757,3 +757,110 @@ Still true, and still the thing in the way: level 2 is not level 21, and the sco
 FR-037's 4,600. What the night established is which levers move it — a dense, continuous cost for
 being in danger — and which do not: a bigger population, a richer observation (§14.5), a sparse
 terminal bonus, or paying the agent for the ghosts it eats.
+
+## 15 The look-ahead player: the game as its own forward model
+
+§2 rejected search as the *shipped* agent — FR-038 asks for trained weights on the target — and kept
+it in reserve as a reference to measure a trained agent against. [DEC-049](../PrePlanning/11-Decisions-and-As-Built.md)
+made it affordable by putting the ghosts back on the arcade's greedy rule, and
+[DEC-050](../PrePlanning/11-Decisions-and-As-Built.md) is the player built with that. It is in the
+tree and measured on the board; **nothing in the game calls it yet**.
+
+### 15.1 What it is
+
+`App/pacman_lookahead` clones the run in progress, drives the clone down each way out of Pacman's
+cell to the next junction, recurses, and picks the branch whose end position is worth most. Worth is
+the score gained, ten a point, minus a hundred thousand a life lost, plus the squared distance to
+the nearest ghost that could kill him — capped at 64, the arcade's own eight-cell figure — which
+only ever sorts branches that scored the same.
+
+**There is no model of the game in it.** The forward model *is* `game_tick`, reached through
+`game_clone`. That is the same argument DEC-042 makes about training against the C evaluator, one
+level up: a hand-written simulator is a second set of rules to keep in step, and the first thing to
+drift.
+
+Two things had to be built for that to be true rather than nearly true.
+
+- **`game_clone`, because a `memcpy` is not a copy.** A `game_t` is values in every field that
+  describes the game and self-referential pointers in the ones that describe its *bus*. A byte copy
+  leaves the copy publishing into the original's Score, so a simulated pellet raises the real
+  player's score with nothing to show it happened — not a crash, a wrong score with no symptom.
+- **`game_freeze_timings`, because a simulation must not draw.** FR-044's jitter comes from
+  `rng_bsp`, one generator for the whole program. A search that let its clones draw would spend the
+  numbers the *played* game was about to get, so thinking would change the future; on the host it
+  would take FR-114's replayable episode with it. The unit test states this exactly rather than by
+  outcome: it counts the draws a search makes and requires none.
+
+### 15.2 What the board said, and what it cost the plan
+
+Three assumptions did not survive `ott lookahead_cost`.
+
+| | assumed | measured on the U545RE |
+|---|---|---|
+| a simulated cell | ~40 us (four greedy ghost steps) | **250 us** |
+| cells in a frame's spare 13 ms | 312 | **~50** |
+| a depth-3 decision | fits | 24.5 ms mean, **67 ms worst** |
+
+DEC-049 priced the *ghost step*, and a cell is about seven `game_tick` calls of Pacman and four
+ghosts and the timers and the bus. The conclusion it drew — that the greedy rule is what makes
+look-ahead possible at all — still stands; the figure it drew it with was six times too kind.
+
+Then the budget itself turned out to be denominated in the wrong thing. **Cells bound the useful
+work and left the waste unbounded**: a branch that walks Pacman into a wall spends its whole tick
+allowance and reaches no cell, so a search keeping exactly to 48 cells still took **19 ms of a frame
+that had 13**. It counts *ticks* now, which is what is actually paid for, and the bound became
+exact.
+
+And the search shape was wrong for a tight budget. Depth-first spends the whole allowance on the
+first branch, so the answer compares one way out studied three junctions deep against three never
+looked at — and the player that produced **scored worse than one walking in a straight line**. It
+deepens iteratively now, keeping the deepest look the budget let it finish, and falls back to a
+partial look, then to any legal move, rather than answering "no direction" to a running game.
+
+### 15.3 What ships, and what it costs
+
+| | |
+|---|---|
+| depth ceiling | 3 junctions |
+| budget | 500 simulated ticks |
+| **look-ahead actually reached** | **2 junctions** |
+| decision cost | **9.7 ms mean, 11 ms worst**, of 13 spare |
+| a tick | 19 us |
+| RAM | 45 kB — one 15 kB `game_t` per level of depth |
+
+RAM is the ceiling, not time. A fourth junction is a fourth clone and the target has about 26 kB
+left as it is; the run went from 71.6 % to **89.9 %** the moment the on-target test called the
+module. Until something calls it the linker drops it whole, which is why the first target build
+after adding it reported no change at all — worth knowing before reading a size report as evidence.
+**SRAM4's 16 kB is still entirely unused** and is exactly big enough for one clone.
+
+### 15.4 What it scores, and what that settles
+
+Two junctions of look-ahead, on FR-037's own maze and FR-037's own twenty draws (seeds 1000..1019):
+
+| | mean over 20 runs | best | worst |
+|---|---|---|---|
+| uniform random | 518 | — | — |
+| the shipped trained agent, against these ghosts | 2,706 | — | — |
+| **`pacman_lookahead`** | **7,076** | **16,560, level 4** | 2,640 |
+| FR-037 asks for | 4,600 | | |
+
+**It clears the threshold by half again, and it more than doubles the trained agent.** That is the
+thing §2 kept it in reserve to answer, and the answer is worth more than the score itself: *the
+gap is the agent's, not the game's*. Before this, 4,600 on the jittered game was a number nobody had
+reached and could reasonably have been suspected of being out of reach — the jitter took FR-037
+back in §14.3 and no trained agent has met it since. It is reachable. What is missing is the
+policy, not the possibility.
+
+**It does not satisfy FR-037**, and it is not meant to: FR-038 asks for trained weights evaluated on
+the target, and a search is not weights. It is the upper mark, and it is now a measured one.
+
+Two honest qualifications. The figure comes from a purpose-written host harness playing whole runs,
+not from `evaluate.py`, which knows how to drive a network and not a search — so it has not been
+through VT-UNIT-010's own arithmetic. And it is the *host* build; the target runs the same code, and
+`ott lookahead_cost` shows the decisions costing 11 ms of a 13 ms allowance there, but no whole run
+has been played out on the board.
+
+The remaining use is the other one §2 named: a teacher. An agent cloned from this player's choices
+starts from a policy that scores 7,000 rather than from noise, and that is a different training
+problem from the one §14 has been losing.
