@@ -106,7 +106,8 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on; `select up` / `select down` pushes the stick.
+/* `select` shows what the menu is on; `select up`/`down` moves between games and
+ * `select left`/`right` picks which agent the AI game uses.
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -125,15 +126,28 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         {
             shell_move_selection(DIRECTION_SOUTH);
         }
+        else if (strcmp(in_arguments[1], "left") == 0)
+        {
+            shell_move_selection(DIRECTION_WEST);
+        }
+        else if (strcmp(in_arguments[1], "right") == 0)
+        {
+            shell_move_selection(DIRECTION_EAST);
+        }
         else
         {
-            cli_print("'select up' or 'select down'");
+            cli_print("'select up', 'down', 'left' or 'right'");
 
             return CLI_FAIL_STATUS;
         }
     }
 
+    /* The agent's name goes with it, so a test can read back what left and right did rather than
+     * having to trust that they did anything. */
+    static const char* const k_ai_names[] = {"none", "neat", "search"};
+
     cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
+    cli_print("agent: %s", k_ai_names[shell_get_selected_ai()]);
 
     return CLI_OK_STATUS;
 }
@@ -216,6 +230,18 @@ static void prv_poll_input(void)
     if (joystick_take_press(JOYSTICK_KEY_SOUTH))
     {
         shell_move_selection(DIRECTION_SOUTH);
+    }
+
+    /* Sideways picks which agent the AI game uses. Taken as an edge like the other two, so holding
+     * the stick over does not flick between the two agents once a frame. */
+    if (joystick_take_press(JOYSTICK_KEY_WEST))
+    {
+        shell_move_selection(DIRECTION_WEST);
+    }
+
+    if (joystick_take_press(JOYSTICK_KEY_EAST))
+    {
+        shell_move_selection(DIRECTION_EAST);
     }
 
     /* Start comes from either key, and both are taken as an *edge* so a thumb resting on
@@ -337,7 +363,7 @@ void app_main(void)
         cli_binding_t start_binding = {"start", prv_start_command, NULL, "Press start: begins a run from the menu"};
 
         cli_binding_t select_binding = {"select", prv_select_command, NULL,
-                                        "Show the menu's selection; 'select up'/'down' moves it"};
+                                        "Show the menu's selection; 'select up'/'down'/'left'/'right' moves it"};
 
         cli_binding_t button_binding = {"button", prv_button_command, NULL,
                                         "Press the board button: start, hand over to the AI, or loop"};

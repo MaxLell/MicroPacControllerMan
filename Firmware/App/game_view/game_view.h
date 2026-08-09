@@ -88,14 +88,20 @@
  *         is drawn as this many — the number is the model's, the picture is ours. */
 #define GAME_VIEW_HUD_LIFE_SLOTS   (3U)
 
-/*! \brief The `AI` the HUD shows while the agent has taken over (FR-032), in the gap the label
- *         row leaves between `1UP` and `LEVEL`.
+/*! \brief The name of whichever machine is playing (FR-032), in the gap the label row leaves
+ *         between `1UP` and `LEVEL`.
  *
- * Always two slots, whether or not the AI is playing: while it is not, they draw the font's space.
+ * **Six, because the name is the point.** It used to be two and to read `AI`, which answers "is a
+ * machine playing" — and once there are two machines to choose between, that leaves the player
+ * remembering which one they picked on the menu. `NEAT` and `SEARCH` say it instead. Six is what
+ * the longer of the two needs, and the label row has sixteen free columns between `1UP` and
+ * `LEVEL`, so it costs nothing that was being used.
+ *
+ * Always six slots, whether or not a machine is playing: while none is, they draw the font's space.
  * A slot that stopped being described would leave the last thing it drew on the panel for the rest
  * of the run — the same reason a spent life is drawn as a blank rather than skipped.
  */
-#define GAME_VIEW_HUD_AI_SLOTS     (2U)
+#define GAME_VIEW_HUD_AI_SLOTS     (6U)
 
 /*! \brief The `LOOP` the HUD shows while the endless mode is on (FR-043), on the lives row and
  *         right-aligned under `LEVEL`.

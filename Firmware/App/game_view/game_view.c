@@ -460,9 +460,9 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_LAST_COLUMN   (26U)
 #define HUD_LIVES_FIRST_COLUMN  (2U)
 
-/* Centred in the label row's own free space: `1UP` ends at column 5 and `LEVEL` starts at 22, so
- * 13 and 14 are the middle of what is left of a 28-column row. */
-#define HUD_AI_FIRST_COLUMN     (13U)
+/* Centred in the label row's own free space: `1UP` ends at column 5 and `LEVEL` starts at 22, which
+ * leaves sixteen columns, and six glyphs centred in them start here. */
+#define HUD_AI_FIRST_COLUMN     (11U)
 
 /* Right-aligned under `LEVEL`, on the lives row: the lives themselves run from column 2 and take
  * six, so the far end of that row is empty and reads as a second place for a status word. */
@@ -472,9 +472,11 @@ static const char* const g_hud_player_label = "1UP";
 static const char* const g_hud_level_label = "LEVEL";
 /*! \brief One label per steering machine, indexed by `game_session_player_e`.
  *
- * Two glyphs each, and the player's own entry is two spaces rather than nothing — for the same
- * reason a spent life is a blank: the slot exists either way and a hole in it reads as a fault. */
-static const char* const g_hud_player_labels[] = {"  ", "AI", "LA"};
+ * Named rather than abbreviated, because the player picked one of them on the menu and should not
+ * have to remember which. Padded to #GAME_VIEW_HUD_AI_SLOTS, and the player's own entry is all
+ * spaces rather than nothing — for the same reason a spent life is a blank: the slot exists either
+ * way and a hole in it reads as a fault. */
+static const char* const g_hud_player_labels[] = {"      ", "NEAT  ", "SEARCH"};
 static const char* const g_hud_loop_label = "LOOP";
 
 _Static_assert(HUD_LOOP_INDEX + GAME_VIEW_HUD_LOOP_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");

@@ -330,7 +330,12 @@ def check_maze_selection(port: str, baud: str) -> bool:
 
 
 def check_the_ai_game(port: str, baud: str) -> bool:
-    """Start the Pac-Man AI game and switch its endless mode, over the serial line (VT-INT-027).
+    """Pick the agent, start the Pac-Man AI game and switch its endless mode (VT-INT-027).
+
+    The agent is chosen on the menu with left and right, so which one plays is settled before the
+    run rather than during it — the button in that game already means the endless mode. What a
+    script can falsify is that the choice moves, that it stays put where there is nothing to
+    choose, and that the run still starts as the agent's.
 
     Two facts a script can settle in seconds. That the agent has Pac-Man from the first frame is
     visible in the firmware's own report of the run — it names the game — and that the endless mode
@@ -348,6 +353,15 @@ def check_the_ai_game(port: str, baud: str) -> bool:
 
         steps = [
             ("select down\r\n", "selected: pac-man ai"),
+            # Sideways picks the agent, and only here: it is dead on the two games a person plays,
+            # which the step after `select up` checks rather than assumes.
+            ("select\r\n", "agent: neat"),
+            ("select right\r\n", "agent: search"),
+            ("select left\r\n", "agent: neat"),
+            ("select right\r\n", "agent: search"),
+            ("select up\r\n", "selected: normal maze"),
+            ("select right\r\n", "agent: search"),  # unchanged: there is nothing to pick here
+            ("select down\r\n", "selected: pac-man ai"),
             ("start\r\n", "pac-man ai run 1"),
             ("button\r\n", "endless mode on"),
             ("button\r\n", "endless mode off"),
@@ -364,7 +378,8 @@ def check_the_ai_game(port: str, baud: str) -> bool:
                 print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-027] the AI game: the agent plays it, and the endless mode switches")
+        print("[VT-INT-027] the AI game: the agent is chosen on the menu, plays it, "
+              "and the endless mode switches")
         return True
     finally:
         os.close(fd)

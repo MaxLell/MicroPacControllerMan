@@ -203,10 +203,24 @@ static void prv_handle_key(SDL_Keycode in_key, bool in_is_repeat)
             break;
 
         case SDLK_LEFT:
-        case SDLK_a: shell_set_direction(DIRECTION_WEST); break;
+        case SDLK_a:
+            shell_set_direction(DIRECTION_WEST);
+            if (!in_is_repeat)
+            {
+                shell_move_selection(DIRECTION_WEST);
+            }
+
+            break;
 
         case SDLK_RIGHT:
-        case SDLK_d: shell_set_direction(DIRECTION_EAST); break;
+        case SDLK_d:
+            shell_set_direction(DIRECTION_EAST);
+            if (!in_is_repeat)
+            {
+                shell_move_selection(DIRECTION_EAST);
+            }
+
+            break;
 
         case SDLK_SPACE:
         case SDLK_RETURN:

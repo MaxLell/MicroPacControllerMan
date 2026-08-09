@@ -634,30 +634,83 @@ void test_the_ai_cannot_be_toggled_in_a_random_maze_run(void)
     TEST_ASSERT_FALSE(shell_has_ai_played());
 }
 
-/* The button is a cycle of three, not a toggle of two: there are two machines to compare and the
- * only way to see them play the same run is to step between them without reflashing. */
-void test_the_button_cycles_the_player_the_network_and_the_search(void)
+/* --- which agent the AI game uses ----------------------------------------- */
+
+/* The choice is the menu's, so it is made before the run and is a property of the run rather than
+ * something that happens part-way through it. Left and right are the free axis: up and down move
+ * between games and the button in that game already means the endless mode (FR-043). */
+void test_the_menu_picks_which_agent_the_ai_game_uses(void)
+{
+    prv_reach_the_menu();
+    shell_move_selection(DIRECTION_SOUTH);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_AI, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
+
+    shell_move_selection(DIRECTION_EAST);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_LOOKAHEAD, shell_get_selected_ai());
+
+    shell_move_selection(DIRECTION_WEST);
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
+}
+
+/* Sideways is dead on the two games a person plays. There is nothing to choose there, and a key
+ * that silently changed something invisible would be worse than a key that does nothing. */
+void test_the_agent_cannot_be_picked_for_a_game_that_has_none(void)
+{
+    prv_reach_the_menu();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_NORMAL_MAZE, shell_get_selected_mode());
+
+    shell_move_selection(DIRECTION_EAST);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_NORMAL_MAZE, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
+}
+
+/* The one that matters: the choice has to reach the run. A menu that showed `SEARCH` and started a
+ * network run would look exactly right and be exactly wrong. */
+void test_the_chosen_agent_is_the_one_that_plays(void)
+{
+    prv_reach_the_menu();
+    shell_move_selection(DIRECTION_SOUTH);
+    shell_move_selection(DIRECTION_EAST);
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
+    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
+    TEST_ASSERT_TRUE(shell_is_ai_playing());
+}
+
+void test_the_ai_takes_over_and_hands_back_during_a_run(void)
 {
     prv_reach_the_menu();
     shell_press_start();
 
     TEST_ASSERT_FALSE(shell_is_ai_playing());
-    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_HUMAN, game_session_get_player());
 
     TEST_ASSERT_TRUE(shell_toggle_ai());
-    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_NETWORK, game_session_get_player());
     TEST_ASSERT_TRUE(shell_is_ai_playing());
 
     TEST_ASSERT_TRUE(shell_toggle_ai());
-    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
-
-    /* Still "the AI is playing" — the question everything asks this is FR-034's, did a person earn
-     * the score, and a search earns it no more than a network does. */
-    TEST_ASSERT_TRUE(shell_is_ai_playing());
-
-    TEST_ASSERT_TRUE(shell_toggle_ai());
-    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_HUMAN, game_session_get_player());
     TEST_ASSERT_FALSE(shell_is_ai_playing());
+}
+
+/* The look-ahead search is offered in the agent's own game and *not* here. The button in a game a
+ * person plays means one thing, and a third state of it would be a way to arrive at the search by
+ * accident while reaching for the player. */
+void test_the_button_never_reaches_the_search_in_the_normal_maze(void)
+{
+    prv_reach_the_menu();
+    shell_press_start();
+
+    for (uint8_t press = 0U; press < 6U; ++press)
+    {
+        (void)shell_toggle_ai();
+
+        TEST_ASSERT_NOT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
+    }
 }
 
 /* FR-034 is "was on at some point", not "is on now". Handing control back before the last life must
@@ -669,8 +722,6 @@ void test_the_lockout_survives_handing_control_back(void)
 
     TEST_ASSERT_FALSE(shell_has_ai_played());
 
-    /* All the way round the cycle, so control is back with the player. */
-    (void)shell_toggle_ai();
     (void)shell_toggle_ai();
     (void)shell_toggle_ai();
 

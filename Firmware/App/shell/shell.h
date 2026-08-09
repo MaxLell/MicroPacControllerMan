@@ -123,6 +123,12 @@ void shell_set_direction(direction_e in_direction);
  */
 void shell_move_selection(direction_e in_direction);
 
+/*! \brief Which agent the AI game will hand Pac-Man to, as a `game_session_player_e`.
+ *
+ * Moved by pushing the menu's cursor left or right while `PAC-MAN AI` is selected, and reported
+ * here so a test or the console can say what the menu is showing without reading pixels. */
+uint8_t shell_get_selected_ai(void);
+
 /*! \brief Which game the menu is offering to start, and which one a run in progress is (FR-040).
  *
  * One value, not two: the selection can only be moved on the menu, so while a run is in progress

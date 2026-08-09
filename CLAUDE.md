@@ -245,9 +245,9 @@ silently working around a wart.
   so thinking would change the future; `game_freeze_timings` stops it and a unit test counts the
   draws and requires none.
   - **It is not FR-038's agent and does not replace it** — that asks for trained weights on the
-    target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* beside the
-    trained agent on B1 so the two can be compared inside one run, which is not the same as
-    shipping it as the agent.
+    target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* as one of the
+    two agents the `PAC-MAN AI` game can be played by, which is not the same as shipping it as the
+    agent FR-038 asks for.
   - **What it settles:** 7,076 over FR-037's own twenty draws, against 4,600 asked for, 2,706 from
     the shipped trained agent and 518 from a random policy; best run 16,560, reaching level 4. So
     the score is reachable and **the gap is the agent's, not the game's**.
@@ -273,15 +273,19 @@ silently working around a wart.
   (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
   screen) and start plays what is selected.
   - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
-    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 cycles three players**
-    (FR-030, DEC-051): the person, then the trained network, then the **look-ahead search**, then
-    back. Pac-Man is **green** for both machines — the colour answers "is this still me" — and the
-    HUD says which: `AI` or `LA`. A player that refuses is skipped, so a firmware whose weight table
-    will not evaluate still reaches the search.
-  - `PAC-MAN AI` — the same maze, the agent from the first frame, and no way to take over (FR-042).
-    **B1 here toggles the endless mode** (FR-043): a finished run starts the next one instead of
-    returning to the menu, and the HUD says `LOOP`. It refuses to start at all if the weight table
-    cannot be evaluated, rather than starting a game that plays itself with nobody playing it.
+    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 hands Pac-Man to the
+    trained agent and takes him back** (FR-030); Pac-Man is **green** while it plays. The
+    look-ahead search is deliberately *not* offered here (DEC-051) — a three-way cycle was built
+    and taken out, because that button is reached for by somebody playing.
+  - `PAC-MAN AI` — the same maze, an agent from the first frame, and no way to take over (FR-042).
+    **Which agent is picked on the menu with left and right** (DEC-051): `AGENT NEAT`, the trained
+    network, or `AGENT SEARCH`, the look-ahead of DEC-050. The in-game HUD **names it** — six
+    glyphs reading `NEAT` or `SEARCH` where it used to read `AI` — so nobody has to remember what
+    they chose. **B1 here still toggles the endless mode** (FR-043): a finished run starts the next
+    one instead of returning to the menu, and the HUD says `LOOP`. With the network it refuses to
+    start at all if the weight table cannot be evaluated, rather than starting a game that plays
+    itself with nobody playing it; the search cannot refuse, so choosing it is also how to play this
+    game on a firmware whose weights are broken.
   - `RANDOM MAZE` — the generated mazes of FR-029, and no AI at all.
   - **Three high-score tables, one per game** (FR-041), in the same flash page at layout version 2.
     FR-034's lockout narrowed with them: an AI-touched run of a *person's* game reaches no table,

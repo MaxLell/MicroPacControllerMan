@@ -18,11 +18,11 @@ rather than assuming.
 | built on | 2026-08-09 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 119,144 B of 504 kB — 23.1 % |
-| RAM | 235,672 B of 256 kB — 89.9 % |
+| flash | 119,376 B of 504 kB — 23.1 % |
+| RAM | 235,688 B of 256 kB — 89.9 % |
 | weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — **3,531 against FR-037's 4,600** |
-| `pacman.hex` | sha256 `13cb08e2cad799587d381b9ca6edc687f68b93644155e0294452a0fb2470d16e` |
-| `pacman.bin` | sha256 `cfbba9fd3f6ebf611de89f530e6dad1cb57861751cd4a22f30c5323873c8448f` |
+| `pacman.hex` | sha256 `a85a77eb5c641f12099cce1ffe46403de8e73f9f0f0c203654ce40dc6b5e5cbc` |
+| `pacman.bin` | sha256 `48ab855efbff4a57b7347ad11413bcda30f7f23f9978202ef43ab20e1c1360b6` |
 
 **Not verified on hardware.** The board was on another machine when this was built, so nothing here
 has been through `run_ott.py`. The host side is green — 468 unit tests, both builds — and that is a
@@ -55,29 +55,30 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-Pick **`NORMAL MAZE`** on the menu and start. **B1 — the blue button on the Nucleo — now cycles
-three players** rather than toggling one:
+**The two agents live in the `PAC-MAN AI` game and are chosen on the menu.**
 
-| presses | who is steering | HUD |
-|---|---|---|
-| 0 | you, on the joystick | blank |
-| 1 | the trained network, `arcade-danger` | `AI` |
-| 2 | the look-ahead search | `LA` |
-| 3 | you again | blank |
+1. Push the stick **down** once, to `PAC-MAN AI`. The line under it reads `AGENT NEAT`.
+2. Push **left or right** to change it to `AGENT SEARCH`, and back.
+3. Press start.
 
-Pac-Man turns **green** for both machines — that says "this is no longer you" — and the two glyphs
-beside `LEVEL` say which one. Same maze, same ghosts, same run: that is the comparison, and it is
-why this is a cycle on one button rather than two firmware images.
+The agent has Pac-Man from the first frame and keeps him. While it plays, the HUD **names it**, in
+the gap between `1UP` and `LEVEL`:
 
-Expect the search to look obviously better. It averages 7,076 over FR-037's twenty draws against the
-network's 3,531, and it reached level 4 where the network clears level 1. It is also *slower to
+```
+   1UP   3531        NEAT        LEVEL 1
+   1UP   7076        SEARCH      LEVEL 4
+```
+
+so there is nothing to remember. **B1 in that game still means the endless mode** (`LOOP` on the
+lives row), unchanged.
+
+Expect `SEARCH` to look obviously better. It averages **7,076** over FR-037's twenty draws against
+`NEAT`'s **3,531**, and it reached level 4 where the network clears level 1. It is also *slower to
 decide* — about 10 ms of each frame — which you will not see, because a frame has 20.
 
-Any run you touch B1 in stays out of the high-score table (FR-034), whichever machine you handed it
-to. That is deliberate: a search earns a score no more than a network does.
-
-`PAC-MAN AI` on the menu is unchanged — the trained network from the first frame, no takeover, B1
-there switches the endless mode.
+`NORMAL MAZE` is the game you play, and there **B1 hands Pac-Man to the trained network and takes
+him back**, exactly as before. The search is deliberately not offered there. Any run you touch B1
+in stays out of that game's high-score table (FR-034).
 
 ## The console, if you want the numbers
 

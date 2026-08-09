@@ -87,7 +87,9 @@ static const struct
     const char* name; /*!< For a caller reporting on the console    */
 } g_menu_options[SHELL_MODE_COUNT] = {
     {"NORMAL MAZE", "AI ON DEMAND", "normal maze"},
-    {"PAC-MAN AI", "PLAYS ITSELF", "pac-man ai"},
+    /* No note: the AI game's second line is #g_selected_ai's name, drawn with the selection because
+     * it changes with it. `PLAYS ITSELF` was there and is what the label already says. */
+    {"PAC-MAN AI", NULL, "pac-man ai"},
     {"RANDOM MAZE", NULL, "random maze"},
 };
 
@@ -105,6 +107,15 @@ static bool g_was_last_score_a_high_score;
 /* Which game the menu is offering, and — because the selection can only be moved on the menu —
  * which game the run in progress is. Also the index of the high-score table that game keeps. */
 static shell_mode_e g_selected_mode;
+
+/*! \brief Which machine the agent's own game hands Pac-Man to (FR-042).
+ *
+ * A *menu* choice and not an in-game one: the run is the agent's from the first frame, so there is
+ * no moment during it at which a player is deciding anything, and the button that would carry the
+ * choice already means the endless mode (FR-043). It is also the honest place for it — which agent
+ * is playing is a property of the run, and picking it before the run starts is what makes two runs
+ * comparable. */
+static game_session_player_e g_selected_ai;
 
 /* Whether a run that ends should be followed by another one (FR-043). Only ever set in the Pac-Man
  * AI game; cleared when a run is started from the menu, so a game begun by hand is one game. */
@@ -302,11 +313,33 @@ static void prv_draw_scores(msg_display_list_t* inout_list)
  * actors of the *previous* list — so a background list drawn after it would wipe it. The scores
  * before it are the reason this is not simply "move the cursor": each game keeps its own table, so
  * the three numbers above the list are part of the selection. */
+/*! \brief The AI names as the menu shows them, indexed by `game_session_player_e`.
+ *
+ * Both padded to the same width on purpose: they are redrawn in place when the choice moves, and a
+ * shorter name would leave the tail of a longer one on the panel.
+ *
+ * `AGENT` in front of the name rather than arrows around it, which is what this wanted to be: the
+ * font is the 1980 ROM's, and that is letters, digits, a space and the one hyphen that had to be
+ * drawn by hand — there is no `<` or `>` to have. The word does the arrows' other job anyway, which
+ * is to say that this line is a property of the game above it and not a fourth game. */
+static const char* const g_menu_ai_labels[] = {NULL, "AGENT NEAT  ", "AGENT SEARCH"};
+
 static void prv_draw_selection(void)
 {
     msg_display_list_t list = {0};
 
     prv_draw_scores(&list);
+    prv_flush(&list);
+
+    /* Which agent the AI game will use, under its label. Here rather than in #prv_draw_menu because
+     * it changes without the menu being redrawn — left and right move it — and it has to be
+     * redrawn when it does.
+     *
+     * In a flush of its own, because a display list has a fixed capacity and the three score rows
+     * very nearly fill one. Appending to theirs overran it, which the list's own precondition
+     * caught. */
+    prv_draw_centred_text(&list, (int16_t)(prv_get_option_y(SHELL_MODE_AI) + MENU_NOTE_OFFSET_Y),
+                          g_menu_ai_labels[g_selected_ai]);
     prv_flush(&list);
 
     prv_add_cursor(&list, prv_get_cursor_x(g_selected_mode),
@@ -431,11 +464,12 @@ static bool prv_start_run(void)
 
     if (g_selected_mode == SHELL_MODE_AI)
     {
-        /* The agent has Pac-Man from the first frame and keeps him (FR-042). Refused only when the
-         * generated table cannot be evaluated — and then the run does not start at all rather than
-         * falling back to the player, because a game that says it plays itself must either do that
-         * or say it cannot. */
-        if (!game_session_set_ai_enabled(true))
+        /* Whichever agent the menu is showing has Pac-Man from the first frame and keeps him
+         * (FR-042). Refused only when the generated table cannot be evaluated — and then the run
+         * does not start at all rather than falling back to the player, because a game that says it
+         * plays itself must either do that or say it cannot. The search cannot refuse, so choosing
+         * it is also the way to play this game on a firmware whose weights are broken. */
+        if (!game_session_set_player(g_selected_ai))
         {
             return false;
         }
@@ -492,6 +526,7 @@ void shell_init(void)
      * layout, and it is the only one that offers the AI. Only #shell_init sets it — coming back
      * from a run leaves the menu on whatever was last played. */
     g_selected_mode = SHELL_MODE_NORMAL_MAZE;
+    g_selected_ai = GAME_SESSION_PLAYER_NETWORK;
     g_is_selection_drawn = false;
     g_is_infinite = false;
     g_run_count = 0U;
@@ -620,6 +655,22 @@ void shell_move_selection(direction_e in_direction)
         return;
     }
 
+    /* Sideways picks the agent, and only where there is an agent to pick. Up and down move between
+     * games, so left and right are the axis that was free — and putting the choice on the menu
+     * keeps the in-game button meaning the one thing it already meant (FR-043). */
+    if ((in_direction == DIRECTION_WEST) || (in_direction == DIRECTION_EAST))
+    {
+        if (g_selected_mode == SHELL_MODE_AI)
+        {
+            g_selected_ai = (g_selected_ai == GAME_SESSION_PLAYER_NETWORK) ? GAME_SESSION_PLAYER_LOOKAHEAD
+                                                                           : GAME_SESSION_PLAYER_NETWORK;
+
+            g_is_selection_drawn = false;
+        }
+
+        return;
+    }
+
     shell_mode_e moved = g_selected_mode;
 
     /* Stops at the ends rather than wrapping: a player pushing up at the top of the list expects
@@ -635,7 +686,7 @@ void shell_move_selection(direction_e in_direction)
     }
     else
     {
-        /* Sideways, or already at the end of the list. */
+        /* Already at the end of the list. */
     }
 
     if (moved != g_selected_mode)
@@ -699,42 +750,26 @@ bool shell_toggle_ai(void)
         return false;
     }
 
-    /* A cycle rather than a toggle, because there are two machines now and they are worth
-     * comparing: player, then the trained network, then the look-ahead search, then back. The
-     * comparison is the point — the same maze, the same ghosts, the same run — and it is the only
-     * way to see the two play the same game without reflashing between them.
-     *
-     * Skipping a player that refuses is what keeps the cycle honest: a firmware whose weight table
-     * will not evaluate should still reach the search, and pressing the button twice to get past a
-     * thing that is not there would be a worse answer than not offering it. */
-    static const game_session_player_e k_cycle[] = {GAME_SESSION_PLAYER_HUMAN, GAME_SESSION_PLAYER_NETWORK,
-                                                    GAME_SESSION_PLAYER_LOOKAHEAD};
-    const uint8_t count = (uint8_t)(sizeof(k_cycle) / sizeof(k_cycle[0]));
-    const game_session_player_e current = game_session_get_player();
-    uint8_t position = 0U;
-
-    for (uint8_t index = 0U; index < count; ++index)
+    /* The trained network only, and a plain toggle. The look-ahead search is **not** offered here:
+     * the owner asked for it in the agent's own game, where the choice is made on the menu before
+     * the run starts, rather than as a third state of a button in a game a person is playing. A
+     * cycle was built here first and taken out again — the button had come to mean "step through
+     * whatever machines exist", which is not what a player reaching for it wants. */
+    if (!game_session_set_ai_enabled(!game_session_is_ai_enabled()))
     {
-        if (k_cycle[index] == current)
-        {
-            position = index;
-            break;
-        }
+        return false;
     }
 
-    for (uint8_t step = 1U; step <= count; ++step)
-    {
-        if (game_session_set_player(k_cycle[(position + step) % count]))
-        {
-            /* Latched here rather than where control goes back to the player, so that the run
-             * remembers what it cannot be told again. */
-            g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
+    /* Latched here rather than where control goes back to the player, so that the run remembers
+     * what it cannot be told again. */
+    g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
 
-            return true;
-        }
-    }
+    return true;
+}
 
-    return false;
+uint8_t shell_get_selected_ai(void)
+{
+    return (uint8_t)g_selected_ai;
 }
 
 bool shell_is_ai_playing(void)
