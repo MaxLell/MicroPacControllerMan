@@ -57,8 +57,14 @@ def score(weights):
         return -1.0, 0.0
     if out.returncode != 0:
         return -1.0, 0.0
-    mean, levels = out.stdout.split()
-    return float(mean), float(levels)
+    # The first two fields and no more: `fit_lookahead.c` also names the maze it played, and unpacking
+    # the whole line is what killed a ten-hour run fifteen minutes into it.
+    fields = out.stdout.split()
+
+    if len(fields) < 2:
+        return -1.0, 0.0
+
+    return float(fields[0]), float(fields[1])
 
 
 def mutate(weights, steps, rng):
