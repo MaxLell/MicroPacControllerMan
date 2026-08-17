@@ -293,40 +293,37 @@ silently working around a wart.
     the 12 kB in **SRAM4**. Until something calls the module the linker drops it whole.
     See [M6 §15](Docu/Design/M6-Pacman-AI.md) and [§16](Docu/Design/M6-Pacman-AI.md).
 
-- **The menu is two axes plus a start row (DEC-055, FR-040..043).** The owner drew it: who plays over
-  which maze over `START`, each row changed with left and right, the cursor moved with up and down.
+- **The menu is a list and a confirm, one page per question (DEC-056, FR-040..043).** The owner
+  sketched it as one screen after another:
   ```
-          - PLAY -            /  - AI PLAYS -
-          - CLASSIC -         /  - RANDOM -
-          - ENDLESS OFF -     /  - ENDLESS ON -     (only while the AI plays)
-                START
+  page 1        page 2 (after PLAY)     page 2 (after AI)    page 3 (AI only)
+  - PLAY        - CLASSIC               - CLASSIC            - ENDLESS OFF
+  - AI          - RANDOM                - RANDOM             - ENDLESS ON
+                ^ start the run         ^ on to page 3       ^ start the run
   ```
-  - **Four combinations, four high-score tables** (FR-041), layout version **3** — so the scores
-    stored before the change are discarded rather than misread. `shell_mode_e` is the four and is
-    *derived* from the two axes, so they cannot disagree. FR-034's lockout: an AI-touched run of a
-    *person's* combination reaches no table; the machine's own two file into their own.
-  - **Three fixed games conflated two questions.** "The AI" implied the arcade's maze and a generated
-    maze could not be played by the machine at all — so the combination worth having was the one that
-    did not exist. **AI × random was measured before it was offered: 19,744 at Ø level 5.00**, against
-    21,870 and 5.90 on the layout the weights were fitted on. **90 % on mazes it has never seen**,
-    which is the answer §17 raised and could not settle, and the sharpest contrast with the network
-    that had memorised one game.
-  - **The endless mode is a menu row now, not the board button** (FR-043) — chosen before the run
-    like everything else about it, and only offered while the AI plays because a person's run has
-    nothing to loop. The cursor steps *over* a row that is not offered, and when the player row moves
-    back to a person the cursor lands on `START` and the loop is switched off with it.
-  - **B1 means start and nothing else.** Both of its in-run meanings are gone — the handover in
-    DEC-054, the loop here. `select up|down|left|right` and `button` on the console push the stick and
-    the button the way `start` presses start, which is what keeps VT-INT-026/027 unattended; both
-    were rewritten to walk the axes.
-  - **The hyphens are the arrows.** The font is the 1980 tile ROM's — letters, digits, a space and the
-    one hyphen DEC-026 drew by hand — so there is no `<` or `>`, and the owner asked for the ROM's own
-    font rather than new art. `- CLASSIC -` says "this row has other values" with what exists.
-  - **Two things the work turned up.** Starting a run must no longer clear the loop (it did, because
-    the loop used to be armed *during* a run) — caught by a test that counted one run where it wanted
-    two. And a cursor move must not redraw the rows: every row's text can change now, so the first
-    version redrew all four on any selection change and the test that holds a menu move to one
-    rectangle rather than a screen caught it at 64 regions against a bound of 43.
+  Up and down move within a page — the highlighted option *is* the choice, so there is no separate
+  commit — and the centre key leaves the page, either onward or into the run. **B1 steps back a
+  page**; on page 1 and the score screen it falls through to meaning start.
+  - **This is the menu's third shape in three days.** Three fixed games (DEC-045), then two settable
+    axes on one screen (DEC-055), then this. The axes were rejected on sight: a screen carrying every
+    choice at once reads denser than a short list asked twice, and the endless row's *conditional*
+    appearance was the tell that the axes were carrying something they did not fit.
+  - **The endless mode stopped needing a rule.** DEC-055 had to say when its row applied and make the
+    cursor step over it. Here it is simply the last page of the AI's path, and a person's path does
+    not pass through it — the shape of the walk carries the condition, so the code does not.
+  - **Two high-score tables, one per maze** (FR-041), layout version **4**. The AI's tables are gone
+    (DEC-056): a run nobody played is not a score anybody set, so **FR-034 is back to what it said
+    originally** — an AI run reaches no table at all, and there is no exception to state.
+  - **Two things the pages made necessary.** A way back, because every other key goes forwards and
+    picking `AI` by accident was a trap. And a page must **reopen on what it was told**: going back
+    from the maze page and forward again silently reset the maze in the first version, so
+    `prv_open_page` puts the cursor on the decision that was made, and a test walks out and back in
+    to hold it.
+  - **The console had to learn to talk.** `start` and `button` print which page they landed on, since
+    neither always starts a run any more; VT-INT-026/027 walk the three pages forwards and back over
+    the serial line and would otherwise be reading silence. `prv_walk_to` in `test_shell.c` is the
+    helper that made the third rewrite of these tests short — it drives the pushes rather than
+    setting state, so the next change to the menu's shape rewrites one function, not twenty tests.
 
 - **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
   timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened

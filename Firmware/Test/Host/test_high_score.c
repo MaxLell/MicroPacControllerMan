@@ -34,10 +34,11 @@
 #define TEST_MAGIC_WORD  (0x5041434DUL)
 /*! \brief The layout version the module writes today.
  *
- * Bumped to 3 in DEC-055, when the three tables became four: the version is what makes a stored page
- * from before the change unreadable rather than silently misread, and a test that kept the old
- * number would be testing that the guard does *not* work. */
-#define TEST_VERSION     (3U)
+ * Bumped every time the shape changes, and it has changed twice in two days: three tables became four
+ * in DEC-055 and four became **two** in DEC-056, when the machine's tables went. The version is what
+ * makes a page written before a change unreadable rather than silently misread, and a test that kept
+ * an old number would be testing that the guard does *not* work. */
+#define TEST_VERSION     (4U)
 #define TEST_WORD_COUNT  (3U + (HIGH_SCORE_TABLE_COUNT * HIGH_SCORE_COUNT)) /* crc, magic, version, the tables */
 
 /* The table the tests about *one* table use. Which one does not matter to them — what matters is

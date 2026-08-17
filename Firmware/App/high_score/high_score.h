@@ -47,7 +47,7 @@
  * The shell asserts that this agrees with the number of games it offers, so the two cannot drift
  * apart without the build saying so.
  */
-#define HIGH_SCORE_TABLE_COUNT (4U)
+#define HIGH_SCORE_TABLE_COUNT (2U)
 
 /* ==========================================================================
  * high_score - public API

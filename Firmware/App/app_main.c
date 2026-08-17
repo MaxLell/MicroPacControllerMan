@@ -40,7 +40,7 @@
  */
 #define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
 #define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
-#define APP_MAIN_HELP_SELECT     "The menu; 'select up|down' picks a row, 'left|right' changes it"
+#define APP_MAIN_HELP_SELECT     "The menu; 'select up' and 'select down' move the cursor"
 #define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
 
 _Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
@@ -82,11 +82,14 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         return CLI_OK_STATUS;
     }
 
-    /* All four tables, each under the name of the combination it belongs to (FR-041). Labelled
-     * rather than numbered, because "table 2" is a number only this file knows the meaning of. */
+    /* Both tables, each under the name of the maze it belongs to (FR-041). Labelled rather than
+     * numbered, because "table 1" is a number only this file knows the meaning of. The machine has no
+     * table since DEC-056, so there are two and they are the two mazes. */
+    static const char* const k_table_names[] = {"classic", "random"};
+
     for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        cli_print("%s:", shell_get_mode_name((shell_mode_e)table));
+        cli_print("%s:", k_table_names[table]);
 
         for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
         {
@@ -94,7 +97,7 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         }
     }
 
-    cli_print("'highscore reset' clears all four.");
+    cli_print("'highscore reset' clears both.");
 
     return CLI_OK_STATUS;
 }
@@ -113,15 +116,25 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
 
     shell_press_start();
 
-    /* Nothing can refuse to start any more. The Pac-Man AI game used to, when the generated weight
-     * table could not be evaluated — better than starting a game that plays itself with nobody
-     * playing it — and the table went with the trained network in DEC-054. The search cannot be
-     * unavailable. */
+    /* **What it did has to be said, because it no longer always starts a run.** Since DEC-056 the
+     * centre key takes the highlighted option, and on every page but the last of a path that means
+     * moving on. A harness driving the menu needs to know which — and when a run does begin, the
+     * periodic report names it, so there is nothing to add here. */
+    if (shell_get_screen() == SHELL_SCREEN_MENU)
+    {
+        static const char* const k_page_names[] = {"player", "maze", "endless"};
+
+        cli_print("page: %s", k_page_names[shell_get_menu_page()]);
+    }
+
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on; `select up`/`down` move the cursor between the menu's rows and
- * `select left`/`right` change the value of the row it is on (DEC-055).
+/* `select` shows what the menu is on and `select up`/`down` move the cursor within the page that is up
+ * (DEC-056). Sideways is accepted and does nothing: a page that is a list has nothing sideways to be.
+ *
+ * `start` takes the highlighted option — which advances a page or begins the run — and `button` steps
+ * back, so the whole three-page walk is drivable from the console.
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -156,12 +169,12 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         }
     }
 
-    /* All three axes plus the cursor, so a harness can read back exactly what the pushes did rather
-     * than trusting that they did anything (VT-INT-026/027). */
-    static const char* const k_row_names[] = {"player", "maze", "endless", "start"};
+    /* The page, what is highlighted on it, and the choices made so far — so a harness can read back
+     * exactly what the pushes did rather than trusting that they did anything (VT-INT-026/027). */
+    static const char* const k_page_names[] = {"player", "maze", "endless"};
 
-    cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
-    cli_print("row: %s", k_row_names[shell_get_selected_row()]);
+    cli_print("page: %s", k_page_names[shell_get_menu_page()]);
+    cli_print("selected: %s", shell_get_mode_name());
     cli_print("endless: %s", shell_is_infinite() ? "on" : "off");
 
     return CLI_OK_STATUS;
@@ -179,6 +192,15 @@ static int prv_button_command(int in_argument_count, char* in_arguments[], void*
     (void)in_context;
 
     shell_press_user_button();
+
+    /* Same reason as `start`: on the menu the button is a step back, and which page it landed on is
+     * the whole of what a harness can check. */
+    if (shell_get_screen() == SHELL_SCREEN_MENU)
+    {
+        static const char* const k_page_names[] = {"player", "maze", "endless"};
+
+        cli_print("page: %s", k_page_names[shell_get_menu_page()]);
+    }
 
     return CLI_OK_STATUS;
 }
@@ -320,7 +342,7 @@ static void prv_report_progress(void)
 
     if (screen == SHELL_SCREEN_GAME)
     {
-        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(shell_get_selected_mode()),
+        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(),
                   (unsigned long)shell_get_run_count(), (unsigned)level, (unsigned)lives,
                   (unsigned long)game_session_get_score());
     }

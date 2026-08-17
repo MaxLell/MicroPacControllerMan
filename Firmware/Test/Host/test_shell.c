@@ -180,58 +180,72 @@ static bool prv_is_playing_the_normal_maze(void)
  *
  * By *pushing* rather than by setting: there is no way to set it, and there should not be — a test
  * that reached past the input would stop covering the path a player takes. */
-/* Arm the endless loop on the menu, which since DEC-055 is the only place it can be armed.
+/* Walk the menu's pages the way a player would, and stop on the last one without confirming it.
  *
- * The row only exists while the machine plays, so this asserts that rather than assuming it — a
- * caller that armed nothing and carried on would make every test below it pass for the wrong
- * reason. */
-static void prv_arm_the_loop(void)
+ * The menu is a list and a confirm, three pages deep (DEC-056), so this drives the cursor and the
+ * centre key rather than setting anything: what a test wants to know is that the *pushes* get there.
+ * It stops short of the final confirm so a caller can assert about the menu before the run begins.
+ */
+static void prv_walk_to(shell_player_e in_player, shell_maze_e in_maze, bool in_is_endless)
 {
-    while (shell_get_selected_row() != SHELL_ROW_ENDLESS)
+    if (shell_get_screen() != SHELL_SCREEN_MENU)
     {
-        shell_move_selection(DIRECTION_SOUTH);
+        prv_reach_the_menu();
     }
 
-    TEST_ASSERT_EQUAL_UINT_MESSAGE(SHELL_ROW_ENDLESS, shell_get_selected_row(),
-                                   "the endless row is not offered, so the machine is not selected");
+    while (shell_press_back())
+    {
+        /* Back to the first page, wherever a previous test left it. */
+    }
 
-    shell_move_selection(DIRECTION_EAST);
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
 
-    TEST_ASSERT_TRUE(shell_is_infinite());
+    if (shell_get_selected_player() != in_player)
+    {
+        shell_move_selection((in_player == SHELL_PLAYER_MACHINE) ? DIRECTION_SOUTH : DIRECTION_NORTH);
+    }
+
+    TEST_ASSERT_EQUAL_UINT(in_player, shell_get_selected_player());
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+
+    if (shell_get_selected_maze() != in_maze)
+    {
+        shell_move_selection((in_maze == SHELL_MAZE_RANDOM) ? DIRECTION_SOUTH : DIRECTION_NORTH);
+    }
+
+    TEST_ASSERT_EQUAL_UINT(in_maze, shell_get_selected_maze());
+
+    if (in_player != SHELL_PLAYER_MACHINE)
+    {
+        /* A person's path ends here: there is no endless page to reach. */
+        TEST_ASSERT_FALSE_MESSAGE(in_is_endless, "a person's run cannot loop");
+
+        return;
+    }
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+
+    if (shell_is_infinite() != in_is_endless)
+    {
+        shell_move_selection(in_is_endless ? DIRECTION_SOUTH : DIRECTION_NORTH);
+    }
+
+    TEST_ASSERT_EQUAL(in_is_endless, shell_is_infinite());
 }
 
-/* Put the menu on a combination, by pushing the stick the way a player would.
- *
- * Two axes since DEC-055, so this drives the cursor to each row and flips its value rather than
- * counting steps down a list. Deliberately through `shell_move_selection` and not a setter: what a
- * test wants to know is that the *pushes* get there. */
-static void prv_select(shell_mode_e in_mode)
+/* The same walk, confirmed, so the run is under way. */
+static void prv_start_a_run(shell_player_e in_player, shell_maze_e in_maze, bool in_is_endless)
 {
-    const shell_player_e player = (in_mode >= SHELL_MODE_AI_CLASSIC) ? SHELL_PLAYER_MACHINE : SHELL_PLAYER_PERSON;
-    const shell_maze_e maze = ((in_mode == SHELL_MODE_PLAY_RANDOM) || (in_mode == SHELL_MODE_AI_RANDOM))
-                                  ? SHELL_MAZE_RANDOM
-                                  : SHELL_MAZE_CLASSIC;
+    prv_walk_to(in_player, in_maze, in_is_endless);
 
-    while (shell_get_selected_row() != SHELL_ROW_PLAYER)
-    {
-        shell_move_selection(DIRECTION_NORTH);
-    }
+    shell_press_start();
 
-    if (shell_get_selected_player() != player)
-    {
-        shell_move_selection(DIRECTION_EAST);
-    }
-
-    shell_move_selection(DIRECTION_SOUTH);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_MAZE, shell_get_selected_row());
-
-    if (shell_get_selected_maze() != maze)
-    {
-        shell_move_selection(DIRECTION_EAST);
-    }
-
-    TEST_ASSERT_EQUAL_UINT(in_mode, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
 }
 
 /* Make the search play badly, on purpose, for the whole of this file.
@@ -352,6 +366,9 @@ void test_the_start_key_starts_a_run_from_the_menu(void)
 {
     prv_reach_the_menu();
 
+    /* Two confirms, because the menu is a list and a confirm per page (DEC-056): who plays, then
+     * which maze, and the second one begins the run. */
+    shell_press_start();
     shell_press_start();
 
     TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
@@ -370,8 +387,7 @@ void test_a_direction_outside_a_run_goes_nowhere(void)
 
 void test_a_run_that_ends_shows_the_score_and_then_the_menu(void)
 {
-    prv_reach_the_menu();
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
 
     /* Nobody is steering, so the ghosts take all three lives. Bounded well above what that
      * needs, and the assertion below is what says it happened rather than the loop ending. */
@@ -396,8 +412,7 @@ void test_a_run_that_ends_shows_the_score_and_then_the_menu(void)
 /* A player who is ready should not have to wait out the score screen. */
 void test_the_start_key_cuts_the_score_screen_short(void)
 {
-    prv_reach_the_menu();
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
 
     for (uint32_t frame = 0U; (frame < 4000U) && (shell_get_screen() == SHELL_SCREEN_GAME); ++frame)
     {
@@ -417,9 +432,9 @@ void test_a_finished_run_reaches_the_high_score_table(void)
 {
     prv_reach_the_menu();
 
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
 
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
     prv_play_until_the_run_ends();
 
     /* Both halves asserted, because a table that refuses everything would pass the second one
@@ -427,81 +442,154 @@ void test_a_finished_run_reaches_the_high_score_table(void)
      * table — and a standing Pacman scores nothing, so it was comparing zero with zero. Pacman
      * starts on an empty cell: he has to be pushed somewhere to eat at all. */
     TEST_ASSERT_NOT_EQUAL_UINT32(0U, game_session_get_score());
-    TEST_ASSERT_EQUAL_UINT32(game_session_get_score(), high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
+    TEST_ASSERT_EQUAL_UINT32(game_session_get_score(), high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
 }
 
 /* --- the choice of maze (FR-040) ------------------------------------------ */
 
-/* The normal maze first: it is the arcade's layout and the only one that offers the AI, so it is
- * what a player who presses start without reading anything should get. */
-void test_the_menu_starts_on_the_normal_maze(void)
+/* The menu opens on the first page with `PLAY` highlighted, which is the choice a player who pushes
+ * nothing at all gets. */
+void test_the_menu_opens_on_play(void)
 {
     prv_reach_the_menu();
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_CLASSIC, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(0U, shell_get_selected_option());
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_PERSON, shell_get_selected_player());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_CLASSIC, shell_get_selected_maze());
 }
 
-/* Up and down move the cursor, left and right change the row it is on, and both stop at the ends
- * rather than wrapping — a player pushing up at the top expects nothing to happen. */
-void test_the_stick_moves_the_cursor_and_changes_the_row_it_is_on(void)
+/* Up and down move within a page and stop at its ends; the highlighted option *is* the choice, so
+ * moving the cursor decides and the centre key only leaves the page. */
+void test_the_stick_moves_within_a_page_and_stops_at_its_ends(void)
 {
     prv_reach_the_menu();
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_PLAYER, shell_get_selected_row());
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_CLASSIC, shell_get_selected_mode());
 
     /* Up at the top does nothing. */
     shell_move_selection(DIRECTION_NORTH);
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_PLAYER, shell_get_selected_row());
-
-    /* Sideways on the top row is who plays, and it goes back. */
-    shell_move_selection(DIRECTION_EAST);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_MACHINE, shell_get_selected_player());
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_AI_CLASSIC, shell_get_selected_mode());
-
-    shell_move_selection(DIRECTION_WEST);
-
+    TEST_ASSERT_EQUAL_UINT(0U, shell_get_selected_option());
     TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_PERSON, shell_get_selected_player());
 
-    /* Down to the maze row, and sideways there is the maze. */
     shell_move_selection(DIRECTION_SOUTH);
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_MAZE, shell_get_selected_row());
+    TEST_ASSERT_EQUAL_UINT(1U, shell_get_selected_option());
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_MACHINE, shell_get_selected_player());
 
-    shell_move_selection(DIRECTION_EAST);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_RANDOM, shell_get_selected_maze());
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_RANDOM, shell_get_selected_mode());
-
-    /* Down to `START`, where sideways has nothing to do, and down again does nothing. */
+    /* Down at the bottom does nothing either. */
     shell_move_selection(DIRECTION_SOUTH);
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_START, shell_get_selected_row());
-
-    shell_move_selection(DIRECTION_EAST);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_RANDOM, shell_get_selected_mode());
-
-    shell_move_selection(DIRECTION_SOUTH);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_ROW_START, shell_get_selected_row());
+    TEST_ASSERT_EQUAL_UINT(1U, shell_get_selected_option());
 }
 
-/* All four combinations are reachable, and each is its own high-score table (FR-041). */
-void test_all_four_combinations_are_reachable(void)
+/* The centre key moves on a page at a time, and each path is as long as it needs to be: a person
+ * picks a maze and goes, the machine picks a maze and then whether to loop. */
+void test_the_centre_key_walks_the_pages_and_the_paths_differ(void)
 {
-    static const shell_mode_e k_all[] = {SHELL_MODE_PLAY_CLASSIC, SHELL_MODE_PLAY_RANDOM, SHELL_MODE_AI_CLASSIC,
-                                         SHELL_MODE_AI_RANDOM};
-
     prv_reach_the_menu();
 
-    for (uint8_t index = 0U; index < (uint8_t)(sizeof(k_all) / sizeof(k_all[0])); ++index)
-    {
-        prv_select(k_all[index]);
+    shell_press_start();
 
-        TEST_ASSERT_EQUAL_UINT(k_all[index], shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+
+    /* A person's second confirm starts the run — there is no endless page on this path. */
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
+    TEST_ASSERT_FALSE(shell_is_ai_playing());
+
+    prv_play_until_the_run_ends();
+    shell_press_start();
+
+    /* And the machine's path has one page more. */
+    prv_reach_the_menu();
+    shell_move_selection(DIRECTION_SOUTH);
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_MENU, shell_get_screen());
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
+    TEST_ASSERT_TRUE(shell_is_ai_playing());
+}
+
+/* The board button steps back, and what was chosen on the way in survives the trip.
+ *
+ * Without a way back, picking `AI` by accident is a trap — every other key goes forwards. And a page
+ * that reopened at the top would silently undo a choice, which is worse than not being able to leave.
+ */
+void test_the_button_steps_back_and_the_choices_survive(void)
+{
+    prv_reach_the_menu();
+
+    /* Nowhere to go back to on the first page. */
+    TEST_ASSERT_FALSE(shell_press_back());
+
+    prv_walk_to(SHELL_PLAYER_MACHINE, SHELL_MAZE_RANDOM, true);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+
+    TEST_ASSERT_TRUE(shell_press_back());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_RANDOM, shell_get_selected_maze());
+    TEST_ASSERT_EQUAL_UINT(1U, shell_get_selected_option());
+
+    TEST_ASSERT_TRUE(shell_press_back());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_MACHINE, shell_get_selected_player());
+
+    TEST_ASSERT_FALSE(shell_press_back());
+
+    /* Forward again, and nothing moved. */
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_RANDOM, shell_get_selected_maze());
+
+    shell_press_start();
+
+    TEST_ASSERT_TRUE(shell_is_infinite());
+}
+
+/* Choosing a person disarms the loop, because a person's path never reaches the page that could. */
+void test_choosing_a_person_switches_the_loop_off(void)
+{
+    prv_reach_the_menu();
+    prv_walk_to(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, true);
+
+    TEST_ASSERT_TRUE(shell_is_infinite());
+
+    while (shell_press_back())
+    {
+        /* back to the first page */
+    }
+
+    shell_move_selection(DIRECTION_NORTH);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_PERSON, shell_get_selected_player());
+    TEST_ASSERT_FALSE(shell_is_infinite());
+}
+
+/* All four combinations of player and maze are reachable, and the two mazes are the two tables
+ * (FR-041) — the machine's runs have no table at all since DEC-056. */
+void test_all_four_combinations_are_reachable(void)
+{
+    prv_reach_the_menu();
+
+    for (uint8_t player = 0U; player < (uint8_t)SHELL_PLAYER_COUNT; ++player)
+    {
+        for (uint8_t maze = 0U; maze < (uint8_t)SHELL_MAZE_COUNT; ++maze)
+        {
+            prv_walk_to((shell_player_e)player, (shell_maze_e)maze, false);
+
+            TEST_ASSERT_EQUAL_UINT(player, shell_get_selected_player());
+            TEST_ASSERT_EQUAL_UINT(maze, shell_get_selected_maze());
+        }
     }
 }
 
@@ -514,20 +602,20 @@ void test_a_sideways_push_leaves_the_selection_alone(void)
     shell_move_selection(DIRECTION_WEST);
     shell_move_selection(DIRECTION_EAST);
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_CLASSIC, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT(0U, shell_get_selected_option());
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_PERSON, shell_get_selected_player());
 }
 
-/* Steering during a run must not change what the run is. The selection is also what
- * #shell_toggle_ai consults, so a stick pushed north mid-game moving it would take the AI away
- * from a normal-maze run halfway through. */
+/* Steering during a run must not change what the run is. The maze is what the high-score table is
+ * chosen by (FR-041), so a stick pushed south mid-game moving it would file the score under the other
+ * maze. */
 void test_the_selection_cannot_be_moved_during_a_run(void)
 {
-    prv_reach_the_menu();
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
 
     shell_move_selection(DIRECTION_SOUTH);
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_PLAY_CLASSIC, shell_get_selected_mode());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_CLASSIC, shell_get_selected_maze());
 }
 
 /* Moving the selection redraws the cursor and the three scores of the game now selected — not the
@@ -558,8 +646,7 @@ void test_moving_the_selection_redraws_the_scores_and_the_cursor_and_not_the_scr
 
 void test_the_normal_maze_option_plays_the_arcade_maze(void)
 {
-    prv_reach_the_menu();
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
 
     TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_session_get_state());
     TEST_ASSERT_TRUE(prv_is_playing_the_normal_maze());
@@ -568,8 +655,7 @@ void test_the_normal_maze_option_plays_the_arcade_maze(void)
 void test_the_random_maze_option_plays_a_generated_maze(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_PLAY_RANDOM);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_RANDOM, false);
 
     TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_session_get_state());
 
@@ -584,8 +670,7 @@ void test_the_random_maze_option_plays_a_generated_maze(void)
 void test_the_ai_game_plays_itself_from_the_first_frame(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, false);
 
     /* No press of anything else: the agent has Pac-Man because the game is that game. In the normal
      * maze the same assertion is false at this point, which is the difference between the two. */
@@ -595,22 +680,18 @@ void test_the_ai_game_plays_itself_from_the_first_frame(void)
     TEST_ASSERT_TRUE(prv_is_playing_the_normal_maze());
 }
 
-/* FR-041 and FR-034 together, and they pull in opposite directions: an agent's run is refused by a
- * player's table and belongs in the agent's own. Both halves in one test, because a lockout that
- * refused every table would pass the first assertion. */
-void test_the_ai_games_score_goes_into_its_own_table_and_no_other(void)
+/* A machine's run reaches **no** table at all (FR-034, DEC-056). Its own table is gone: a run nobody
+ * played is not a score anybody set. Both mazes are checked, because a lockout that only covered the
+ * one the run was played on would look right from that side. */
+void test_a_machines_score_reaches_no_table_at_all(void)
 {
-    prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, false);
     prv_play_until_the_run_ends();
 
-    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_SCORE, shell_get_screen());
+    /* It has to have *scored*, or a refused zero would look exactly like a working lockout. */
     TEST_ASSERT_NOT_EQUAL_UINT32(0U, game_session_get_score());
-
-    TEST_ASSERT_EQUAL_UINT32(game_session_get_score(), high_score_get_best((uint8_t)SHELL_MODE_AI_CLASSIC));
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_PLAY_RANDOM));
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MAZE_RANDOM));
 }
 
 /* --- the endless mode (FR-043) -------------------------------------------- */
@@ -618,8 +699,7 @@ void test_the_ai_games_score_goes_into_its_own_table_and_no_other(void)
 void test_a_game_started_by_hand_is_one_game(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, false);
 
     TEST_ASSERT_FALSE(shell_is_infinite());
     TEST_ASSERT_EQUAL_UINT32(1U, shell_get_run_count());
@@ -628,9 +708,7 @@ void test_a_game_started_by_hand_is_one_game(void)
 void test_the_loop_starts_the_next_run_instead_of_returning_to_the_menu(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    prv_arm_the_loop();
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, true);
 
     prv_play_until_the_run_ends();
 
@@ -653,10 +731,10 @@ void test_the_loop_starts_the_next_run_instead_of_returning_to_the_menu(void)
 void test_switching_the_loop_off_lets_the_run_finish(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    prv_arm_the_loop();
+    prv_walk_to(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, true);
 
-    shell_move_selection(DIRECTION_WEST);
+    /* Switched off again on the page that switched it on, which is the only place it lives. */
+    shell_move_selection(DIRECTION_NORTH);
 
     TEST_ASSERT_FALSE(shell_is_infinite());
 
@@ -678,8 +756,7 @@ void test_switching_the_loop_off_lets_the_run_finish(void)
 void test_an_ai_run_is_kept_out_of_a_persons_table_and_a_player_run_is_not(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, false);
 
     prv_play_until_the_run_ends();
 
@@ -688,16 +765,15 @@ void test_an_ai_run_is_kept_out_of_a_persons_table_and_a_player_run_is_not(void)
     /* The AI's run has to have *scored* for the lockout to mean anything: a refused zero would
      * look exactly like a working lockout. */
     TEST_ASSERT_NOT_EQUAL_UINT32(0U, game_session_get_score());
-    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
+    TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
 
     /* And now a person's game, which must reach that table. */
     shell_press_start();
-    prv_select(SHELL_MODE_PLAY_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
     prv_play_until_the_run_ends();
 
     TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_SCORE, shell_get_screen());
-    TEST_ASSERT_NOT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
+    TEST_ASSERT_NOT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
 }
 
 /* Every new run begins under player control, whatever the last one did — including the latch FR-034
@@ -705,16 +781,14 @@ void test_an_ai_run_is_kept_out_of_a_persons_table_and_a_player_run_is_not(void)
 void test_a_new_run_starts_under_player_control(void)
 {
     prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_MACHINE, SHELL_MAZE_CLASSIC, false);
 
     TEST_ASSERT_TRUE(shell_is_ai_playing());
 
     prv_play_until_the_run_ends();
 
     shell_press_start();
-    prv_select(SHELL_MODE_PLAY_CLASSIC);
-    shell_press_start();
+    prv_start_a_run(SHELL_PLAYER_PERSON, SHELL_MAZE_CLASSIC, false);
 
     TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
     TEST_ASSERT_FALSE(shell_is_ai_playing());

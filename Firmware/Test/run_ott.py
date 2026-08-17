@@ -283,12 +283,13 @@ MAZE_SELECTION_TIMEOUT_S = 8.0
 
 
 def check_maze_selection(port: str, baud: str) -> bool:
-    """Walk the menu's two axes with `select` and start what it was left on (FR-040, VT-INT-026).
+    """Walk the menu's pages with `select`, `start` and `button`, and start what was chosen
+    (FR-040, VT-INT-026).
 
-    The menu is two independent axes since DEC-055 — who plays and which maze — plus an endless row
-    that only exists while the machine plays, plus `START`. What a script can falsify is that up and
-    down move the cursor, that left and right change the row it is on, that the four combinations are
-    all reachable, and that the one selected is the one that starts.
+    The menu is a list and a confirm, three pages deep (DEC-056): who plays, which maze, and — for the
+    machine only — whether it loops. What a script can falsify is that up and down move within a page,
+    that `start` takes the highlighted option and advances, that `button` steps back without undoing
+    what was chosen on the way in, and that the run started is the one the pages were left on.
     """
     configure_tty(port, baud)
     fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
@@ -297,25 +298,22 @@ def check_maze_selection(port: str, baud: str) -> bool:
         write_command(fd, "reset\r\n")
 
         steps = [
+            ("select\r\n", "page: player"),
             ("select\r\n", "selected: play classic"),
-            ("select\r\n", "row: player"),
-            # The maze axis, on its own row.
-            ("select down\r\n", "row: maze"),
+            # On to the maze page, and the other maze.
+            ("start\r\n", "page: maze"),
+            ("select down\r\n", "selected: play random"),
+            ("select up\r\n", "selected: play classic"),
+            ("select down\r\n", "selected: play random"),
+            # Back a page, and the maze that was chosen survives the trip.
+            ("button\r\n", "page: player"),
+            ("start\r\n", "page: maze"),
+            ("select\r\n", "selected: play random"),
+            # Sideways is accepted and moves nothing: a list has nothing sideways to be.
             ("select right\r\n", "selected: play random"),
-            ("select left\r\n", "selected: play classic"),
-            # The player axis, and the combination it makes with the maze.
-            ("select up\r\n", "row: player"),
-            ("select right\r\n", "selected: ai classic"),
-            ("select down\r\n", "row: maze"),
-            ("select right\r\n", "selected: ai random"),
-            ("select left\r\n", "selected: ai classic"),
-            ("select up\r\n", "row: player"),
-            ("select left\r\n", "selected: play classic"),
-            # `START` is a row, and sideways there changes nothing.
-            ("select down\r\n", "row: maze"),
-            ("select down\r\n", "row: start"),
-            ("select right\r\n", "selected: play classic"),
-            ("start\r\n", "play classic run 1"),
+            ("select left\r\n", "selected: play random"),
+            # And the second confirm begins a person's run.
+            ("start\r\n", "play random run 1"),
         ]
 
         if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
@@ -329,23 +327,19 @@ def check_maze_selection(port: str, baud: str) -> bool:
                 print(f"[VT-INT-026] maze selection: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-026] maze selection: both axes move, all four combinations reachable, "
-              "and the chosen one is played")
+        print("[VT-INT-026] maze selection: the pages walk forwards and back, and the chosen run starts")
         return True
     finally:
         os.close(fd)
 
 
 def check_the_ai_game(port: str, baud: str) -> bool:
-    """Start the machine's game and arm the endless loop from the menu (VT-INT-027).
+    """Walk the machine's path, which has one page more than a person's (VT-INT-027).
 
-    Two facts a script can settle in seconds. That the search has Pac-Man from the first frame is
-    visible in the firmware's own report of the run — it names the combination — and that the endless
-    row is **only there while the machine plays** is visible in where the cursor lands.
-
-    That last one is the case the owner named when the menu was designed: with the cursor on the
-    endless row, moving the player row back to a person has to leave it on `START` rather than on a
-    row that no longer exists.
+    Two facts a script can settle in seconds. That the machine's path reaches an endless page where a
+    person's does not — the page a person never sees is why the endless mode needs no rule of its own
+    about when it applies — and that the search has Pac-Man from the first frame, which is visible in
+    the firmware's own report of the run.
 
     What is *not* checked here is the restart itself: seeing it costs a whole run of a search that
     reaches level six, which is many minutes, and the suite is run after every build. `test_shell.c`
@@ -358,28 +352,21 @@ def check_the_ai_game(port: str, baud: str) -> bool:
         write_command(fd, "reset\r\n")
 
         steps = [
-            # A person plays, so down from the maze row steps over the endless row to `START`.
-            ("select down\r\n", "row: maze"),
-            ("select down\r\n", "row: start"),
-            # Now the machine plays, and the row is there.
-            ("select up\r\n", "row: maze"),
-            ("select up\r\n", "row: player"),
-            ("select right\r\n", "selected: ai classic"),
-            ("select down\r\n", "row: maze"),
-            ("select down\r\n", "row: endless"),
-            ("select right\r\n", "endless: on"),
-            ("select left\r\n", "endless: off"),
-            ("select right\r\n", "endless: on"),
-            # Back to a person: the row goes, the cursor lands on `START`, and the loop goes with it.
-            ("select up\r\n", "row: maze"),
-            ("select up\r\n", "row: player"),
-            ("select left\r\n", "selected: play classic"),
+            # A person's path is two pages: the second confirm would start a run, so it is not pressed.
+            ("start\r\n", "page: maze"),
+            ("button\r\n", "page: player"),
+            # The machine's is three, and the third is the endless page.
+            ("select down\r\n", "selected: ai classic"),
+            ("start\r\n", "page: maze"),
+            ("start\r\n", "page: endless"),
             ("select\r\n", "endless: off"),
-            # And once more with the machine, armed, and started.
-            ("select right\r\n", "selected: ai classic"),
-            ("select down\r\n", "row: maze"),
-            ("select down\r\n", "row: endless"),
-            ("select right\r\n", "endless: on"),
+            ("select down\r\n", "endless: on"),
+            ("select up\r\n", "endless: off"),
+            ("select down\r\n", "endless: on"),
+            # Back out and in again: the loop survives, because a page reopens on what it was told.
+            ("button\r\n", "page: maze"),
+            ("start\r\n", "page: endless"),
+            ("select\r\n", "endless: on"),
             ("start\r\n", "ai classic run 1"),
         ]
 
@@ -394,8 +381,8 @@ def check_the_ai_game(port: str, baud: str) -> bool:
                 print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-027] the AI game: the endless row is the machine's alone, and the run "
-              "starts as the search's")
+        print("[VT-INT-027] the AI game: the machine's path has the endless page a person's has not, "
+              "and the run starts as the search's")
         return True
     finally:
         os.close(fd)

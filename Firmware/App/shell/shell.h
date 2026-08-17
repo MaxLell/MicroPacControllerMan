@@ -46,13 +46,7 @@ typedef enum
     SHELL_SCREEN_SCORE        /*!< What the run came to, briefly (FR-023)            */
 } shell_screen_e;
 
-/*! \brief Who steers Pac-Man in the run the menu is offering (FR-040).
- *
- * The menu's first row, and the first of **two independent axes** it became in DEC-055: who plays,
- * and which maze. Three fixed games became four combinations because the two questions are
- * genuinely separate — before this, "the AI" was a game that implied the arcade's maze and a person
- * could not have a generated one played for them at all.
- */
+/*! \brief Who steers Pac-Man in the run the menu is offering (FR-040). */
 typedef enum
 {
     SHELL_PLAYER_PERSON = 0, /*!< The joystick                                     */
@@ -60,7 +54,12 @@ typedef enum
     SHELL_PLAYER_COUNT
 } shell_player_e;
 
-/*! \brief Which maze the run the menu is offering plays. */
+/*! \brief Which maze the run plays — and, for a run a person plays, its high-score table (FR-041).
+ *
+ * **Two tables, not four.** DEC-056 took the machine's away at the owner's request: a run nobody
+ * played is not a score anybody set, so it is recorded nowhere at all. That is what FR-034 said
+ * before DEC-046 gave the agent a table of its own, and this is the same answer arrived at again.
+ */
 typedef enum
 {
     SHELL_MAZE_CLASSIC = 0, /*!< The arcade's own layout, at every level          */
@@ -68,39 +67,28 @@ typedef enum
     SHELL_MAZE_COUNT
 } shell_maze_e;
 
-/*! \brief The menu's rows, top to bottom.
+/*! \brief Which page of the menu is up.
  *
- * \ref SHELL_ROW_ENDLESS is only there while the machine plays: a person's run has nothing to loop.
- * Moving on to it is therefore not always possible, which #shell_move_selection is the only place
- * that knows.
+ * **A list and a confirm, three pages deep**, which is DEC-056's shape and the third the menu has
+ * had: one screen of three fixed games, then two axes on one screen, then this. Each page is a short
+ * list, up and down move within it, and the centre key takes the highlighted one — which either
+ * advances to the next page or starts the run.
+ *
+ * The pages a run passes through depend on who is playing: a person picks a maze and goes, and the
+ * machine picks a maze and then whether to loop. So \ref SHELL_MENU_PAGE_ENDLESS is only ever
+ * reached from \ref SHELL_PLAYER_MACHINE, which is why the endless mode needs no rule of its own
+ * about when it applies — it cannot be reached where it would not mean anything.
  */
 typedef enum
 {
-    SHELL_ROW_PLAYER = 0, /*!< `PLAY` / `AI PLAYS`                               */
-    SHELL_ROW_MAZE,       /*!< `CLASSIC` / `RANDOM`                              */
-    SHELL_ROW_ENDLESS,    /*!< `ENDLESS OFF` / `ENDLESS ON`, machine only (FR-043) */
-    SHELL_ROW_START,      /*!< `START`                                            */
-    SHELL_ROW_COUNT
-} shell_row_e;
+    SHELL_MENU_PAGE_PLAYER = 0, /*!< `PLAY` / `AI`                                  */
+    SHELL_MENU_PAGE_MAZE,       /*!< `CLASSIC` / `RANDOM`                           */
+    SHELL_MENU_PAGE_ENDLESS,    /*!< `ENDLESS OFF` / `ENDLESS ON`, the machine only */
+    SHELL_MENU_PAGE_COUNT
+} shell_menu_page_e;
 
-/*! \brief One combination of player and maze, and the index of its high-score table (FR-041).
- *
- * **Four tables, one per combination.** The numbers are not comparable across any of the axes: the
- * arcade's maze can be learned and a generated one cannot, and a run the machine played from the
- * first frame is not a run anybody played. Derived from the two axes rather than stored, so there is
- * one place a combination is named and no way for the two to disagree.
- *
- * The order is player-major, which is the order the axes are listed in and the order the flash page
- * holds them in.
- */
-typedef enum
-{
-    SHELL_MODE_PLAY_CLASSIC = 0,
-    SHELL_MODE_PLAY_RANDOM,
-    SHELL_MODE_AI_CLASSIC,
-    SHELL_MODE_AI_RANDOM,
-    SHELL_MODE_COUNT
-} shell_mode_e;
+/*! \brief How many options any one page lists. Two throughout. */
+#define SHELL_MENU_OPTIONS  (2U)
 
 /*! \brief How long the panel stays dark before the title appears (NFR-005). */
 #define SHELL_LOGO_DELAY_MS (200U)
@@ -159,27 +147,38 @@ void shell_set_direction(direction_e in_direction);
  */
 void shell_move_selection(direction_e in_direction);
 
-/*! \brief Which combination the menu is offering, and which one a run in progress is (FR-040).
+/*! \brief Who the menu is offering to have play, and which maze it is offering.
  *
- * Derived from #shell_get_selected_player and #shell_get_selected_maze. The selection can only be
- * moved on the menu, so while a run is in progress it still says what that run was started as —
- * which is what makes it the right thing for the high-score table to be chosen by.
+ * The selection can only be moved on the menu, so while a run is in progress these still say what
+ * that run was started as — which is what makes the maze the right thing for the high-score table to
+ * be chosen by (FR-041).
  */
-shell_mode_e shell_get_selected_mode(void);
-
-/*! \brief Who the menu is offering to have play, and which maze it is offering. */
 shell_player_e shell_get_selected_player(void);
 shell_maze_e shell_get_selected_maze(void);
 
-/*! \brief Which row the menu's cursor is on, so a test or the console can say so without pixels. */
-shell_row_e shell_get_selected_row(void);
-
-/*! \brief The name of a game, for a caller that reports what the board is doing.
+/*! \brief Which page of the menu is up, and which of its options is highlighted.
  *
- * \param[in]       in_mode: a \ref shell_mode_e below #SHELL_MODE_COUNT
+ * For a test or the console that has to say what the menu is showing without reading pixels.
+ */
+shell_menu_page_e shell_get_menu_page(void);
+uint8_t shell_get_selected_option(void);
+
+/*! \brief Take a step back through the menu's pages — what the board button means there.
+ *
+ * Without it, picking `AI` by accident is a trap: every other key goes forwards. On the first page
+ * there is nowhere to go back to and nothing happens.
+ *
+ * \return          `true` when a page was actually left
+ */
+bool shell_press_back(void);
+
+/*! \brief What the menu is offering, named, for a caller that reports what the board is doing.
+ *
+ * The four combinations of player and maze, for reporting only — the high-score tables are the two
+ * mazes and nothing indexes by this.
  * \return          A static string, never `NULL`
  */
-const char* shell_get_mode_name(shell_mode_e in_mode);
+const char* shell_get_mode_name(void);
 
 /*! \brief Which screen is up. */
 shell_screen_e shell_get_screen(void);
@@ -217,13 +216,6 @@ bool shell_has_ai_played(void);
  * thing everywhere. A finished run starts the next instead of returning to the menu, and the HUD
  * says `LOOP` while it is on. */
 bool shell_is_infinite(void);
-
-/*! \brief Whether a row can be moved to at all.
- *
- * \ref SHELL_ROW_ENDLESS cannot while a person plays. Public so a test can state the rule rather
- * than infer it from where the cursor ended up.
- */
-bool shell_is_row_offered(shell_row_e in_row);
 
 /*! \brief How many runs the loop has played, the one in progress included; `0` outside it.
  *

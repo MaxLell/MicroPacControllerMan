@@ -14,18 +14,18 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that made the menu two axes (DEC-055), on `feat/lookahead-evaluation` |
+| built from | the commit that made the menu a page per question (DEC-056), on `feat/lookahead-evaluation` |
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 108,544 B of 504 kB — 21.0 % |
+| flash | 108,488 B of 504 kB — 21.0 % |
 | RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
-| `pacman.hex` | sha256 `d38cc59417b25af7e6ee205955c42a18eb4ab4f843b213b2736049b043abc3b3` |
-| `pacman.bin` | sha256 `22fc569e625e3de8c0ba4bea28e899bc88c7e6d994a35cacffe98a04941c7070` |
+| `pacman.hex` | sha256 `2b4106346abadc78b1a0c674656ec9a31f84944e3bcb19e8e2d47a1928af9e92` |
+| `pacman.bin` | sha256 `c5d980d5bdce04193f4ae3f4bc1d758c3c7839a2c94ef5a4c246da7d90d888ce` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost` — eleven tests. The host side is green too: 445 unit tests, both builds.
+`lookahead_cost` — eleven tests. The host side is green too: 448 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -54,22 +54,24 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-**The menu is two rows and a start row.** Up and down move the Pac-Man cursor between them; left and
-right change the row it is on:
+**The menu asks one question a screen.** Up and down move the Pac-Man cursor, the stick's centre
+takes the highlighted one, and **B1 steps back**:
 
 ```
-        - PLAY -              or  - AI PLAYS -
-        - CLASSIC -           or  - RANDOM -
-        - ENDLESS OFF -       or  - ENDLESS ON -      (only while the AI plays)
-              START
+screen 1      screen 2 (after PLAY)   screen 2 (after AI)   screen 3 (AI only)
+- PLAY        - CLASSIC               - CLASSIC             - ENDLESS OFF
+- AI          - RANDOM                - RANDOM              - ENDLESS ON
+              ^ starts the run        ^ goes to screen 3    ^ starts the run
 ```
 
-So there are four combinations, and each keeps its own high-score table. **The endless row is only
-there while the AI plays** — a run of yours has nothing to loop — and moving the top row back to
-`PLAY` takes the row away, puts the cursor on `START` and switches the loop off with it.
+The endless mode is the AI's last question and defaults to off — a run of yours never reaches that
+screen, because there is nothing to loop. While the AI plays, the HUD says `AI` in the gap between
+`1UP` and `LEVEL`, and `LOOP` on the lives row when the loop is on.
 
-Press start from any row. While the AI plays, the HUD says `AI` in the gap between `1UP` and
-`LEVEL`, and `LOOP` on the lives row when the endless mode is on.
+**Two high-score tables, one per maze**, both for runs *you* play. The AI is recorded nowhere at all:
+a run nobody played is not a score anybody set. **The scores stored by an older image are gone** the
+first time this one boots — the table's shape changed, and the version check discards a page it cannot
+read rather than misreading it.
 
 Expect it to average **21,870** and reach **level 5.9** on `CLASSIC`, and **19,744** at level 5.0 on
 `RANDOM` — which is the more interesting number, because its evaluation weights were fitted on the
@@ -79,14 +81,6 @@ hoovering pellets, because a four-ghost sweep is 3,000 points where a whole leve
 
 **It still dithers a little** — about one decision in twenty walks back the way it came, down from one
 in five before its leaves could see. [M6 §17](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
-
-**B1 means start and nothing else.** Handing Pac-Man over mid-run and toggling the loop both used to
-live on it; the first went with the trained network and the second onto the menu. A machine's run goes
-into a machine's table and stays out of yours (FR-034/FR-041).
-
-**The scores stored by an older image are gone** the first time this one boots: four tables instead of
-three is a new layout, and the version check discards a page it cannot read rather than misreading
-it.
 
 ## The console, if you want the numbers
 

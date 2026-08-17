@@ -105,19 +105,26 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
         pacman_lookahead_set_weights(&hopeless);
     }
 
-    /* Who plays, on the menu's top row, which since DEC-055 is the only place it is decided. The
-     * maze row is left where it is: both halves of this test play the arcade's layout. */
-    while (shell_get_selected_row() != SHELL_ROW_PLAYER)
+    /* Who plays is the menu's first page, and the maze its second; both halves of this test play the
+     * arcade's layout, so the maze page is confirmed as it stands. The machine's path has one page
+     * more — the endless one — which is confirmed as it stands too, at its default of off. */
+    while (shell_press_back())
     {
-        shell_move_selection(DIRECTION_NORTH);
+        /* back to the first page, wherever the previous run left it */
     }
 
     if ((shell_get_selected_player() == SHELL_PLAYER_MACHINE) != in_is_ai)
     {
-        shell_move_selection(DIRECTION_EAST);
+        shell_move_selection(in_is_ai ? DIRECTION_SOUTH : DIRECTION_NORTH);
     }
 
     shell_press_start();
+    shell_press_start();
+
+    if (in_is_ai)
+    {
+        shell_press_start();
+    }
 
     if (shell_get_screen() != SHELL_SCREEN_GAME)
     {
@@ -212,15 +219,13 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
 
     if (prv_play_one_run(true, &ai_score, out_reason, in_reason_size))
     {
-        /* Two tables, because since DEC-054 the AI's run *is* the agent's own game: it belongs in
-         * the agent's table (FR-041) and must stay out of the person's (FR-034). Before DEC-054 the
-         * AI played a normal-maze run the player had handed over, which belonged in no table at all
-         * — the same requirement, a different run. */
-        const uint32_t persons_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC);
-        const uint32_t agents_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_AI_CLASSIC);
+        /* **One table to check, and it must be empty.** DEC-056 took the machine's own away at the
+         * owner's request, so a run it played is recorded nowhere at all — which is what FR-034 said
+         * before DEC-046 gave the agent one, arrived at again. */
+        const uint32_t persons_table_after_ai = high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC);
 
-        cli_print("  the AI's run scored %lu; its own table holds %lu, the person's %lu", (unsigned long)ai_score,
-                  (unsigned long)agents_table_after_ai, (unsigned long)persons_table_after_ai);
+        cli_print("  the AI's run scored %lu; the classic table holds %lu", (unsigned long)ai_score,
+                  (unsigned long)persons_table_after_ai);
 
         if (ai_score == 0U)
         {
@@ -233,14 +238,6 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
             (void)snprintf(out_reason, in_reason_size, "the AI's run of %lu reached the person's table",
                            (unsigned long)ai_score);
         }
-        else if (agents_table_after_ai != ai_score)
-        {
-            /* And the other side of FR-041: a lockout that refused *every* table would pass the
-             * assertion above and be wrong. The agent keeps its own scoreboard. */
-            (void)snprintf(out_reason, in_reason_size,
-                           "the AI's run of %lu did not reach the agent's own table, which holds %lu",
-                           (unsigned long)ai_score, (unsigned long)agents_table_after_ai);
-        }
         else
         {
             /* The other half: the table still works. A lower score than the AI's is not required
@@ -250,13 +247,13 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
             if (prv_play_one_run(false, &player_score, out_reason, in_reason_size))
             {
                 cli_print("  the player's run scored %lu, the table holds %lu", (unsigned long)player_score,
-                          (unsigned long)high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
+                          (unsigned long)high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC));
 
                 if (player_score == 0U)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run scored nothing");
                 }
-                else if (high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC) != player_score)
+                else if (high_score_get_best((uint8_t)SHELL_MAZE_CLASSIC) != player_score)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run of %lu did not reach the table",
                                    (unsigned long)player_score);
