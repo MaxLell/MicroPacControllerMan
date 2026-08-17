@@ -1,0 +1,20 @@
+# What the image build does not need to be sent.
+#
+# The build context is `Firmware/` and the image copies exactly one file out of it
+# (`Training/requirements.txt`), so everything else here is bytes handed to the daemon for nothing.
+# Without this the context carries three build trees, a virtual environment and a few hundred
+# megabytes of NEAT checkpoints — which is slow enough to look like a hung build.
+build/
+build-host/
+build-test/
+Training/.venv/
+Training/campaign/
+Training/checkpoint-neat-*
+Training/train.log
+__pycache__/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map

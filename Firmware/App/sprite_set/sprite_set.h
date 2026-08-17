@@ -119,6 +119,11 @@ typedef enum
     SPRITE_SET_GLYPH_Y,
     SPRITE_SET_GLYPH_Z,
 
+    /*! The one glyph that is **not** the arcade's, drawn rather than decoded: the tile ROM extract
+     *  this font came from carries letters, digits and a space, and the game is called Pac-Man. It
+     *  sits after the two ASCII runs so neither of them stops being arithmetic. */
+    SPRITE_SET_GLYPH_HYPHEN,
+
     SPRITE_SET_ID_COUNT
 } sprite_set_id_e;
 
@@ -127,6 +132,13 @@ typedef enum
 typedef enum
 {
     SPRITE_SET_PALETTE_PACMAN = 0,
+
+    /*! \brief Pac-Man while the trained agent is steering him (FR-032).
+     *
+     * Green, so that who is playing is visible from across the room rather than only in the three
+     * letters the HUD has room for. */
+    SPRITE_SET_PALETTE_PACMAN_AI,
+
     SPRITE_SET_PALETTE_BLINKY,
     SPRITE_SET_PALETTE_PINKY,
     SPRITE_SET_PALETTE_INKY,

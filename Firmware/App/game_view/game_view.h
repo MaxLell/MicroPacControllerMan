@@ -88,11 +88,36 @@
  *         is drawn as this many — the number is the model's, the picture is ours. */
 #define GAME_VIEW_HUD_LIFE_SLOTS   (3U)
 
+/*! \brief The name of whichever machine is playing (FR-032), in the gap the label row leaves
+ *         between `1UP` and `LEVEL`.
+ *
+ * **Six, because the name is the point.** It used to be two and to read `AI`, which answers "is a
+ * machine playing" — and once there are two machines to choose between, that leaves the player
+ * remembering which one they picked on the menu. `NEAT` and `SEARCH` say it instead. Six is what
+ * the longer of the two needs, and the label row has sixteen free columns between `1UP` and
+ * `LEVEL`, so it costs nothing that was being used.
+ *
+ * Always six slots, whether or not a machine is playing: while none is, they draw the font's space.
+ * A slot that stopped being described would leave the last thing it drew on the panel for the rest
+ * of the run — the same reason a spent life is drawn as a blank rather than skipped.
+ */
+#define GAME_VIEW_HUD_AI_SLOTS     (6U)
+
+/*! \brief The `LOOP` the HUD shows while the endless mode is on (FR-043), on the lives row and
+ *         right-aligned under `LEVEL`.
+ *
+ * A field of its own rather than more letters next to `AI`, because the two say different things: one
+ * is who is playing, the other is what happens when this run ends. Four slots always, blank while
+ * the loop is off, for the same reason as the AI's two.
+ */
+#define GAME_VIEW_HUD_LOOP_SLOTS   (4U)
+
 /*! \brief Everything the HUD draws, as a fixed list: `1UP`, the score, `LEVEL`, the level,
- *         and the life slots. Fixed on purpose — a list that never changes length can be
- *         compared against what was last drawn item by item. */
+ *         the life slots, the AI indication and the loop indication. Fixed on purpose — a list that
+ *         never changes length can be compared against what was last drawn item by item. */
 #define GAME_VIEW_HUD_ITEM_COUNT                                                                                       \
-    (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS)
+    (3U + GAME_VIEW_HUD_SCORE_DIGITS + 5U + GAME_VIEW_HUD_LEVEL_DIGITS + GAME_VIEW_HUD_LIFE_SLOTS                      \
+     + GAME_VIEW_HUD_AI_SLOTS + GAME_VIEW_HUD_LOOP_SLOTS)
 
 /*! \brief The `drawn_hud` entry for a slot that has never been drawn. Above every
  *         `sprite_set_id_e`, so the first comparison always reports a change. */
@@ -131,6 +156,22 @@ typedef struct
      *   once is the handover after a new maze. */
     playfield_map_t maze;
     bool has_maze;
+
+    /*!< Whether the HUD says the AI has taken over (FR-032). Told to the view rather than read
+     *   out of the state message: taking over is not something the *game* knows about, and
+     *   `msg_game_state_t` describes the game. The diffing needs no help with it — a slot is
+     *   compared against the sprite that was last drawn there, not against an older state, so
+     *   flipping this redraws the two slots on the next frame and nothing else. */
+    /*! \brief Which of the three is steering, so the HUD can say *which* machine it is.
+     *
+     * A `uint8_t` rather than the session's own enumeration, because the view is below the session
+     * and must not include it — the same reason nothing here knows what a `game_t` is. The values
+     * are `game_session_player_e`'s and \ref game_view_set_player is where they arrive. */
+    uint8_t player;
+
+    /*!< Whether a finished run will be followed by another (FR-043). The view only draws it; the
+     *   shell owns whether it is true. */
+    bool is_infinite;
 } game_view_t;
 
 /* ==========================================================================
@@ -170,6 +211,30 @@ void game_view_set_maze(game_view_t* inout_view, const playfield_map_t* in_map);
  * \param[in]       in_state: the state, copied in; must not be `NULL`
  */
 void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_state);
+
+/*! \brief Say whether the HUD should show that the AI has taken over (FR-032).
+ *
+ * \param[in,out]   inout_view: the view, must not be `NULL`
+ * \param[in]       in_is_active: `true` while the agent is playing
+ */
+/*! \brief Say who is steering, so the HUD can label it (FR-032).
+ *
+ * `AI` while the trained network plays and `LA` while the look-ahead search does — two glyphs
+ * either way, so the slot the HUD already reserved is enough and no layout moves. Pac-Man is drawn
+ * in the agent's colour for both: the colour answers "is this still me", which is one question,
+ * and the label answers which machine, which is the other.
+ *
+ * \param[in,out]   inout_view: instance, must not be `NULL`
+ * \param[in]       in_player: a `game_session_player_e`
+ */
+void game_view_set_player(game_view_t* inout_view, uint8_t in_player);
+
+/*! \brief Tell the view whether the endless mode is on, so the HUD can say so (FR-043).
+ *
+ * \param[in,out]   inout_view: initialised view, must not be `NULL`
+ * \param[in]       in_is_infinite: `true` while a finished run will be followed by another
+ */
+void game_view_set_infinite(game_view_t* inout_view, bool in_is_infinite);
 
 /*! \brief Fill in the next display list.
  *

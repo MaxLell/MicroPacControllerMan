@@ -23,10 +23,10 @@
  * a 240 x 320 one holds the arcade layout at its native 8 px per cell with room to spare.
  * The reduction outlived its reason by one hardware change.
  *
- * **A game no longer plays this maze** — FR-029 gives every level a generated one
- * (`maze_gen`). It stays as the *reference*: the one layout whose properties are known from
- * outside this codebase, so it is what the generator's output is judged against and what
- * `game_view`'s appearance rules are checked with. Difficulty was never the maze's business
+ * **This is the "normal maze" of FR-040** — one of the two games the menu offers, the other being
+ * FR-029's generated ones (`maze_gen`). It is also the *reference*: the one layout whose properties
+ * are known from outside this codebase, so it is what the generator's output is judged against and
+ * what `game_view`'s appearance rules are checked with. Difficulty was never the maze's business
  * anyway — the ghosts getting faster, Cruise Elroy waking up and the frightened window
  * shrinking (§10.9) live in `difficulty`.
  *

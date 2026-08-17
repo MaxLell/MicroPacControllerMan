@@ -93,13 +93,15 @@ silently working around a wart.
   `run_ott.py` — the UART receive register holds one character with no FIFO, and a loop
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
-- **The game sits inside a shell** (DEC-026): loading screen, menu with the three high
-  scores, the run, the score screen, back to the menu (FR-001/002/003/023). The title is set
-  in the tile ROM's own font — `PACMAN`, because the decoded font has no hyphen. `start` on
-  the console presses the start key, so the whole flow is walkable from `run_ott.py`
+- **The game sits inside a shell** (DEC-026): loading screen, menu, the run, the score screen, back
+  to the menu (FR-001/002/003/023) — and since DEC-045/046 the menu is where one of three games is
+  chosen. The title is set in the tile ROM's own font, plus **one glyph that was drawn and not
+  decoded**: the hyphen of `PAC-MAN`, because the ROM extract is letters, digits and a space.
+  `start` on the console presses the start key, so the whole flow is walkable from `run_ott.py`
   (VT-INT-011 is now automatic).
-- **The high scores are in flash** (DEC-025): three of them, behind a magic word, a version
-  and a CRC, in one 8 KB page the **linker** reserves so the firmware cannot grow into it.
+- **The high scores are in flash** (DEC-025, DEC-046): three tables of three, one per game the menu
+  offers, behind a magic word, a version and a CRC, in one 8 KB page the **linker** reserves so the
+  firmware cannot grow into it.
   `highscore` on the console prints them, `highscore reset` clears them, and `ott high_score`
   proves the round trip on real silicon — which is how the ICACHE was caught answering
   reads with what the page used to hold.
@@ -107,14 +109,20 @@ silently working around a wart.
   and shy radius, a ghost house nobody may
   re-enter and Pacman may never enter, arcade spawn positions and dot-counter release, and
   the scatter targets in the unreachable dead space with the corners assigned the right way
-  round. **Two deliberate departures, both asked for by the owner:** seeking is a route search
-  rather than the arcade's one-cell greedy choice, and **a ghost never turns around** — the
+  round. Seeking is the arcade's own **one greedy cell at a time**, tie-broken up-left-down-right:
+  DEC-023 had replaced it with a breadth-first route search at the owner's request, and **DEC-049
+  rolled that back** because a route search costs 300 µs a ghost step against the greedy rule's 10,
+  which is the difference between 1 and 312 cells of simulated future in a frame's spare 13 ms. What
+  it buys back is the arcade's shortsightedness — a ghost walks at the wall between it and its
+  target, which is why its ghosts can be baited. **One deliberate departure remains, asked for by
+  the owner: a ghost never turns around** — the
   arcade's forced reversal on a mode change is gone (DEC-037), so a mode change moves a ghost's
   target and takes effect from the next junction. Only a dead-end stub still forces the way
   back, and no generated maze has one. Measured either side: 86 reversals over 25 runs became 0.
 
-- **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level plays
-  a maze **generated** for it (FR-029) instead of the arcade's one layout. `App/maze_gen` is a
+- **M5 Random Mazes — done, verified on hardware** (DEC-029/030, 2026-08-04). Every level of a
+  **random-maze** game plays a maze **generated** for it (FR-029); since DEC-045 the arcade's one
+  layout is the other game the menu offers rather than a retired fixture. `App/maze_gen` is a
   faithful port of the tetris-stacking generator from
   [shaunlebron/pacman-mazegen](https://github.com/shaunlebron/pacman-mazegen) — 9 × 5 grid of
   stacked pieces, upscaled by three, mirrored, which *is* 28 × 31. Faithful on purpose, JavaScript
@@ -153,6 +161,206 @@ silently working around a wart.
   RAM 68.0 %, flash 18.7 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
+- **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
+  **NEAT**, ported to the target as `const` weights, and offered in two of the three games the menu
+  now lists. Everything is built and everything that touches hardware is verified there.
+  **FR-037 is not met at the time of writing**, and it was: the agent that reached 4,980 on the
+  deterministic game averages **2,197** over twenty runs of the jittered one (DEC-047), because it had
+  memorised a trajectory rather than learned to play. Retraining against the jittered game, with the
+  reshaped objective, is what [M6 §14](Docu/Design/M6-Pacman-AI.md) records.
+  - **The network that trains is the network that ships** (DEC-042). Training does *not* use
+    neat-python's evaluator: a genome is flattened into the arrays `Services/neural_net` reads and
+    the C side plays the whole episode, so there is exactly one implementation of inference in the
+    project and FR-039 cannot be violated rather than merely being checked. It is also why a
+    generation costs 11 s on two cores instead of the budgeted 12 s per core.
+  - **What the agent sees is Pacman's own frame** — forward/left/right/back, 23 features, distances
+    by breadth-first search over the open cells counting the tunnel wrap. Every level's maze is
+    generated, so a policy in compass coordinates would learn "wall to the north" four times over.
+    The **frightened timer is deliberately not an input**: the player has no countdown either, only
+    the flashing.
+  - **The curriculum is runtime configuration, not a training build** (DEC-041): `game_config_t`
+    turns ghosts and power pellets off so the agent learns to walk, then to fear, then to hunt.
+    Training therefore exercises the code that ships (FR-112).
+  - **In the game:** the board button toggles the AI during a run and still means start on the menu
+    and the score screen — `shell` decides, because `shell` knows the screen. The joystick is dead
+    while the AI plays, enforced in `game_session_set_direction` alone so it holds for all three
+    callers. Two flags, and the difference is FR-034: `game_session` knows whether the AI plays
+    *now*, `shell` latches whether it played *at any point*, and the high-score lockout reads the
+    latch — so handing control back before the last life does not launder the score.
+  - **Verified on the board:** `ott ai_equivalence` (VT-INT-024) replays four states recorded on the
+    host — ordinary play, frightened mode, a tunnel, a life just lost — and the target chose the same
+    direction for every one; `ott ai_high_score` (VT-INT-025) plays two whole runs and shows the AI's
+    stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
+    `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
+    its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
+  - **The agent that ships is `arcade-danger`, at 3,531, and it does not meet FR-037** (DEC-051).
+    Adopted deliberately with `--force`, because 4,600 is the requirement and 3,531 is the best
+    trained agent this project has had — up from 2,827, which is the largest step any single change
+    has bought. The change is a continuous cost for danger (M6 §14.6): the fitness charges ten
+    points for every decision taken with a killing ghost within four cells. It stopped the agent
+    dying badly rather than making it score well.
+    **Four things are measured *not* to help** and are recorded so they are not retried: paying a
+    bonus per ghost eaten (it cost score, and more training made it worse), a bonus for finishing a
+    level (identically zero until one is finished, so no gradient at all), a bigger population, and
+    — the night of 2026-08-09 — **more capacity**: 32 hidden units scored 2,634, *below* the
+    16-unit baseline. Comparisons are made at **100 episodes**, not FR-037's twenty — at twenty the
+    standard error is larger than the differences being argued about.
+  - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
+    2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
+    growth is the equivalence test's own recorded states and playfield.
+  - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves with NEAT,
+    **`train_es.py` fits a fixed 23-16-4 network with a separable evolution strategy** (DEC-048),
+    `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
+    `pacman_ai_record` writes the FR-039 state set, `campaign.py` runs several time-budgeted
+    trainings unattended — each naming its own trainer — and writes one summary to read afterwards.
+    **`./dev.sh train --hours 1` starts a campaign on this machine, detached**, `docker-train` the
+    same one in the container; both refuse to start over leftover
+    winners without being told `--fresh` or `--keep`, because a leftover is *measured* rather than
+    retrained and that silently halves a night.
+    **The budget is an input and the runs share it** (M6 §14.5): a run whose share falls below the
+    least it is worth starting with is *dropped and named*, not shortened into a different
+    experiment, and the stages share a run's budget the same way so that a short run still reaches
+    stage 3 — the only stage FR-037 is measured on. A trainer that exits non-zero is reported as
+    failed with the tail of its log; it used to look exactly like a run that found nothing, which
+    is how three of four runs crashed in seconds and left nine hours of a night idle.
+    **Why two trainers:** NEAT's winner used **6 of 23 inputs** — it deletes structure whenever the
+    fitness is noisy, and FR-044's jitter is noise (DEC-044/048). A fixed topology cannot prune
+    itself blind, and nothing in C changes: `neural_net` already evaluates an arbitrary graph, so a
+    dense net is a special case of what ships.
+    **Everything trains and is measured on the normal maze** (DEC-045). It was briefly one episode per
+    genome — a fixed maze plus a game with nothing random in it makes a score a *measurement* — and
+    FR-044's jitter ended that: six episodes per genome now, and the acceptance seeds 1000..1019 are
+    reserved again, because a score on the draws it trained against answers nothing.
+    `evaluate.py --maze generated` still asks the generalisation question and says out loud that the
+    answer is not an FR-037 verdict.
+    See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
+
+- **A look-ahead player is in the game, and since DEC-052 it scores 11,652 (DEC-050/051/052).** `App/pacman_lookahead`
+  decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
+  each way out to the next junction, and the branch whose end position is worth most wins. There is
+  no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
+  drift. Two things made that true rather than nearly true: a `memcpy` is **not** a clone (the
+  game's bus is pointers into itself, so a byte copy would score simulated pellets on the real
+  player), and a simulation must **not draw** — FR-044's jitter comes from the one shared generator,
+  so thinking would change the future; `game_freeze_timings` stops it and a unit test counts the
+  draws and requires none.
+  - **It is not FR-038's agent and does not replace it** — that asks for trained weights on the
+    target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* as one of the
+    two agents the `PAC-MAN AI` game can be played by, which is not the same as shipping it as the
+    agent FR-038 asks for.
+  - **What it settles, and the correction that had to be made to it** (M6 §15.4/§15.5): the 7,076
+    this line used to claim is real but belongs to a **5,000-tick** search, measured before the
+    board cut the allowance to 500 and left standing afterwards. **What ships scores 3,132** over
+    FR-037's own twenty draws — *below* the 4,600 asked for, though still above the trained agent's
+    2,706 and a random policy's 518. The conclusion survives: given the time, the same code reaches
+    7,076 with a best run of 16,560 at level 4, so **the score is reachable and the gap is the
+    agent's, not the game's** — it now also has a price, about **three times** the thinking a frame
+    pays for.
+  - **It dithers, and the dithering is a symptom.** 7.0 % of decisions walk back to the cell of two
+    decisions ago. Outside a 1.63-junction horizon every branch evaluates alike — 15.2 % of
+    multi-branch decisions are exact ties — and nothing in the evaluation pulls toward food it
+    cannot already see. Suppressing the oscillation entirely is measured and **costs score**
+    (2,945), as do a coarser simulation step and pruning the reversal branch: they buy depth and
+    lose fidelity. The only lever that works is **more simulated ticks of the real game**, and the
+    frames to spend them in exist — 51.5 per junction-to-junction leg, worst 18, against the one
+    frame a decision uses today.
+  - **Both levers §15.5 named are built (DEC-052, M6 §16), and the player scores 11,652** over a
+    hundred draws against 3,123 before them — 11,947 over FR-037's own twenty, against 4,600 asked
+    for. Neither costs a millisecond of frame time that was not already there.
+    - **A stranded Pacman is noticed at once (RF-019, done).** A leg sets one direction and lets it
+      ride, so a bend stranded him and the walk could only wait out the 32-tick backstop: **17.8 %
+      of every simulated tick**. `pacman_is_stuck` is the rule, written as the negation of
+      `pacman_advance` so the two cannot drift. Worth +25 % over a hundred draws. It is not a
+      fidelity trade — the played game asks again on every cell and always hands him an open way,
+      so the stalled Pacman the backstop simulated does not occur.
+    - **A decision thinks across the frames of its cell, a slice at a time.** A decision belongs to
+      a cell, a cell lasts 10.6 frames, and the search used to work in the first and idle through
+      nine. The recursion is an explicit stack now, so it can be put down between any two branches:
+      `pacman_lookahead_restart` on a new cell, `pacman_lookahead_think(350)` a frame,
+      `pacman_lookahead_get_direction` every frame. **Staleness is unchanged** — a decision was
+      always rooted at the cell's first frame and always took effect at its last, because
+      `pacman_set_intent` queues.
+    - **The root copy lives in SRAM4**, the 16 kB bank three documents called "exactly big enough
+      for one clone" while nothing used it. Main RAM is unchanged at 89.9 %. It needed a `.sram4`
+      section in the linker script (NON-GENERATED, beside `.noinit`) — without one the section
+      becomes an orphan, lands in RAM, and main RAM goes to 94.5 % while SRAM4 reports empty.
+    - **On the board:** what must fit a frame is now a **slice at 2.9 ms mean / 11 ms worst** of 13,
+      where a whole decision was 11.2 / 13. Junctions reached **1.63 → 2.97 of 3**; a decision
+      spends ~1,400 ticks over 10 frames instead of 500 in one. Whole automatic suite passes.
+    - **A refactor is checked by sameness, not by a mean.** The rewrite was verified by diffing the
+      two versions' decisions over a run, which found a real bug the scores would only have argued
+      about: the recursion's entry test was being re-asked on the way *out* of a level, so a level
+      that spent the last of the budget on its children had its finished answer thrown away. What
+      holds it now is a test that slices of 1, 7, 64 and 350 ticks all answer what one shot answers.
+    - **The dithering is better and not gone**: 18.7 % → 11.5 % of decisions, longest streak 56 →
+      50. The cause §15.5 named first is untouched — nothing in the evaluation pulls toward food it
+      cannot already see. Breaking ties by carrying straight on measured 3,573 against 3,123 and is
+      deliberately **not** built, because it changes what the player decides rather than how much it
+      may think.
+  - **DEC-049's arithmetic was six times too kind** and the board said so: a simulated cell costs
+    **250 us**, not the 40 the four greedy ghost steps suggested, because a cell is seven
+    `game_tick` calls of Pacman, four ghosts, the timers and the bus. A frame's spare 13 ms buys
+    about 50 cells, not 312.
+  - **The budget counts ticks, not cells**, because a branch walking into a wall spends ticks and
+    reaches no cell — bounding cells left the waste unbounded, and a search keeping to 48 cells
+    still took 19 ms of a 13 ms allowance. And the search **deepens iteratively**: depth-first at a
+    tight budget spends everything on the first branch, and the player that produced scored *worse*
+    than one walking in a straight line.
+  - Ceiling 3 junctions, **2.97 of them actually reached**; a decision spends ~1,400 ticks across the
+    10 frames its cell lasts, in slices of 350 that measure **2.9 ms mean, 11 ms worst** of 13 —
+    verified by `ott lookahead_cost`, which measures a *frame* now rather than a decision. **RAM is
+    the ceiling of the depth constant, not of the search**: a level of depth is a 12 kB `game_t` on
+    this part, three of them plus the frame buffer put main RAM at **89.9 %**, and the root copy is
+    the 12 kB in **SRAM4**. Until something calls the module the linker drops it whole.
+    See [M6 §15](Docu/Design/M6-Pacman-AI.md) and [§16](Docu/Design/M6-Pacman-AI.md).
+
+- **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
+  and the high scores of the selected one, and nothing else: the title and the row of actors are the
+  loading screen's, which has just shown them. The joystick's up/down keys move a **Pac-Man cursor**
+  (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
+  screen) and start plays what is selected.
+  - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
+    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 hands Pac-Man to the
+    trained agent and takes him back** (FR-030); Pac-Man is **green** while it plays. The
+    look-ahead search is deliberately *not* offered here (DEC-051) — a three-way cycle was built
+    and taken out, because that button is reached for by somebody playing.
+  - `PAC-MAN AI` — the same maze, an agent from the first frame, and no way to take over (FR-042).
+    **Which agent is picked on the menu with left and right** (DEC-051): `AGENT NEAT`, the trained
+    network, or `AGENT SEARCH`, the look-ahead of DEC-050. The in-game HUD **names it** — six
+    glyphs reading `NEAT` or `SEARCH` where it used to read `AI` — so nobody has to remember what
+    they chose. **B1 here still toggles the endless mode** (FR-043): a finished run starts the next
+    one instead of returning to the menu, and the HUD says `LOOP`. With the network it refuses to
+    start at all if the weight table cannot be evaluated, rather than starting a game that plays
+    itself with nobody playing it; the search cannot refuse, so choosing it is also how to play this
+    game on a firmware whose weights are broken.
+  - `RANDOM MAZE` — the generated mazes of FR-029, and no AI at all.
+  - **Three high-score tables, one per game** (FR-041), in the same flash page at layout version 2.
+    FR-034's lockout narrowed with them: an AI-touched run of a *person's* game reaches no table,
+    not even the agent's, and the agent's own game files into its own.
+  - **The button has one owner.** `shell_press_user_button` decides what B1 means from the screen
+    and the game; `app_main` only reports the press. `select` and `button` on the console push the
+    stick and the button the way `start` presses start, which is what makes VT-INT-026/027
+    unattended.
+
+- **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
+  timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened
+  window, the idle timer — moves by up to 2 s **or half its nominal value, whichever is smaller**, so
+  the arcade's twentieth-of-a-second phases at level 5 keep their character instead of being replaced.
+  `Bsp/rng_bsp` is the source: the **RNG peripheral** on the target (registers, not the HAL — see the
+  conventions below), a **seeded xorshift** on the host so a training episode still replays (FR-114).
+  `maze_gen` keeps its own reproducible algorithm and takes only its *seed* from there, which is what
+  keeps a maze replayable. `ott rng` (VT-INT-028) proves on silicon that the words are neither
+  constant nor zero. The jitter is **off in the rules tests** — they assert exact timings — and has
+  three tests of its own.
+  - **It cost the AI its requirement, and that is the point.** The agent trained on the
+    deterministic game scored **4,980 on its one episode and 2,197 over twenty jittered runs**: it
+    had memorised a trajectory. FR-037 is a mean over 20 runs again, and the agent is being retrained
+    against the game it actually plays.
+  - **Training's objective is no longer the score** (FR-036): **+500 a ghost** on top of it, and an
+    episode ends at the **first** life lost. A flat penalty per life was rejected — a run ends
+    *because* its lives are gone, so it would be a near-constant, and on a run cut short by the idle
+    rule it would reward standing still.
+
 ## Build · flash · test (all from `Firmware/`)
 
 ```bash
@@ -164,6 +372,10 @@ cmake --build build -j                                   # -> build/pacman.elf, 
 # Flash over ST-LINK V3E. NOT openocd — see "Hardware facts" below.
 STM32_Programmer_CLI -c port=SWD -w build/pacman.elf -v -rst
 
+# A machine with no cross-toolchain flashes the committed image instead. It is a copy, it goes
+# stale silently, and Firmware/Prebuilt/README.md carries the commit it was built from.
+STM32_Programmer_CLI -c port=SWD -w Prebuilt/pacman.hex -v -rst
+
 # Run an on-target test end-to-end (schedules, resets, reports over the VCP)
 python3 Test/run_ott.py --suite                          # the automatic ones, unattended
 python3 Test/run_ott.py --manual                         # the ones needing you at the board
@@ -174,13 +386,39 @@ python3 Test/run_ott.py pacman --port /dev/ttyACM0        # one by name; exit 0 
 ./dev.sh all                                             # build + flash + both OTT suites
 ./dev.sh install-hook                                    # format staged files + test on commit
 
+# Another machine, with only Docker installed (Firmware/docker/Dockerfile, Ubuntu 24.04 so the
+# tool versions are the verified ones). The repo is mounted, not copied; the container runs as
+# the host's user. NOT in the image: STM32CubeProgrammer (ST account) — mount the host's and set
+# PROGRAMMER=. Inside the container the trainer's Python is on PATH, so no Training/.venv.
+./dev.sh docker                                          # a shell in it
+./dev.sh docker check                                    # any dev.sh command inside it
+
 # Host build — no hardware, no cross-toolchain
 cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build build-host -j
-./build-host/pacman_host_app                             # play it: arrows/WASD, space, esc
+./build-host/pacman_host_app                             # play it: arrows/WASD pick the game and steer,
+                                                         # space starts it, esc quits
 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all
+
+# Train the AI (host only; needs the host build for libpacman_env.so — DEC-040)
+python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
+Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
+Training/.venv/bin/python Training/evaluate.py              # VT-UNIT-010: FR-037 and its baseline
+./dev.sh train --hours 1                                    # a campaign that is finished in an hour
+./dev.sh train                                              # the whole thing, which is a night
+./dev.sh train-stop                                         # stop it
+Training/.venv/bin/python Training/campaign.py --hours 1     # what that wraps -> campaign/summary.md
+Training/.venv/bin/python Training/export_c.py              # winner.json -> App/pacman_ai/ai_weights.[ch]
+./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
 ```
+
+**Re-exporting weights means re-recording the FR-039 state set** — that last line, in that order.
+The recorded expectations belong to one weight table and carry its digest, so `ott ai_equivalence`
+refuses to run against a different one rather than reporting a stale recording as a porting fault.
+**`./dev.sh adopt-weights [winner.json]` does the whole sequence**, and refuses a winner that fails
+VT-UNIT-010 unless given `--force` — training produces a winner every time, including one worse than
+what is already shipped.
 
 - **What gets a unit test: everything above the BSP.** The BSP is the *mocking*
   boundary — mock a `Bsp/` header to test the module above it; don't unit-test the BSP
@@ -194,7 +432,9 @@ ceedling test:all
 
 Toolchain (verified): gcc-arm-none-eabi **13.2.1**, cmake **3.28**, openocd **0.12.0**
 (debug only), **STM32CubeProgrammer 2.23.0** (flashing).
-`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd`, plus
+`sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi cmake
+openocd` — newlib is the target's C library and only a *Recommends* of the compiler, so an install
+without recommends fails on `math.h` — plus
 CubeProgrammer from st.com. After installing openocd, **unplug/replug the board once**
 so a non-root user can reach SWD — openocd ships the udev rules even though it cannot
 program this part.
@@ -244,9 +484,12 @@ program this part.
   `g_pin_map`. Do not call `HAL_GPIO_*` anywhere else.
 - **No tick arithmetic, no `millis()`.** `Services/delay` for blocking waits,
   `Services/sw_timer` for every timeout and periodic job.
-- **HAL over registers.** Direct register access needs a justifying comment; there is
-  exactly one today (`uart_bsp_read_character()` reads `RDR` — the HAL has no
-  non-blocking single-character read).
+- **HAL over registers.** Direct register access needs a justifying comment; there are
+  exactly two today. `uart_bsp_read_character()` reads `RDR` — the HAL has no non-blocking
+  single-character read. `rng_bsp.c` drives the RNG's three registers because the HAL's RNG
+  driver is **not compiled**: `HAL_RNG_MODULE_ENABLED` is commented out in the CubeMX export,
+  and enabling it would be a third hand edit to generated code of the kind a regeneration
+  discards (DEC-047).
 - **Adding an OTT test:** new `Firmware/Test/Target/scripts/ott_<name>.c/.h` + one row
   in `ott_scenarios.c` + the source in `CMakeLists.txt`; nothing else changes.
 - **Coding standard:** [c-code-style](https://github.com/MaxLell/c-code-style)

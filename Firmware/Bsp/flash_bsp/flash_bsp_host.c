@@ -57,8 +57,12 @@ void flash_bsp_read(uint8_t* out_block, size_t in_block_size)
     }
 
     /* A short read leaves the rest erased, which is the same thing a half-programmed page
-     * looks like — and the caller's checksum is what rejects both. */
-    (void)fread(out_block, 1U, in_block_size, file);
+     * looks like — and the caller's checksum is what rejects both.
+     *
+     * Taken into a variable rather than cast to `(void)`: glibc marks `fread` warn_unused_result,
+     * and a cast does not satisfy that. Only visible at -O2, which the training library uses. */
+    const size_t read_bytes = fread(out_block, 1U, in_block_size, file);
+    (void)read_bytes;
     (void)fclose(file);
 }
 

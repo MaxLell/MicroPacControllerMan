@@ -290,11 +290,64 @@ void test_resetting_pacman_clears_his_intent(void)
     TEST_ASSERT_EQUAL(DIRECTION_NONE, pacman_get_direction(&g_pacman));
 }
 
+/* --- stuck, which is the negation of advancing ---------------------------- */
+
+/* Each of these says the same thing twice: what #pacman_is_stuck answers, and what
+ * #pacman_advance then does. They are asserted together on purpose — the point of the function is
+ * that it predicts the other one without moving him, and a test that only checked the prediction
+ * would keep passing on the day the two drifted apart. */
+
+void test_a_freshly_reset_pacman_is_stuck(void)
+{
+    /* No facing and no intent: both tests fail, so nothing will move him until somebody asks. */
+    prv_place_pacman_in_the_open();
+
+    TEST_ASSERT_TRUE(pacman_is_stuck(&g_pacman, &g_playfield));
+    TEST_ASSERT_FALSE(pacman_advance(&g_pacman, &g_playfield));
+}
+
+void test_pacman_facing_down_an_open_corridor_is_not_stuck(void)
+{
+    prv_place_pacman_in_the_open();
+    pacman_set_intent(&g_pacman, DIRECTION_EAST);
+    (void)pacman_advance(&g_pacman, &g_playfield);
+
+    TEST_ASSERT_FALSE(pacman_is_stuck(&g_pacman, &g_playfield));
+    TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
+}
+
+void test_pacman_walked_into_a_wall_is_stuck(void)
+{
+    /* Row 5 is open east to west and walled to the north at #WALLED_NORTH_X. Sent north from
+     * there he keeps the facing and stops, which is the state a look-ahead leg strands him in. */
+    pacman_reset(&g_pacman, prv_cell(WALLED_NORTH_X, OPEN_CELL_Y));
+    pacman_set_intent(&g_pacman, DIRECTION_NORTH);
+
+    TEST_ASSERT_FALSE(pacman_advance(&g_pacman, &g_playfield));
+    TEST_ASSERT_TRUE(pacman_is_stuck(&g_pacman, &g_playfield));
+}
+
+void test_a_pacman_whose_queued_turn_is_open_is_not_stuck(void)
+{
+    /* Facing a wall but *asking* for a way that is open. The queued direction is tested first,
+     * exactly as #pacman_advance tests it, so he is not stuck however hopeless his facing is. */
+    pacman_reset(&g_pacman, prv_cell(WALLED_NORTH_X, OPEN_CELL_Y));
+    pacman_set_intent(&g_pacman, DIRECTION_NORTH);
+    (void)pacman_advance(&g_pacman, &g_playfield);
+
+    pacman_set_intent(&g_pacman, DIRECTION_EAST);
+
+    TEST_ASSERT_FALSE(pacman_is_stuck(&g_pacman, &g_playfield));
+    TEST_ASSERT_TRUE(pacman_advance(&g_pacman, &g_playfield));
+}
+
 /* --- preconditions ------------------------------------------------------- */
 
 void test_a_null_pacman_asserts(void)
 {
     ASSERT_PROBE_EXPECT(pacman_set_intent(NULL, DIRECTION_EAST), "inout_pacman != NULL");
+    ASSERT_PROBE_EXPECT(pacman_is_stuck(NULL, &g_playfield), "in_pacman != NULL");
+    ASSERT_PROBE_EXPECT(pacman_is_stuck(&g_pacman, NULL), "in_playfield != NULL");
 }
 
 void test_a_null_agent_asserts(void)

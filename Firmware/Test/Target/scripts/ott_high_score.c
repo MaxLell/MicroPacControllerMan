@@ -20,14 +20,18 @@
 #define THIRD_SCORE  (111UL)
 
 /* Put back what was there before the test, smallest first: `high_score_offer` inserts by
- * rank, so offering in ascending order reproduces the original order exactly. */
-static void prv_restore(const uint32_t* const in_saved)
+ * rank, so offering in ascending order reproduces the original order exactly. All three tables,
+ * because the test overwrites all three. */
+static void prv_restore(const uint32_t in_saved[HIGH_SCORE_TABLE_COUNT][HIGH_SCORE_COUNT])
 {
     (void)high_score_reset();
 
-    for (uint8_t place = HIGH_SCORE_COUNT; place > 0U; --place)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        (void)high_score_offer(in_saved[place - 1U]);
+        for (uint8_t place = HIGH_SCORE_COUNT; place > 0U; --place)
+        {
+            (void)high_score_offer(table, in_saved[table][place - 1U]);
+        }
     }
 }
 
@@ -38,7 +42,7 @@ static void prv_restore(const uint32_t* const in_saved)
 bool ott_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t in_reason_size)
 {
     static const uint32_t k_written[HIGH_SCORE_COUNT] = {FIRST_SCORE, SECOND_SCORE, THIRD_SCORE};
-    uint32_t saved[HIGH_SCORE_COUNT];
+    uint32_t saved[HIGH_SCORE_TABLE_COUNT][HIGH_SCORE_COUNT];
     uint32_t erase_start_tick;
     uint32_t write_start_tick;
     uint32_t erase_ms;
@@ -47,17 +51,20 @@ bool ott_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t in
 
     (void)in_parameter;
 
-    cli_print("High score: the table in real flash — erase, program, read back.");
+    cli_print("High score: the three tables in real flash — erase, program, read back.");
 
     high_score_init();
 
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        saved[place] = high_score_get(place);
-    }
+        for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+        {
+            saved[table][place] = high_score_get(table, place);
+        }
 
-    cli_print("  stored now: %lu / %lu / %lu", (unsigned long)saved[0], (unsigned long)saved[1],
-              (unsigned long)saved[2]);
+        cli_print("  table %u stored now: %lu / %lu / %lu", (unsigned)table, (unsigned long)saved[table][0],
+                  (unsigned long)saved[table][1], (unsigned long)saved[table][2]);
+    }
 
     erase_start_tick = systick_bsp_get_tick();
 
@@ -72,20 +79,28 @@ bool ott_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t in
 
     high_score_init();
 
-    if (high_score_get_best() != 0U)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        (void)snprintf(out_reason, in_reason_size, "an erased page did not read back empty");
-        prv_restore(saved);
+        if (high_score_get_best(table) != 0U)
+        {
+            (void)snprintf(out_reason, in_reason_size, "an erased page did not read back empty");
+            prv_restore(saved);
 
-        return false;
+            return false;
+        }
     }
 
-    /* Ascending, so each one displaces the last and all three end up stored. */
+    /* A different triple per table, so a page that stored one table three times — or the same table
+     * three times over — cannot pass. Ascending within a table, so each score displaces the last and
+     * all three end up stored. */
     write_start_tick = systick_bsp_get_tick();
 
-    for (uint8_t place = HIGH_SCORE_COUNT; place > 0U; --place)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        (void)high_score_offer(k_written[place - 1U]);
+        for (uint8_t place = HIGH_SCORE_COUNT; place > 0U; --place)
+        {
+            (void)high_score_offer(table, k_written[place - 1U] + table);
+        }
     }
 
     write_ms = systick_bsp_get_tick() - write_start_tick;
@@ -93,19 +108,23 @@ bool ott_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t in
     /* Re-reading is the whole point: until now everything could have come from RAM. */
     high_score_init();
 
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        if (high_score_get(place) != k_written[place])
+        for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
         {
-            is_correct = false;
+            if (high_score_get(table, place) != (k_written[place] + table))
+            {
+                is_correct = false;
+            }
         }
-    }
 
-    cli_print("  wrote %lu / %lu / %lu, read back %lu / %lu / %lu", (unsigned long)k_written[0],
-              (unsigned long)k_written[1], (unsigned long)k_written[2], (unsigned long)high_score_get(0U),
-              (unsigned long)high_score_get(1U), (unsigned long)high_score_get(2U));
+        cli_print("  table %u wrote %lu / %lu / %lu, read back %lu / %lu / %lu", (unsigned)table,
+                  (unsigned long)(k_written[0] + table), (unsigned long)(k_written[1] + table),
+                  (unsigned long)(k_written[2] + table), (unsigned long)high_score_get(table, 0U),
+                  (unsigned long)high_score_get(table, 1U), (unsigned long)high_score_get(table, 2U));
+    }
     cli_print("  erase %lu ms, %u writes %lu ms — far too slow for a frame, which is why a run",
-              (unsigned long)erase_ms, (unsigned)HIGH_SCORE_COUNT, (unsigned long)write_ms);
+              (unsigned long)erase_ms, (unsigned)(HIGH_SCORE_COUNT * HIGH_SCORE_TABLE_COUNT), (unsigned long)write_ms);
     cli_print("  is offered to the table once, when it ends.");
 
     prv_restore(saved);

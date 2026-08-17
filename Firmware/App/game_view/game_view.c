@@ -449,6 +449,8 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_LABEL_INDEX   (HUD_SCORE_INDEX + GAME_VIEW_HUD_SCORE_DIGITS)
 #define HUD_LEVEL_INDEX         (HUD_LEVEL_LABEL_INDEX + 5U)
 #define HUD_LIVES_INDEX         (HUD_LEVEL_INDEX + GAME_VIEW_HUD_LEVEL_DIGITS)
+#define HUD_AI_INDEX            (HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS)
+#define HUD_LOOP_INDEX          (HUD_AI_INDEX + GAME_VIEW_HUD_AI_SLOTS)
 
 /* The maze columns each part sits on. The score runs to column 6 and the level to 26, so
  * both read outward from the edge they belong to, as the arcade's do. */
@@ -458,10 +460,26 @@ static void prv_add_cell_item(const game_view_t* const in_view, msg_display_list
 #define HUD_LEVEL_LAST_COLUMN   (26U)
 #define HUD_LIVES_FIRST_COLUMN  (2U)
 
+/* Centred in the label row's own free space: `1UP` ends at column 5 and `LEVEL` starts at 22, which
+ * leaves sixteen columns, and six glyphs centred in them start here. */
+#define HUD_AI_FIRST_COLUMN     (11U)
+
+/* Right-aligned under `LEVEL`, on the lives row: the lives themselves run from column 2 and take
+ * six, so the far end of that row is empty and reads as a second place for a status word. */
+#define HUD_LOOP_FIRST_COLUMN   (22U)
+
 static const char* const g_hud_player_label = "1UP";
 static const char* const g_hud_level_label = "LEVEL";
+/*! \brief One label per steering machine, indexed by `game_session_player_e`.
+ *
+ * Named rather than abbreviated, because the player picked one of them on the menu and should not
+ * have to remember which. Padded to #GAME_VIEW_HUD_AI_SLOTS, and the player's own entry is all
+ * spaces rather than nothing — for the same reason a spent life is a blank: the slot exists either
+ * way and a hole in it reads as a fault. */
+static const char* const g_hud_player_labels[] = {"      ", "NEAT  ", "SEARCH"};
+static const char* const g_hud_loop_label = "LOOP";
 
-_Static_assert(HUD_LIVES_INDEX + GAME_VIEW_HUD_LIFE_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
+_Static_assert(HUD_LOOP_INDEX + GAME_VIEW_HUD_LOOP_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");
 
 /* One digit of a number, counting places from the units up, or a space where a leading
  * zero would be. Place zero always gives a digit, so a score of nothing reads `0` rather
@@ -492,16 +510,18 @@ static void prv_set_hud_text_item(char in_character, uint8_t in_column, int16_t 
     *out_y = in_y;
 }
 
-/* What one slot of the HUD should show, for a given state.
+/* What one slot of the HUD should show, for a given view.
  *
- * A pure function of the state, which is the whole trick: the same call against the state
- * last drawn says what is on the panel, and the difference between the two is exactly what
- * has to be sent. */
-static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_t in_index,
-                                  sprite_set_id_e* const out_sprite, sprite_set_palette_e* const out_palette,
-                                  int16_t* const out_x, int16_t* const out_y)
+ * A pure function of what the view holds, which is the whole trick: what it says is compared
+ * against the sprite the slot last actually showed, and the difference is exactly what has to be
+ * sent. Reading the view rather than only the state is what lets the AI indication join in
+ * without the game having to know that an AI exists. */
+static void prv_describe_hud_item(const game_view_t* const in_view, uint8_t in_index, sprite_set_id_e* const out_sprite,
+                                  sprite_set_palette_e* const out_palette, int16_t* const out_x, int16_t* const out_y)
 {
     ASSERT(in_index < GAME_VIEW_HUD_ITEM_COUNT);
+
+    const msg_game_state_t* const in_state = &in_view->state;
 
     if (in_index < HUD_SCORE_INDEX)
     {
@@ -535,7 +555,7 @@ static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_
         prv_set_hud_text_item(prv_get_digit_character(in_state->level, place), column, GAME_VIEW_HUD_VALUE_ROW_Y,
                               out_sprite, out_palette, out_x, out_y);
     }
-    else
+    else if (in_index < HUD_AI_INDEX)
     {
         /* A life slot: a little Pacman, or a blank the same size once it is spent. Both
          * are drawn, never merely skipped — a slot that stopped being sent would leave the
@@ -548,6 +568,29 @@ static void prv_describe_hud_item(const msg_game_state_t* const in_state, uint8_
         *out_x =
             (int16_t)(GAME_VIEW_ORIGIN_X + ((int16_t)(HUD_LIVES_FIRST_COLUMN + (slot * 2U)) * GAME_VIEW_TILE_SIZE));
         *out_y = GAME_VIEW_HUD_LIVES_Y;
+    }
+    else if (in_index < HUD_LOOP_INDEX)
+    {
+        /* Which machine is playing, if either (FR-032). */
+        const uint8_t offset = (uint8_t)(in_index - HUD_AI_INDEX);
+        const uint8_t player =
+            (in_view->player < (uint8_t)(sizeof(g_hud_player_labels) / sizeof(g_hud_player_labels[0])))
+                ? in_view->player
+                : 0U;
+
+        prv_set_hud_text_item(g_hud_player_labels[player][offset], (uint8_t)(HUD_AI_FIRST_COLUMN + offset),
+                              GAME_VIEW_HUD_LABEL_ROW_Y, out_sprite, out_palette, out_x, out_y);
+    }
+    else
+    {
+        /* The loop indication (FR-043): `LOOP` while a finished run will be followed by another. On
+         * the lives row rather than beside `AI`, because "who is playing" and "what happens when
+         * this run ends" are two different facts and a player reads them at different moments. */
+        const uint8_t offset = (uint8_t)(in_index - HUD_LOOP_INDEX);
+
+        prv_set_hud_text_item(in_view->is_infinite ? g_hud_loop_label[offset] : ' ',
+                              (uint8_t)(HUD_LOOP_FIRST_COLUMN + offset), GAME_VIEW_HUD_LIVES_Y, out_sprite, out_palette,
+                              out_x, out_y);
     }
 }
 
@@ -570,7 +613,7 @@ static void prv_fill_changed_hud(game_view_t* const inout_view, msg_display_list
         int16_t x;
         int16_t y;
 
-        prv_describe_hud_item(&inout_view->state, index, &sprite, &palette, &x, &y);
+        prv_describe_hud_item(inout_view, index, &sprite, &palette, &x, &y);
 
         if ((uint8_t)sprite == inout_view->drawn_hud[index])
         {
@@ -672,12 +715,17 @@ static void prv_fill_actor_items(const game_view_t* const in_view, msg_display_l
     }
 
     /* Pacman last, so he is on top where he and a ghost share a cell — which is exactly
-     * the moment the player is looking at. */
+     * the moment the player is looking at.
+     *
+     * Green while the agent has him, yellow while the player does (FR-032). The HUD's three letters
+     * say the same thing, and this says it about the thing the eye is already following — which is
+     * the difference between knowing and having to look. The *lives* in the HUD stay yellow: they
+     * are a count of what is left, not the figure somebody is steering. */
     prv_get_actor_pixel(&in_view->state.pacman, &x, &y);
     prv_add_item(
         inout_list, DISPLAY_ITEM_ACTOR,
         sprite_set_get_pacman_sprite((direction_e)in_view->state.pacman.direction, in_view->state.pacman.progress),
-        SPRITE_SET_PALETTE_PACMAN, x, y);
+        (in_view->player != 0U) ? SPRITE_SET_PALETTE_PACMAN_AI : SPRITE_SET_PALETTE_PACMAN, x, y);
 }
 
 /* ==========================================================================
@@ -729,6 +777,20 @@ void game_view_set_state(game_view_t* inout_view, const msg_game_state_t* in_sta
          * may be showing anything at all. */
         prv_forget_hud(inout_view);
     }
+}
+
+void game_view_set_infinite(game_view_t* inout_view, bool in_is_infinite)
+{
+    ASSERT(inout_view != NULL);
+
+    inout_view->is_infinite = in_is_infinite;
+}
+
+void game_view_set_player(game_view_t* inout_view, uint8_t in_player)
+{
+    ASSERT(inout_view != NULL);
+
+    inout_view->player = in_player;
 }
 
 bool game_view_get_display_list(game_view_t* inout_view, msg_display_list_t* out_list)

@@ -8,6 +8,15 @@
  * whether they were the best, a table tells them how close they came, and the arcade
  * cabinets they are copied from all showed a list.
  *
+ * **Three tables of three**, one per game the menu offers (FR-041), because the games are not
+ * comparable: the arcade's own maze is a maze that can be learned, a generated one cannot, and a
+ * run the agent played is not a run anybody played. One table would put those three numbers in one
+ * column and invite exactly the comparison that means nothing.
+ *
+ * A table is chosen by *index* and this module does not know what the indices mean. That is
+ * deliberate: which games exist is the shell's business, and a storage module that knew would have
+ * to be edited every time the menu gained an entry.
+ *
  * The whole table is held in RAM and written to `Bsp/flash_bsp` only when it changes,
  * which is at most once per run. That is not an optimisation: an erase-and-program on this
  * part stalls the CPU for milliseconds, so writing one on any kind of schedule would show
@@ -30,8 +39,15 @@
  * high_score - public types
  * ========================================================================= */
 
-/*! \brief How many scores the table keeps — the three the menu shows. */
-#define HIGH_SCORE_COUNT (3U)
+/*! \brief How many scores one table keeps — the three the menu shows. */
+#define HIGH_SCORE_COUNT       (3U)
+
+/*! \brief How many tables there are — one per game the menu offers (FR-041).
+ *
+ * The shell asserts that this agrees with the number of games it offers, so the two cannot drift
+ * apart without the build saying so.
+ */
+#define HIGH_SCORE_TABLE_COUNT (3U)
 
 /* ==========================================================================
  * high_score - public API
@@ -55,31 +71,37 @@ void high_score_init(void);
  * A score of zero is never stored: it beats nothing, and a table of zeroes is how "empty"
  * is expressed.
  *
+ * \param[in]       in_table: `0`..#HIGH_SCORE_TABLE_COUNT `- 1`
  * \param[in]       in_score: the score to offer
  * \return          `true` when the table changed, so a caller can say so
  */
-bool high_score_offer(uint32_t in_score);
+bool high_score_offer(uint8_t in_table, uint32_t in_score);
 
 /*! \brief One of the scores, best first.
  *
+ * \param[in]       in_table: `0`..#HIGH_SCORE_TABLE_COUNT `- 1`
  * \param[in]       in_index: `0`..#HIGH_SCORE_COUNT `- 1`, `0` being the best
  * \return          The score, `0` for a place nobody has taken yet
  */
-uint32_t high_score_get(uint8_t in_index);
+uint32_t high_score_get(uint8_t in_table, uint8_t in_index);
 
-/*! \brief The best score, or `0` if there is none — what a single-number display shows. */
-uint32_t high_score_get_best(void);
+/*! \brief The best score of a table, or `0` if there is none — what a single-number display shows.
+ *
+ * \param[in]       in_table: `0`..#HIGH_SCORE_TABLE_COUNT `- 1`
+ */
+uint32_t high_score_get_best(uint8_t in_table);
 
-/*! \brief Whether a score would get into the table, without offering it.
+/*! \brief Whether a score would get into a table, without offering it.
  *
  * Lets a score screen say "a new high score" before the table has been changed, which is
  * the only way to say it about the run that just ended.
  *
+ * \param[in]       in_table: `0`..#HIGH_SCORE_TABLE_COUNT `- 1`
  * \param[in]       in_score: the score to test
  */
-bool high_score_would_qualify(uint32_t in_score);
+bool high_score_would_qualify(uint8_t in_table, uint32_t in_score);
 
-/*! \brief Forget every score, in RAM and in storage.
+/*! \brief Forget every score of every table, in RAM and in storage.
  *
  * What the `highscore reset` console command does. Erases the page rather than storing
  * three zeroes, so afterwards the storage is in the state it left the factory in — the

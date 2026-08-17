@@ -20,8 +20,12 @@
 
 /* Bumped whenever the stored shape changes, so an old table is discarded rather than
  * misread. A CRC would not catch this on its own — a table of the previous shape is
- * perfectly intact, just not this shape. */
-#define LAYOUT_VERSION (1U)
+ * perfectly intact, just not this shape.
+ *
+ * Version 2 is three tables where version 1 was one (FR-041). A board flashed over an older one
+ * therefore starts with empty tables rather than showing version 1's three scores as the normal
+ * maze's — which they might not be, since that build had only one game. */
+#define LAYOUT_VERSION (2U)
 
 /* The record as it sits in flash. The CRC is deliberately first and covers everything
  * after it, so the field being checked never covers itself. */
@@ -30,10 +34,19 @@ typedef struct
     uint32_t crc;
     uint32_t magic_word;
     uint32_t layout_version;
-    uint32_t scores[HIGH_SCORE_COUNT];
+    uint32_t scores[HIGH_SCORE_TABLE_COUNT][HIGH_SCORE_COUNT];
 } stored_table_t;
 
-static uint32_t g_scores[HIGH_SCORE_COUNT];
+static uint32_t g_scores[HIGH_SCORE_TABLE_COUNT][HIGH_SCORE_COUNT];
+
+/* The table a caller means. Out of range is a mistake in the caller rather than a runtime
+ * condition — the indices come from a fixed set of games — so it asserts rather than clamping. */
+static uint32_t* prv_get_table(uint8_t in_table)
+{
+    ASSERT(in_table < HIGH_SCORE_TABLE_COUNT);
+
+    return g_scores[in_table];
+}
 
 static uint32_t prv_compute_crc(const stored_table_t* const in_table)
 {
@@ -97,8 +110,9 @@ void high_score_init(void)
     (void)memcpy(g_scores, table.scores, sizeof(g_scores));
 }
 
-bool high_score_offer(uint32_t in_score)
+bool high_score_offer(uint8_t in_table, uint32_t in_score)
 {
+    uint32_t* const scores = prv_get_table(in_table);
     uint8_t place;
 
     if (in_score == 0U)
@@ -108,7 +122,7 @@ bool high_score_offer(uint32_t in_score)
 
     for (place = 0U; place < HIGH_SCORE_COUNT; ++place)
     {
-        if (in_score > g_scores[place])
+        if (in_score > scores[place])
         {
             break;
         }
@@ -122,31 +136,33 @@ bool high_score_offer(uint32_t in_score)
     /* Everything below the new score moves down a place, and the last one falls off. */
     for (uint8_t index = HIGH_SCORE_COUNT - 1U; index > place; --index)
     {
-        g_scores[index] = g_scores[index - 1U];
+        scores[index] = scores[index - 1U];
     }
 
-    g_scores[place] = in_score;
+    scores[place] = in_score;
 
+    /* One write for whichever table changed: the record holds all three, so a page that has to be
+     * erased anyway costs the same whether one table moved or all of them did. */
     (void)prv_store();
 
     return true;
 }
 
-uint32_t high_score_get(uint8_t in_index)
+uint32_t high_score_get(uint8_t in_table, uint8_t in_index)
 {
     ASSERT(in_index < HIGH_SCORE_COUNT);
 
-    return g_scores[in_index];
+    return prv_get_table(in_table)[in_index];
 }
 
-uint32_t high_score_get_best(void)
+uint32_t high_score_get_best(uint8_t in_table)
 {
-    return g_scores[0];
+    return prv_get_table(in_table)[0];
 }
 
-bool high_score_would_qualify(uint32_t in_score)
+bool high_score_would_qualify(uint8_t in_table, uint32_t in_score)
 {
-    return (in_score > 0U) && (in_score > g_scores[HIGH_SCORE_COUNT - 1U]);
+    return (in_score > 0U) && (in_score > prv_get_table(in_table)[HIGH_SCORE_COUNT - 1U]);
 }
 
 bool high_score_reset(void)

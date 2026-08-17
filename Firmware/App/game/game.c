@@ -14,6 +14,7 @@
 #include "msg_broker.h"
 #include "pacman.h"
 #include "playfield.h"
+#include "rng_bsp.h"
 #include "score.h"
 
 /* ==========================================================================
@@ -71,6 +72,61 @@ static void prv_deliver_events(game_t* const inout_game)
     (void)score_process(&inout_game->score);
 }
 
+/* --- the jitter (FR-044) ---------------------------------------------------
+ *
+ * Every timing the ghosts are paced by moves a little from run to run, so two runs of the same
+ * level are not the same level: the scatter/chase plan, the frightened window, the idle timer that
+ * pushes a ghost out when nobody is eating, and how many dots each ghost waits for.
+ *
+ * **Two bounds, and the second is the one that matters.** The owner asked for about two seconds. Two
+ * seconds is also longer than several of the arcade's own phases — at level 5 the plan has scatter
+ * phases of a twentieth of a second (§10.9) — so a flat two seconds would not vary those, it would
+ * *replace* them, and the schedule's character is the thing worth keeping. So the jitter is also
+ * capped at half the nominal value: a 20 s phase moves by 2 s, a 5 s phase by 2 s, a 1/20 s phase by
+ * a millisecond nobody will notice. Nothing can reach zero, and nothing can double.
+ *
+ * A jitter is drawn when a timing *starts*, not when it is read — reading is per tick, and a
+ * duration that changed under the timer counting it down would never expire. */
+#define TIMING_JITTER_MS      (2000U)
+#define TIMING_JITTER_DIVISOR (2U)
+
+/* How many dots either way a ghost's wait may move. In dots rather than milliseconds because that
+ * is the unit the house counts in; three is about a second and a half of eating. */
+#define HOUSE_DOT_JITTER      (3U)
+
+static uint32_t prv_jitter_ms(const game_t* const in_game, uint32_t in_nominal_ms)
+{
+    if (!in_game->config.has_timing_jitter || (in_nominal_ms == 0U))
+    {
+        return in_nominal_ms;
+    }
+
+    const uint32_t bound = (in_nominal_ms / TIMING_JITTER_DIVISOR) < TIMING_JITTER_MS
+                               ? (in_nominal_ms / TIMING_JITTER_DIVISOR)
+                               : TIMING_JITTER_MS;
+
+    if (bound == 0U)
+    {
+        return in_nominal_ms;
+    }
+
+    /* `[nominal - bound, nominal + bound]`, so the mean is the nominal value and a level is neither
+     * systematically easier nor harder than the table says. */
+    return (in_nominal_ms - bound) + rng_bsp_get_below((2U * bound) + 1U);
+}
+
+/* What the table says a ghost waits for, in pellets eaten. Pinky's is always nothing, so he
+ * leaves the moment a level begins; Blinky is never in there to ask. */
+static uint16_t prv_get_nominal_dot_limit(const game_t* const in_game, uint8_t in_index)
+{
+    switch ((ghost_personality_e)in_index)
+    {
+        case GHOST_INKY: return in_game->difficulty.inky_dot_limit;
+        case GHOST_CLYDE: return in_game->difficulty.clyde_dot_limit;
+        default: return 0U;
+    }
+}
+
 /* --- placement ----------------------------------------------------------- */
 
 /* Put everyone back where the level starts, keeping score, lives and eaten pellets. Used
@@ -97,7 +153,27 @@ static void prv_place_entities(game_t* const inout_game)
     inout_game->dots_idle_ms = 0U;
     inout_game->frightened_remaining_ms = 0U;
     inout_game->phase_index = 0U;
-    inout_game->phase_remaining_ms = inout_game->difficulty.phase_durations_ms[0];
+    inout_game->phase_remaining_ms = prv_jitter_ms(inout_game, inout_game->difficulty.phase_durations_ms[0]);
+    inout_game->house_idle_limit_ms = prv_jitter_ms(inout_game, inout_game->difficulty.house_idle_limit_ms);
+
+    /* Drawn once per level rather than per ghost release, so a ghost's wait is a property of the
+     * level a player is in and not something that changes while they are watching the house. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        const uint16_t nominal = prv_get_nominal_dot_limit(inout_game, index);
+
+        inout_game->ghost_dot_limit[index] = nominal;
+
+        if (inout_game->config.has_timing_jitter && (nominal > 0U))
+        {
+            /* Never below one: a limit of zero means "leaves at once", which is Pinky's rule and
+             * not something the jitter may hand to Inky or Clyde by accident. */
+            const uint16_t span = (uint16_t)((2U * HOUSE_DOT_JITTER) + 1U);
+            const int32_t moved = (int32_t)nominal - (int32_t)HOUSE_DOT_JITTER + (int32_t)rng_bsp_get_below(span);
+
+            inout_game->ghost_dot_limit[index] = (uint16_t)((moved < 1) ? 1 : moved);
+        }
+    }
 }
 
 static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index);
@@ -119,6 +195,26 @@ static uint32_t prv_get_level_maze_seed(uint32_t in_run_seed, uint8_t in_level)
     return seed;
 }
 
+/* Turn every power pellet into an ordinary one, for a run configured without them.
+ *
+ * A substitution rather than a removal: the pellet counts stay as they were, so "the level is
+ * cleared" keeps meaning what it meant and the level-clear path is the same code. Writes the
+ * cells directly because that is what a `playfield_t` is — the type publishes its grid, and a
+ * demotion is not an event anything needs to hear about. */
+static void prv_demote_power_pellets(game_t* const inout_game)
+{
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            if (inout_game->playfield.pellets[row][column] == PLAYFIELD_PELLET_POWER)
+            {
+                inout_game->playfield.pellets[row][column] = PLAYFIELD_PELLET_NORMAL;
+            }
+        }
+    }
+}
+
 static void prv_load_level(game_t* const inout_game, uint8_t in_level)
 {
     inout_game->level = in_level;
@@ -133,6 +229,12 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
     }
 
     playfield_load_from_map(&inout_game->playfield, &inout_game->maze);
+
+    if (!inout_game->config.has_power_pellets)
+    {
+        prv_demote_power_pellets(inout_game);
+    }
+
     prv_place_entities(inout_game);
 
     /* A new level starts the personal counters over and puts the global one away (§10.4).
@@ -157,16 +259,11 @@ static void prv_load_level(game_t* const inout_game, uint8_t in_level)
     }
 }
 
-/* The dot limit that lets a ghost out, in pellets eaten. Pinky's is always nothing, so he
- * leaves the moment a level begins; Blinky is never in there to ask. */
+/* What this level's ghost actually waits for: the table's figure, moved by the jitter drawn when the
+ * level loaded (FR-044). */
 static uint16_t prv_get_dot_limit(const game_t* const in_game, uint8_t in_index)
 {
-    switch ((ghost_personality_e)in_index)
-    {
-        case GHOST_INKY: return in_game->difficulty.inky_dot_limit;
-        case GHOST_CLYDE: return in_game->difficulty.clyde_dot_limit;
-        default: return 0U;
-    }
+    return in_game->ghost_dot_limit[in_index];
 }
 
 /* Which ghost's counter is running: the most-preferred one still shut in, in the order
@@ -260,7 +357,7 @@ static void prv_advance_house_idle_timer(game_t* const inout_game, uint32_t in_e
 
     inout_game->dots_idle_ms += in_elapsed_ms;
 
-    if (inout_game->dots_idle_ms >= inout_game->difficulty.house_idle_limit_ms)
+    if (inout_game->dots_idle_ms >= inout_game->house_idle_limit_ms)
     {
         prv_release_from_house(inout_game, waiting);
         inout_game->dots_idle_ms = 0U;
@@ -365,12 +462,12 @@ static void prv_advance_timers(game_t* const inout_game, uint32_t in_elapsed_ms)
     }
 
     ++inout_game->phase_index;
-    inout_game->phase_remaining_ms = prv_get_phase_duration(inout_game);
+    inout_game->phase_remaining_ms = prv_jitter_ms(inout_game, prv_get_phase_duration(inout_game));
 }
 
 static void prv_start_frightened(game_t* const inout_game)
 {
-    const uint32_t duration = inout_game->difficulty.frightened_duration_ms;
+    const uint32_t duration = prv_jitter_ms(inout_game, inout_game->difficulty.frightened_duration_ms);
 
     if (duration == 0U)
     {
@@ -463,6 +560,13 @@ static bool prv_have_met(cell_t in_pacman_cell, cell_t in_pacman_previous_cell, 
 static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_previous_cell,
                                  const cell_t* const in_ghost_previous_cells)
 {
+    /* One guard for both callers — Pacman's step and a ghost's — so a run without ghosts
+     * cannot lose a life down a path this function does not own. */
+    if (!inout_game->config.has_ghosts)
+    {
+        return true;
+    }
+
     const cell_t pacman_cell = pacman_get_cell(&inout_game->pacman);
 
     for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
@@ -476,6 +580,8 @@ static bool prv_resolve_meetings(game_t* const inout_game, cell_t in_pacman_prev
 
         if (ghost_is_frightened(ghost))
         {
+            ++inout_game->ghosts_eaten;
+
             prv_publish(inout_game, MSG_GAME_GHOST_EATEN, NULL, 0U);
             /* Revived in the middle of the house, which is Pinky's starting cell, and it
              * has to walk out through the gate like the others. */
@@ -671,6 +777,47 @@ static msg_actor_t prv_describe_actor(cell_t in_cell, direction_e in_direction, 
  * game - public
  * ========================================================================= */
 
+void game_clone(game_t* out_clone, const game_t* in_source)
+{
+    uint32_t total;
+    uint8_t chain_index;
+
+    ASSERT(out_clone != NULL);
+    ASSERT(in_source != NULL);
+    ASSERT(out_clone != in_source);
+
+    total = in_source->score.total;
+    chain_index = in_source->score.ghost_chain_index;
+
+    /* A `game_t` is a value in every field that describes the *game*, and a set of
+     * self-referential pointers in the ones that describe its *bus*: the broker holds the address
+     * of each subscriber, every queue holds the address of its own storage, and Score's active
+     * object holds its own address as its handler context. Copying the bytes copies those
+     * addresses, so the copy's bus would be the *original's* bus — and the first pellet a
+     * simulation ate would score in the game being played. That is not a crash; it is a wrong score
+     * with no symptom, which is worse.
+     *
+     * So: copy everything, then give the copy a bus of its own. #prv_init_bus is the same call
+     * starting a run makes, which is what keeps the two from drifting apart. */
+    memcpy(out_clone, in_source, sizeof(*out_clone));
+
+    prv_init_bus(out_clone);
+
+    /* #score_init zeroes the total, and a clone that forgot the score is not a clone: a caller
+     * measuring what a simulated future is worth compares the two scores, and a reset one makes
+     * every future look the same. The bonus chain goes with it — mid-frightened the next ghost is
+     * worth 400 rather than 200, and a search that thinks otherwise mis-prices a chase. */
+    out_clone->score.total = total;
+    out_clone->score.ghost_chain_index = chain_index;
+}
+
+void game_freeze_timings(game_t* inout_game)
+{
+    ASSERT(inout_game != NULL);
+
+    inout_game->config.has_timing_jitter = false;
+}
+
 void game_init(game_t* inout_game)
 {
     ASSERT(inout_game != NULL);
@@ -686,6 +833,9 @@ void game_init(game_t* inout_game)
     inout_game->maze_seed = 1U;
     inout_game->is_maze_fixed = false;
 
+    /* Before the level loads, because loading one reads the rules. */
+    game_get_default_config(&inout_game->config);
+
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
 }
 
@@ -698,14 +848,36 @@ static void prv_begin_run(game_t* const inout_game)
 
     inout_game->lives = GAME_STARTING_LIVES;
     inout_game->state = GAME_STATE_RUNNING;
+    inout_game->ghosts_eaten = 0U;
 
     prv_load_level(inout_game, DIFFICULTY_FIRST_LEVEL);
+}
+
+void game_get_default_config(game_config_t* out_config)
+{
+    ASSERT(out_config != NULL);
+
+    out_config->has_ghosts = true;
+    out_config->has_timing_jitter = true;
+    out_config->has_power_pellets = true;
 }
 
 void game_start(game_t* inout_game, uint32_t in_maze_seed)
 {
     ASSERT(inout_game != NULL);
 
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_start_configured(inout_game, in_maze_seed, &config);
+}
+
+void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game_config_t* in_config)
+{
+    ASSERT(inout_game != NULL);
+    ASSERT(in_config != NULL);
+
+    inout_game->config = *in_config;
     inout_game->maze_seed = in_maze_seed;
     inout_game->is_maze_fixed = false;
 
@@ -715,10 +887,38 @@ void game_start(game_t* inout_game, uint32_t in_maze_seed)
 void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map)
 {
     ASSERT(inout_game != NULL);
-    ASSERT(in_map != NULL);
 
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_start_on_map_configured(inout_game, in_map, &config);
+}
+
+void game_start_on_map_configured(game_t* inout_game, const playfield_map_t* in_map, const game_config_t* in_config)
+{
+    ASSERT(inout_game != NULL);
+    ASSERT(in_map != NULL);
+    ASSERT(in_config != NULL);
+
+    inout_game->config = *in_config;
     inout_game->maze = *in_map;
     inout_game->is_maze_fixed = true;
+
+    prv_begin_run(inout_game);
+}
+
+void game_start_on_normal_maze(game_t* inout_game)
+{
+    ASSERT(inout_game != NULL);
+
+    /* Straight into the game's own copy, rather than through a `playfield_map_t` the caller holds:
+     * one is 899 bytes, which is most of the kilobyte of stack the linker script reserves, and a
+     * caller on the target would have to find that space somewhere for a value it hands straight
+     * over. This is why "the normal maze" is a name in this API and not an argument to it. */
+    playfield_get_arcade_map(&inout_game->maze);
+    inout_game->is_maze_fixed = true;
+
+    game_get_default_config(&inout_game->config);
 
     prv_begin_run(inout_game);
 }
@@ -728,6 +928,13 @@ const playfield_map_t* game_get_maze(const game_t* in_game)
     ASSERT(in_game != NULL);
 
     return &in_game->maze;
+}
+
+const playfield_t* game_get_playfield(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return &in_game->playfield;
 }
 
 void game_set_direction(game_t* inout_game, direction_e in_direction)
@@ -778,7 +985,8 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms)
         }
     }
 
-    for (uint8_t index = 0U; (index < GHOST_COUNT) && (inout_game->state == GAME_STATE_RUNNING); ++index)
+    for (uint8_t index = 0U;
+         inout_game->config.has_ghosts && (index < GHOST_COUNT) && (inout_game->state == GAME_STATE_RUNNING); ++index)
     {
         /* Likewise per ghost: a step can carry it into or out of the tunnel, and Blinky's
          * own step can be the one that empties the maze far enough to wake Elroy. */
@@ -862,11 +1070,41 @@ void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state)
     out_state->level = in_game->level;
 }
 
+cell_t game_get_ghost_cell(const game_t* in_game, uint8_t in_index)
+{
+    ASSERT(in_game != NULL);
+    ASSERT(in_index < (uint8_t)GHOST_COUNT);
+
+    return ghost_get_cell(&in_game->ghosts[in_index]);
+}
+
+bool game_is_ghost_frightened(const game_t* in_game, uint8_t in_index)
+{
+    ASSERT(in_game != NULL);
+    ASSERT(in_index < (uint8_t)GHOST_COUNT);
+
+    return ghost_is_frightened(&in_game->ghosts[in_index]);
+}
+
 game_state_e game_get_state(const game_t* in_game)
 {
     ASSERT(in_game != NULL);
 
     return in_game->state;
+}
+
+cell_t game_get_pacman_cell(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return pacman_get_cell(&in_game->pacman);
+}
+
+uint16_t game_get_ghosts_eaten(const game_t* in_game)
+{
+    ASSERT(in_game != NULL);
+
+    return in_game->ghosts_eaten;
 }
 
 uint32_t game_get_score(const game_t* in_game)

@@ -58,6 +58,51 @@ typedef enum
     GAME_STATE_WON   /*!< Final level cleared (FR-027)       */
 } game_state_e;
 
+/*! \brief Which of the game's rules are in force.
+ *
+ * Everything here defaults to *on*, which is the game FR-001..029 describe; #game_start and
+ * #game_start_on_map use those defaults, so the shipped firmware neither sets this nor is
+ * affected by it. It exists for the AI's training curriculum
+ * ([M6 §6](../../../Docu/Design/M6-Pacman-AI.md), [DEC-041](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md)):
+ * a network that is still learning to walk cannot also work out that a ghost is sometimes
+ * food and sometimes death, so it is taught the maze first and the rest afterwards.
+ *
+ * These are *runtime* switches on purpose rather than a training-only build. Training must
+ * exercise the code that ships (FR-112), and a second set of rules behind an `#ifdef` would
+ * be a second game to keep in step — the first thing to diverge silently.
+ */
+typedef struct
+{
+    /*! \brief When `false`, the ghosts neither move nor catch Pacman.
+     *
+     * They are still placed, so a snapshot still describes four of them and they still sit
+     * where a level begins — Blinky above the gate, the rest in the house. Making them
+     * *absent* would need an "absent" encoding in \ref msg_actor_t that nothing else wants,
+     * so they are inert instead of gone. */
+    bool has_ghosts;
+
+    /*! \brief When `false`, the game's timings are exactly the table's (FR-044).
+     *
+     * Defaults to *on*, because a little variation from run to run is the game as it is played. A
+     * test that asserts when a phase ends, or which tick a ghost leaves the house on, has to turn it
+     * off — those tests are about the rules, and a rule checked against a moving timing is not
+     * checked. */
+    bool has_timing_jitter;
+
+    /*! \brief When `false`, the level's power pellets are ordinary pellets.
+     *
+     * The pellet *counts* do not change, so clearing the level still means the same thing
+     * and the score is lower only by what the four power pellets and any eaten ghost would
+     * have paid. Frightened mode therefore never starts. */
+    bool has_power_pellets;
+} game_config_t;
+
+/*! \brief The rules as the game is meant to be played: everything on.
+ *
+ * \param[out]      out_config: filled with the defaults, must not be `NULL`
+ */
+void game_get_default_config(game_config_t* out_config);
+
 typedef struct
 {
     /* --- the Model --- */
@@ -85,8 +130,26 @@ typedef struct
     uint8_t level;
     uint8_t lives;
 
+    /*! \brief Which rules this run plays under. Defaults to all of them. */
+    game_config_t config;
+
     /*! \brief What this level plays like, looked up once when it loads (§10.9). */
     difficulty_t difficulty;
+
+    /*! \brief This level's own timings, which are the table's moved by the jitter of FR-044 — drawn
+     *         when the level loads, so they hold for as long as a player is in it.
+     *
+     * The phase durations and the frightened window are not here because they are drawn as each one
+     * *starts*; these two are asked for repeatedly, so they have to be decided once. */
+    uint32_t house_idle_limit_ms;
+    uint16_t ghost_dot_limit[GHOST_COUNT];
+
+    /*! \brief Ghosts eaten in this run, for a caller that has to reward it.
+     *
+     * A statistic about the run, like the score, and the score already pays the arcade's own
+     * 200/400/800/1600 for these. It is counted separately because the AI's training pays *more*
+     * for a ghost than the game does (FR-036), and it cannot pay for something it cannot count. */
+    uint16_t ghosts_eaten;
 
     /* --- timing, all in milliseconds --- */
     uint32_t pacman_move_elapsed_ms;
@@ -145,6 +208,54 @@ typedef struct
  */
 void game_init(game_t* inout_game);
 
+/*! \brief Copy a run so it can be played forward without touching the original.
+ *
+ * This is what makes the game its own forward model: a caller can clone the run in progress, tick
+ * the clone to see where a choice leads, and throw it away — the game being played never learns
+ * that any of it happened. `pacman_lookahead` is built on exactly this.
+ *
+ * **A `memcpy` is not enough and this is the reason the function exists.** Most of a `game_t` is
+ * values, but its internal bus is pointers into itself: the broker knows each subscriber by
+ * address, each queue knows its own storage by address, and Score's active object carries its own
+ * address as context. A byte copy would leave the copy publishing into the *original's* Score, so
+ * a simulated pellet would raise the real player's score with nothing to show it happened. This
+ * copies the values and then gives the clone a bus of its own.
+ *
+ * What a clone reproduces exactly: the maze and what has been eaten off it, every actor's cell,
+ * facing and movement phase, the score and its bonus chain, lives, level, the mode timers and the
+ * dot counters. So a clone ticked with the same elapsed times replays the same game — **as long as
+ * the jitter of FR-044 is off**. With it on the clone draws its own timings, which is the right
+ * behaviour for a search that must not assume the future it planned for is the one that arrives.
+ *
+ * The clone is 15 kB. It belongs in static storage, not on the stack — the target reserves a
+ * kilobyte of it.
+ *
+ * \param[out]      out_clone: receives the copy, must not be `NULL` and must not be `in_source`
+ * \param[in]       in_source: the run to copy, must not be `NULL`
+ */
+void game_clone(game_t* out_clone, const game_t* in_source);
+
+/*! \brief Stop this game drawing any more of FR-044's jitter, leaving the timings it already has.
+ *
+ * **Meant for a clone, and the reason it exists is not tidiness.** The jitter is drawn from
+ * `rng_bsp`, which is one generator for the whole program: a search that ticks a clone forward
+ * would pull words out of the stream the *played* game is going to draw from, so simulating a
+ * future would change it. On the host that also breaks FR-114 — a training episode replays from
+ * its seed only if nothing else is drawing.
+ *
+ * What a frozen game keeps is everything already drawn: this level's idle limit and dot limits
+ * stand, and the phase and frightened timers run down from where they are. What it loses is the
+ * variation on the *next* phase, which then lasts exactly what the difficulty table says. So a
+ * simulation assumes the ghosts keep to their nominal pacing from here on — the honest assumption,
+ * because the draw it would otherwise make is not the draw the real game will make.
+ *
+ * There is no way back on purpose. A run being played must never be frozen, and a clone has no
+ * reason to thaw.
+ *
+ * \param[in,out]   inout_game: the game to freeze, must not be `NULL`
+ */
+void game_freeze_timings(game_t* inout_game);
+
 /*! \brief Begin a new run at level 1 with a full set of lives (FR-003/006).
  *
  * Every level of the run gets its **own generated maze** (FR-029), derived from `in_maze_seed`
@@ -157,16 +268,51 @@ void game_init(game_t* inout_game);
  */
 void game_start(game_t* inout_game, uint32_t in_maze_seed);
 
+/*! \brief Begin a run under rules of the caller's choosing.
+ *
+ * Identical to #game_start except that the caller says which rules are in force. Only the
+ * AI's training harness has a reason to (\ref game_config_t); passing the defaults is
+ * exactly #game_start.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_maze_seed: any value; caller's job to make it vary between runs
+ * \param[in]       in_config: the rules to play under, must not be `NULL`
+ */
+void game_start_configured(game_t* inout_game, uint32_t in_maze_seed, const game_config_t* in_config);
+
 /*! \brief Begin a run on one maze, given rather than generated.
  *
- * Every level of the run plays `in_map`. Two callers want this: a test, which cannot assert
- * anything about a corridor it has not been told about, and anything that wants the arcade's
- * own maze (#playfield_get_arcade_map).
+ * Every level of the run plays `in_map`. This is for a caller that has a maze in hand — a test,
+ * which cannot assert anything about a corridor it has not been told about. For the arcade's own
+ * layout use #game_start_on_normal_maze, which does not make anybody hold one.
  *
  * \param[in,out]   inout_game: the game, must not be `NULL`
  * \param[in]       in_map: the maze to play, copied in; must not be `NULL`
  */
 void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map);
+
+/*! \brief Begin a run on one given maze, under rules of the caller's choosing.
+ *
+ * #game_start_on_map with a \ref game_config_t, and the pair to #game_start_configured. The AI's
+ * training curriculum needs both halves at once: it is taught on the normal maze (the arcade's own
+ * layout), and it is taught in stages that switch the ghosts and the power pellets off.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ * \param[in]       in_map: the maze to play, copied in; must not be `NULL`
+ * \param[in]       in_config: the rules to play under, must not be `NULL`
+ */
+void game_start_on_map_configured(game_t* inout_game, const playfield_map_t* in_map, const game_config_t* in_config);
+
+/*! \brief Begin a run on the **normal maze**: the arcade's own layout, every level (FR-040).
+ *
+ * One of the two games the menu offers, and the one the AI plays. It takes no map for a reason
+ * worth knowing: a `playfield_map_t` is 899 bytes and the target reserves a kilobyte of stack, so a
+ * caller assembling one to hand over would have to find that space somewhere. The game already
+ * holds the only copy that needs to exist.
+ *
+ * \param[in,out]   inout_game: the game, must not be `NULL`
+ */
+void game_start_on_normal_maze(game_t* inout_game);
 
 /*! \brief The maze being played, for a caller that has to draw it.
  *
@@ -174,6 +320,16 @@ void game_start_on_map(game_t* inout_game, const playfield_map_t* in_map);
  * \return          The current level's maze, owned by the game and valid until the next level
  */
 const playfield_map_t* game_get_maze(const game_t* in_game);
+
+/*! \brief The playfield the run is being played on, for a caller that has to reason about routes.
+ *
+ * The maze plus what has been eaten off it, which is what a route search needs and
+ * #game_get_maze does not carry. Read-only: the pellets are the game's to remove.
+ *
+ * \param[in]       in_game: the game, must not be `NULL`
+ * \return          The live playfield, owned by the game
+ */
+const playfield_t* game_get_playfield(const game_t* in_game);
 
 /*! \brief Record the player's intended direction (FR-004).
  *
@@ -207,11 +363,42 @@ void game_tick(game_t* inout_game, uint32_t in_elapsed_ms);
  */
 void game_get_state_message(const game_t* in_game, msg_game_state_t* out_state);
 
+/*! \brief Which cell Pacman is standing in.
+ *
+ * Exists for a caller that needs *only* that, which is the training harness: it ticks the game until
+ * Pacman reaches a new cell, and asking #game_get_state_message that question costs 41 us because
+ * the message carries a pellet bitmap for all 868 cells. Measured over a whole decision, that was
+ * **79 % of the training time** — twelve ticks of the game itself are 3 us. A question this cheap
+ * deserves a way to ask it cheaply.
+ *
+ * \param[in]       in_game: the game, must not be `NULL`
+ */
+cell_t game_get_pacman_cell(const game_t* in_game);
+
 /*! \brief How the run stands. */
+/*! \brief Where one ghost is, and whether it can currently be eaten.
+ *
+ * The pair exists for the training environment, which has to know how much danger a decision was
+ * taken in without building a whole state message for every one of them (that message is 246 bytes
+ * and a run takes hundreds of decisions). Nothing in the firmware needs them.
+ *
+ * \param[in]       in_game: instance, must not be `NULL`
+ * \param[in]       in_index: 0..#GHOST_COUNT-1
+ */
+cell_t game_get_ghost_cell(const game_t* in_game, uint8_t in_index);
+bool game_is_ghost_frightened(const game_t* in_game, uint8_t in_index);
+
 game_state_e game_get_state(const game_t* in_game);
 
 /*! \brief The score so far, cumulative across levels (§10.9). */
 uint32_t game_get_score(const game_t* in_game);
+
+/*! \brief Ghosts eaten in this run, across levels.
+ *
+ * For the training harness, which pays more for one than the game's score does (FR-036). The game
+ * itself has no use for the figure — the points are already in the score.
+ */
+uint16_t game_get_ghosts_eaten(const game_t* in_game);
 
 /*! \brief Lives left (FR-024). */
 uint8_t game_get_lives(const game_t* in_game);

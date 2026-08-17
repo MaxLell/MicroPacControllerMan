@@ -271,6 +271,54 @@ void test_the_mirrored_pacman_frames_really_are_mirrors(void)
     }
 }
 
+/* The one glyph that was drawn rather than decoded out of the tile ROM, and the reason the title
+ * screen can spell the game's own name. Checked as *ink in the middle rows and nowhere else*, which
+ * is what makes it a hyphen rather than a tile that happens to have pixels — `SPRITE_SET_ID_COUNT`
+ * already guarantees the latter. */
+void test_the_font_has_a_hyphen(void)
+{
+    const sprite_t* const hyphen = sprite_set_get(SPRITE_SET_GLYPH_HYPHEN);
+
+    TEST_ASSERT_EQUAL_UINT(SPRITE_SET_GLYPH_HYPHEN, sprite_set_get_glyph('-'));
+
+    for (uint8_t row = 0U; row < hyphen->height; ++row)
+    {
+        const bool is_a_bar_row = (row == 3U) || (row == 4U);
+
+        for (uint8_t column = 0U; column < hyphen->width; ++column)
+        {
+            /* Ink is index 1, the palette's foreground. The rest of a glyph is index 2 — the tile's
+             * own background, opaque black, so one item paints a whole cell — and not transparency,
+             * which is why this cannot be written as "not transparent". */
+            const bool is_ink = hyphen->rows[row][column] == SPRITE_CHAR_INDEX_1;
+
+            /* The bar spans the six-pixel box the letters either side of it are drawn in, so it
+             * sits on the same grid rather than looking like it came from another font. */
+            TEST_ASSERT_EQUAL(is_a_bar_row && (column >= 1U) && (column <= 6U), is_ink);
+        }
+    }
+}
+
+/* The AI's green is a colour of this palette and not merely a free one: it is the maze's own blue
+ * with its channels rotated, so it carries the same saturation and brightness as the walls it is
+ * seen against. Asserted as a *relationship*, because a bare hex value in a test says nothing
+ * about why that value and not another. */
+void test_the_ai_recolours_pacman_without_leaving_the_palette(void)
+{
+    const sprite_palette_t* const player = sprite_set_get_palette(SPRITE_SET_PALETTE_PACMAN);
+    const sprite_palette_t* const agent = sprite_set_get_palette(SPRITE_SET_PALETTE_PACMAN_AI);
+    const sprite_palette_t* const wall = sprite_set_get_palette(SPRITE_SET_PALETTE_WALL);
+
+    TEST_ASSERT_NOT_EQUAL_HEX16(player->colors[1], agent->colors[1]);
+    TEST_ASSERT_NOT_EQUAL_HEX16(wall->colors[1], agent->colors[1]);
+
+    /* RGB565: five bits of red, six of green, five of blue. The wall's red and blue are equal and
+     * its green is the bright one; the agent's swaps green with blue, which is the rotation. */
+    TEST_ASSERT_EQUAL_UINT((wall->colors[1] >> 11) & 0x1FU, (agent->colors[1] >> 11) & 0x1FU);
+    TEST_ASSERT_EQUAL_UINT(wall->colors[1] & 0x1FU, (agent->colors[1] >> 6) & 0x1FU);
+    TEST_ASSERT_EQUAL_UINT(((wall->colors[1] >> 5) & 0x3FU) >> 1, agent->colors[1] & 0x1FU);
+}
+
 void test_the_four_ghosts_differ_only_in_colour(void)
 {
     const sprite_palette_t* const blinky = sprite_set_get_palette(SPRITE_SET_PALETTE_BLINKY);

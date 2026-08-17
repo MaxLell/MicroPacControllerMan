@@ -34,15 +34,11 @@ void pacman_set_intent(pacman_t* inout_pacman, direction_e in_direction)
     inout_pacman->queued_direction = in_direction;
 }
 
-/* Whether Pacman may take a step in a direction.
- *
- * Walls are the agent's business; the ghost house is his. §10.2 puts it off-limits to him
- * altogether, and the gate is the only way across its boundary — so barring him there bars
- * him from all of it, without the house needing to be a wall to the ghosts who live in it.
- */
-static bool prv_may_step(const pacman_t* const in_pacman, const playfield_t* const in_playfield,
-                         direction_e in_direction)
+bool pacman_may_step(const pacman_t* in_pacman, const playfield_t* in_playfield, direction_e in_direction)
 {
+    ASSERT(in_pacman != NULL);
+    ASSERT(in_playfield != NULL);
+
     if (!agent_can_step(&in_pacman->agent, in_playfield, in_direction))
     {
         return false;
@@ -59,18 +55,30 @@ bool pacman_advance(pacman_t* inout_pacman, const playfield_t* in_playfield)
     /* The queued direction is only taken up when it is actually possible; otherwise it
      * stays queued, so a turn asked for a moment too early still happens at the
      * junction rather than being thrown away. */
-    if (prv_may_step(inout_pacman, in_playfield, inout_pacman->queued_direction))
+    if (pacman_may_step(inout_pacman, in_playfield, inout_pacman->queued_direction))
     {
         return agent_step(&inout_pacman->agent, in_playfield, inout_pacman->queued_direction);
     }
 
-    if (prv_may_step(inout_pacman, in_playfield, agent_get_direction(&inout_pacman->agent)))
+    if (pacman_may_step(inout_pacman, in_playfield, agent_get_direction(&inout_pacman->agent)))
     {
         return agent_step(&inout_pacman->agent, in_playfield, agent_get_direction(&inout_pacman->agent));
     }
 
     /* Stopped: he keeps the facing he already had (§10.1) and stays put. */
     return false;
+}
+
+bool pacman_is_stuck(const pacman_t* in_pacman, const playfield_t* in_playfield)
+{
+    ASSERT(in_pacman != NULL);
+    ASSERT(in_playfield != NULL);
+
+    /* The two tests #pacman_advance makes, in its order, asked without moving him. Written as the
+     * negation of that function rather than as a rule of its own, so a change to what he may do
+     * cannot leave this saying something else. */
+    return !pacman_may_step(in_pacman, in_playfield, in_pacman->queued_direction)
+           && !pacman_may_step(in_pacman, in_playfield, agent_get_direction(&in_pacman->agent));
 }
 
 cell_t pacman_get_cell(const pacman_t* in_pacman)

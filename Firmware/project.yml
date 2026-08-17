@@ -69,6 +69,7 @@
     - Services/**
     - Bsp/dio_bsp
     - Bsp/flash_bsp
+    - Bsp/rng_bsp
     - Bsp/systick_bsp
     - ThirdParty/embedded_utils
   :support:
@@ -77,7 +78,15 @@
 
 :files:
   :test: []
-  :source: []
+  :source:
+    # The one BSP whose *real* host implementation is linked into the tests rather than mocked,
+    # against the rule two lines up. `rng_bsp_host.c` is a seeded xorshift and nothing else — a pure
+    # function of the seed it was given, with no hardware to stand in for — so linking it hands every
+    # test a deterministic generator, where a mock would hand it a fake and make every test that
+    # merely *links* `game` set up expectations for a call it does not care about. Tests that assert
+    # about an exact timing switch the jitter off in `game_config_t` instead, which is the honest way
+    # to say "this test is about the rule, not about the variation".
+    - Bsp/rng_bsp/rng_bsp_host.c
 
 # NOTE for anyone adding a test: Ceedling decides which real sources to link from the
 # includes it sees in the TEST file itself, not transitively. Every module here uses

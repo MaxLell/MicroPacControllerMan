@@ -4,11 +4,14 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 **STM32CubeMX / STM32 HAL** export under `ThirdParty/`, flashed with
 **STM32CubeProgrammer** over ST-LINK V3E.
 
-> The game is complete and plays on the board, with a **randomly generated maze per level**
-> (FR-029) — RAM **68.0 %** (178,244 of 256 kB), flash **18.7 %** (96,292 of the 504 kB left
-> after the high-score page), both builds warning-free, **371** host unit tests green. Every
-> requirement in the spec has a passing test; the two timing budgets that used to sit here as
-> unmet are **withdrawn** rather than satisfied
+> The game is complete and plays on the board, and the menu offers **three games**: the arcade's own
+> maze, the same maze played by the trained agent alone, or a **randomly generated maze per level**
+> (FR-029/FR-040..043), each with its own high scores — RAM **71.6 %**
+> (187,584 of 256 kB), flash **21.6 %** (111,504 of the 504 kB left
+> after the high-score page), both builds warning-free, **449** host unit tests green. **Every
+> requirement in the spec has a passing test**, FR-037's play strength included, though
+> [M6 §14](../Docu/Design/M6-Pacman-AI.md) records how narrow that margin is; the two timing budgets
+> that used to sit here as unmet are **withdrawn** rather than satisfied
 > ([DEC-036](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The known edges are recorded in
 > the [Refactoring Backlog](../Docu/Refactoring-Backlog.md); the milestone record is
 > [04 §4.2](../Docu/PrePlanning/04-Implementation-Phases-and-Milestones.md#42-close-out) and
@@ -16,9 +19,19 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 
 ## Toolchain
 
+**Or skip all of it and use the container** — see [Docker](#docker) below. On another machine that is
+the shorter road: `./dev.sh docker` and you are building.
+
 ```
-sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake openocd
+sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi \
+                        libnewlib-arm-none-eabi cmake openocd
 ```
+
+`libnewlib-arm-none-eabi` is the target's C library — `math.h`, `libc.a`, `libm.a`, which the HAL
+includes. It is only a *Recommends* of `gcc-arm-none-eabi`, so an ordinary `apt-get install` pulls it
+along and it used to go unmentioned here. Anything installing without recommends does not get it, and
+then the HAL fails to compile on `math.h: No such file or directory` — which is exactly how the first
+build of the container failed.
 
 Plus **STM32CubeProgrammer** for flashing, from
 [st.com](https://www.st.com/en/development-tools/stm32cubeprog.html) (an ST account is
@@ -94,6 +107,170 @@ interchangeable and `Services/` never learns which one it got. Prefer this over
 `#ifdef`s inside a module — the only conditional compilation left is where a platform
 genuinely lacks the concept, such as `retain_ram`'s `.noinit` section, which no host
 process has.
+
+## Docker
+
+For a second machine, or for not installing any of the above:
+
+```
+./dev.sh docker              # a shell in the image, this repository mounted
+./dev.sh docker check        # formatting + unit tests + both builds, inside it
+./dev.sh docker-build        # rebuild the image after editing docker/Dockerfile
+```
+
+The image is `Firmware/docker/Dockerfile`, built on **Ubuntu 24.04 on purpose**: every tool version
+this project has been verified against is the one noble packages — gcc-arm-none-eabi 13.2.1,
+cmake 3.28.3, clang-format 18, ruby 3.2, SDL2 2.30 — so `apt-get install` reproduces the verified
+toolchain rather than approximating it. Ceedling is pinned to 1.1.1, the version the suite has been
+run against throughout, because Ceedling generates the mocks and the runners and a different version
+is a different test build.
+
+**The repository is mounted, not copied.** An edit on the host is an edit in the container, and a
+build artefact belongs to whoever ran the command: `dev.sh docker` passes the host's user id
+through. The repository *root* is mounted at `/work` and the working directory is `/work/Firmware`,
+because `.git` lives a level above the firmware and `install-hook` needs it.
+
+The trainer's Python is in the image, at `/opt/venv` and first on `PATH`. So inside the container
+there is no `Training/.venv` to create and the commands are plain `python3`:
+
+```
+python3 Training/train.py
+python3 Training/evaluate.py
+```
+
+### One build directory per path
+
+`build/`, `build-host/` and `build-test/` carry the absolute path they were configured at, so a
+directory made on the host cannot be used inside the container — the tree is `/work/Firmware` in
+there — or the other way round. `dev.sh` notices and names the command that fixes it; nothing is
+lost, it is all regenerated.
+
+Which one it asks for depends on **who is about to use the directory, not on where you typed the
+command**. `./dev.sh docker-train` runs on the host and hands `build-host/` to a container, so what it
+needs is a directory configured for `/work/Firmware` — and it will send you to `./dev.sh docker host`
+to make one. `./dev.sh host` needs the opposite. If you switch between the two often, keep the habit
+of `rm -rf build build-host build-test` when you cross over, or simply work in one of them.
+
+### If it says the daemon cannot be reached
+
+```
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+One error from Docker, three different faults behind it — so `dev.sh` checks which one before it
+builds and tells you that, instead of listing all three:
+
+| what it finds | what it means | the fix |
+|---|---|---|
+| `DOCKER_HOST` is set | not about the local socket at all | unset it, or fix what it points at |
+| no socket at `/var/run/docker.sock` | the daemon is not running | `sudo systemctl enable --now docker` |
+| socket there, you are in the `docker` group | the membership has not reached *this shell* — a group is read at login | `newgrp docker`, or log out and in |
+| socket there, you are not in the group | the group owns the socket and a fresh install puts nobody in it | `sudo usermod -aG docker "$USER" && newgrp docker` |
+
+**Do not use `sudo ./dev.sh docker` as a workaround.** It works, and then every artefact the build
+writes into your tree belongs to root — including `build/`, `build-test/` and Ceedling's caches, which
+you then cannot rebuild without sudo either. `dev.sh` does take `SUDO_UID` into account so that it is
+merely unnecessary rather than destructive, but the group is the fix.
+
+`DEPRECATED: The legacy builder is deprecated` alongside it is only a notice: the legacy builder
+builds this image correctly. `sudo apt-get install docker-buildx` silences it.
+
+### What the container cannot do
+
+**Flashing.** `STM32_Programmer_CLI` comes from STM32CubeProgrammer, which is behind an ST account
+and cannot be fetched unattended, so the image does not have it. Mount the host's install and point
+`dev.sh` at it — it already takes the override:
+
+```
+docker run --rm -it     --user "$(id -u):$(id -g)"     --volume "$PWD/..:/work" --workdir /work/Firmware     --volume /opt/st:/opt/st:ro     --device /dev/ttyACM0 --volume /dev/bus/usb:/dev/bus/usb     --env PROGRAMMER=/opt/st/stm32cubeprg/bin/STM32_Programmer_CLI     micropac-dev ./dev.sh suite
+```
+
+`--device /dev/ttyACM0` is the serial console and is enough for `run_ott.py` on its own;
+`/dev/bus/usb` is what the programmer needs to reach the ST-LINK. `./dev.sh docker` adds the serial
+device for you when a board is plugged in, and nothing else — the USB bus and somebody else's
+`/opt` are not things it should mount behind your back.
+
+**The window, unless you hand it a display.** `pacman_host_app` opens an SDL window.
+`./dev.sh docker` passes `DISPLAY` and `/tmp/.X11-unix` through when there is a display to pass, so
+under X11 it works; under Wayland you will need `xhost` or an Xwayland socket. Building and testing
+need no display at all.
+
+> **Not yet verified.** The machine this was written on has no Docker installed, so the image has
+> never been built. Everything in it is either a package whose exact version is installed and
+> working on that machine, or a line of the same `dev.sh` the host uses — but "should work" is not
+> "does", and the first `./dev.sh docker check` on a machine with Docker is what will say. If it
+> fails, the likely places are the two the author could not exercise: the `gem install` and the
+> `pip install`, both of which want a network at build time.
+
+## Training overnight, and stopping it
+
+`Training/campaign.py` runs the configured runs one after another and writes
+`Training/campaign/summary.md` after each. It says at the start when it expects to be finished. The
+only thing to edit for a longer or shorter night is each run's `hours`; the campaign's ceiling is
+derived from them.
+
+Detached, so it survives the terminal:
+
+```
+./dev.sh docker-train           # start it, then follow the log
+./dev.sh docker-train --fresh   # ...after throwing away previous winners
+./dev.sh docker-train-stop      # stop it
+```
+
+That is a wrapper for one `docker run -d`, and it exists for the two things a person hits in this
+order. A container of that name left over from last time makes `docker run` refuse outright — plain
+enough. A **winner file** left over from last time makes the campaign *skip* that run, which is what
+makes a campaign resumable after a reboot and also what quietly halves a night when the leftovers
+were not meant to be kept. So it stops and says which files it found, and takes `--fresh` or `--keep`
+rather than guessing.
+
+Stopping loses nothing: `train.py` writes its winner on every improvement rather than at the end.
+
+Outside a container the order matters, and there is a trap in it:
+
+```
+pkill -f "[c]ampaign.py" && sleep 2 && pkill -f "[t]rain.py --out"
+```
+
+The campaign first. `pkill -f train.py` on its own matches the pool workers as well as the parent,
+kills them, and leaves the parent waiting in `pool.map` for results that will never arrive.
+
+**More cores do not finish sooner.** The budget is wall-clock: `train.py --max-seconds` stops between
+generations, so a bigger machine spends the same night doing more generations. That is deliberate — a
+generation is not a fixed amount of work, since a better agent lives longer and its episodes take
+longer.
+
+## After training: taking a winner into the firmware
+
+Training produces `Training/winner.json` (or a file per run under `Training/campaign/`, which is not
+in git). Getting one of those into the firmware is four files and one **order that matters**, so it
+is a command rather than a recipe:
+
+```
+./dev.sh adopt-weights                        # Training/winner.json
+./dev.sh adopt-weights Training/campaign/normal-seed1.json
+./dev.sh adopt-weights --force <file>         # one that does not meet FR-037
+```
+
+It measures the winner first and **refuses to adopt one that fails VT-UNIT-010**, because training
+produces a winner every time including a bad one, and the thing that must not happen quietly is a
+worse agent replacing a better one. Then it exports `App/pacman_ai/ai_weights.[ch]`, rebuilds the
+host library and **re-records the FR-039 state set** — in that order. Exporting weights changes what
+the target computes, so a state set recorded against the old ones is a recording of a different
+network; `ott ai_equivalence` refuses to run on a digest mismatch, which is the safety net, and this
+is what keeps you off it.
+
+Commit the four files together:
+
+```
+Training/winner.json
+App/pacman_ai/ai_weights.c
+App/pacman_ai/ai_weights.h
+Test/Target/scripts/ott_ai_equivalence_states.c
+```
+
+Then, on the machine with the board, `./dev.sh suite`. `ott ai_equivalence` is what proves the port
+agrees with the host about the *new* weights, and it is the only thing that can.
 
 ## On-Target Tests (OTT)
 
@@ -179,9 +356,13 @@ source of truth in
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |
 | `Services/msg_broker/` | The publish/subscribe bus between modules (FR-103/108/110). Instance-based; output queues, not callbacks. |
+| `Services/neural_net/` | The feed-forward evaluator the trained agent runs on: an arbitrary NEAT topology held entirely in `const` data, no allocation, no state between calls. `float` only, a fixed accumulation order and ReLU only — all three for FR-039, because the host would otherwise promote to `double` and two libm implementations need not agree about `tanh`. `neural_net_is_well_formed` checks the table rather than trusting it. |
+| `App/pacman_ai/` | The instance: 23 features in Pacman's own frame, four relative actions, and the one trained network the firmware carries (`ai_weights.c`, **generated** — see below). `pacman_ai_decide` is the whole decision in one call, which is what the target and the host both go through. |
+| `Training/` | Host-only, and not firmware ([DEC-040](../Docu/PrePlanning/11-Decisions-and-As-Built.md)): the game as a shared library, the NEAT loop, the play-strength measurement, the weight exporter and the FR-039 state recorder. Nothing in the target build refers to it. |
 | `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
 | `Test/Target/` | The OTT core, the scenario registry, the one shared frame buffer (`ott_framebuffer`), and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
+| `App/pacman_ai/ai_weights.[ch]`, `Test/Target/scripts/ott_ai_equivalence_states.c` | **Generated, do not edit.** The trained weights come from `Training/export_c.py`; the recorded FR-039 states come from `./build-host/pacman_ai_record`. The second belongs to the first — the recording carries the weight table's digest and `ott ai_equivalence` refuses to run against a different one, so re-exporting means re-recording. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
 | `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
 | `dev.sh` | The umbrella command: builds, tests, formats, flashes, runs the OTTs, and installs the commit hook. Not a second implementation of any of them — it calls `format.sh`, `ceedling` and `Test/run_ott.py`, so each job has one definition however it is reached. |
@@ -303,3 +484,7 @@ measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 - **M5 — Random Mazes.** A maze generated per level (FR-029), its appearance derived from
   its walls as geometry. See
   [the Random Mazes design doc](../Docu/Design/M4-Random-Mazes.md).
+- **M6 — Pacman AI.** An agent evolved on the host with NEAT and shipped as `const` weights, and
+  the menu that now asks which of the two mazes to play (FR-040) — the AI is offered in the
+  arcade's own one, which is what it was trained on. See
+  [the Pacman AI design doc](../Docu/Design/M6-Pacman-AI.md).

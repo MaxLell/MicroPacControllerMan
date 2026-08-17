@@ -103,12 +103,11 @@ typedef struct
 
 /*! \brief Load the arcade's own maze, with every pellet restored.
  *
- * **This is no longer what a game plays** — since FR-029 every level gets a generated maze
- * (`maze_gen`, #playfield_load_from_map). The arcade layout stays because it is the one maze
- * whose every property is known from outside this codebase: 244 pellets, the corridors the
- * Dossier's ghost behaviour was described against, the tile map `game_view` derives its
- * appearance rules from. That makes it the fixture the generated mazes are judged against,
- * and a fixture has to stay put.
+ * **This is the "normal maze" the menu offers** (FR-040), and it is also the fixture the generated
+ * mazes are judged against — it is the one maze whose every property is known from outside this
+ * codebase: 244 pellets, the corridors the Dossier's ghost behaviour was described against, the
+ * tile map `game_view`'s appearance rules were checked with. For a while it was *only* the fixture,
+ * between FR-029 giving every level a generated maze and DEC-045 giving the player the choice.
  *
  * \param[out]      inout_playfield: playfield to load into, must not be `NULL`
  */

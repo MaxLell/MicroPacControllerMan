@@ -37,8 +37,8 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "high_score"]
-MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman"]
+AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "search_budget", "lookahead_cost", "ai_high_score"]
+MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
 
@@ -48,7 +48,11 @@ INTERACTIVE = set(MANUAL)
 # minutes at the arcade's own pace. The scenario itself allows 600 s, so the harness has to
 # outlast it or it would report a timeout on a test that is still going.
 INTERACTIVE_TIMEOUT_S = 130.0
-LONG_TIMEOUT_S = {"pacman": 620.0}
+LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
+
+# An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
+# because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0, "lookahead_cost": 60.0}
 
 
 def detect_port() -> str:
@@ -165,7 +169,8 @@ def wait_until_idle(fd: int, quiet: float = 0.3, timeout: float = 3.0) -> None:
 def run_single(port: str, baud: str, test: str, timeout: float) -> int:
     interactive = test in INTERACTIVE
     if timeout is None:
-        timeout = LONG_TIMEOUT_S.get(test, INTERACTIVE_TIMEOUT_S) if interactive else 8.0
+        timeout = (LONG_TIMEOUT_S.get(test, INTERACTIVE_TIMEOUT_S) if interactive
+                   else LONG_AUTOMATIC_TIMEOUT_S.get(test, 8.0))
 
     warn_if_port_is_busy(port)
     configure_tty(port, baud)
@@ -182,7 +187,23 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
         wait_until_idle(fd)
         write_command(fd, f"ott {test}\r\n")
         match, text = read_until(fd, [passed, failed, unknown], timeout, echo=interactive)
+        # The detail lines a test printed, not only the verdict. Several tests exist to
+        # *measure* something — a frame budget, the cost of a route search, what a look-ahead
+        # decision costs — and their number is the whole point of running them. Two leading
+        # spaces is the convention those lines already follow.
+        #
+        # Printed whatever the verdict, and that is the second half of the same lesson: a
+        # measurement test *fails by measuring something too big*, so a failure is exactly when
+        # the numbers are wanted. They were shown on PASS only, and a look-ahead search that
+        # overran its frame reported the one figure it had blown and hid the five that said why.
+        def show_measurements(from_text: str) -> None:
+            for line in from_text.splitlines():
+                if line.startswith("  ") and line.strip():
+                    print(line.rstrip())
+
         if match == passed:
+            show_measurements(text)
+
             print(f"\nPASS: {test}")
             return 0
         if match == failed:
@@ -191,6 +212,8 @@ def run_single(port: str, baud: str, test: str, timeout: float) -> int:
             # point of a failure report. Give the rest of the line a moment.
             _, tail = read_until(fd, ["\n"], 1.0, echo=interactive)
             text += tail
+            show_measurements(text)
+
             for line in text.splitlines():
                 if line.startswith(failed):
                     print(f"\n{line}")
@@ -255,6 +278,113 @@ def check_boot_sequence(port: str, baud: str) -> bool:
         os.close(fd)
 
 
+# Long enough for a reset, the 3 s loading screen and a few commands answered one frame at a time.
+MAZE_SELECTION_TIMEOUT_S = 8.0
+
+
+def check_maze_selection(port: str, baud: str) -> bool:
+    """Walk the menu with `select` and start the game it was left on (FR-040, VT-INT-026).
+
+    The cursor next to the selected option is pixels and only an operator can judge it; what the
+    firmware *does* with the selection is the part that can be falsified without anyone at the
+    board, and it is the part a mistake would show up in — a menu that showed the cursor moving and
+    started the other game would look right and be wrong.
+
+    `select` is a device on the console and not a decision: it pushes the stick, exactly as `start`
+    presses the button, and the shell decides what pushing means.
+    """
+    configure_tty(port, baud)
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+    try:
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
+
+        steps = [
+            ("select\r\n", "selected: normal maze"),
+            ("select down\r\n", "selected: pac-man ai"),
+            ("select down\r\n", "selected: random maze"),
+            ("select down\r\n", "selected: random maze"),  # the end of the list, and it stays there
+            ("select up\r\n", "selected: pac-man ai"),
+            ("select up\r\n", "selected: normal maze"),
+            ("select down\r\n", "selected: pac-man ai"),
+            ("select down\r\n", "selected: random maze"),
+            ("start\r\n", "random maze run 1: level 1"),
+        ]
+
+        if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+            print("[VT-INT-026] maze selection: the menu never came up")
+            return False
+
+        for command, expected in steps:
+            write_command(fd, command)
+
+            if read_until(fd, [expected], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+                print(f"[VT-INT-026] maze selection: '{command.strip()}' did not report "
+                      f"'{expected}'")
+                return False
+
+        print("[VT-INT-026] maze selection: both options offered, and the chosen one is played")
+        return True
+    finally:
+        os.close(fd)
+
+
+def check_the_ai_game(port: str, baud: str) -> bool:
+    """Pick the agent, start the Pac-Man AI game and switch its endless mode (VT-INT-027).
+
+    The agent is chosen on the menu with left and right, so which one plays is settled before the
+    run rather than during it — the button in that game already means the endless mode. What a
+    script can falsify is that the choice moves, that it stays put where there is nothing to
+    choose, and that the run still starts as the agent's.
+
+    Two facts a script can settle in seconds. That the agent has Pac-Man from the first frame is
+    visible in the firmware's own report of the run — it names the game — and that the endless mode
+    belongs to that game and switches is visible in what the shell says when the button is pressed.
+
+    What is *not* checked here is the restart itself: seeing it costs a whole run of an agent that
+    clears level 1, which is minutes, and the suite is run after every build. `test_shell.c` covers
+    the restart, and the board covers it whenever somebody watches the game.
+    """
+    configure_tty(port, baud)
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+    try:
+        wait_until_idle(fd)
+        write_command(fd, "reset\r\n")
+
+        steps = [
+            ("select down\r\n", "selected: pac-man ai"),
+            # Sideways picks the agent, and only here: it is dead on the two games a person plays,
+            # which the step after `select up` checks rather than assumes.
+            ("select\r\n", "agent: neat"),
+            ("select right\r\n", "agent: search"),
+            ("select left\r\n", "agent: neat"),
+            ("select right\r\n", "agent: search"),
+            ("select up\r\n", "selected: normal maze"),
+            ("select right\r\n", "agent: search"),  # unchanged: there is nothing to pick here
+            ("select down\r\n", "selected: pac-man ai"),
+            ("start\r\n", "pac-man ai run 1"),
+            ("button\r\n", "endless mode on"),
+            ("button\r\n", "endless mode off"),
+        ]
+
+        if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+            print("[VT-INT-027] the AI game: the menu never came up")
+            return False
+
+        for command, expected in steps:
+            write_command(fd, command)
+
+            if read_until(fd, [expected], MAZE_SELECTION_TIMEOUT_S)[0] is None:
+                print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
+                return False
+
+        print("[VT-INT-027] the AI game: the agent is chosen on the menu, plays it, "
+              "and the endless mode switches")
+        return True
+    finally:
+        os.close(fd)
+
+
 def run_suite(port: str, baud: str) -> int:
     print("=== OTT automatic regression suite ===")
     results = []
@@ -266,9 +396,14 @@ def run_suite(port: str, baud: str) -> int:
 
     results.append(("VT-INT-002 boot banner", check_banner(port, baud)))
     results.append(("VT-INT-011 boot sequence", check_boot_sequence(port, baud)))
+    results.append(("VT-INT-026 maze selection", check_maze_selection(port, baud)))
+    results.append(("VT-INT-027 the AI game", check_the_ai_game(port, baud)))
 
     for test in AUTOMATIC:
-        rc = run_single(port, baud, test, timeout=8.0)
+        # Eight seconds is right for a test that judges itself in a moment, and wrong for one that
+        # plays two runs to game over. The per-test override is looked up here as well as in
+        # run_single, because passing an explicit timeout is what skipped it the first time.
+        rc = run_single(port, baud, test, timeout=LONG_AUTOMATIC_TIMEOUT_S.get(test, 8.0))
         results.append((f"ott {test}", rc == 0))
 
     print("\n--- summary ---")
@@ -309,7 +444,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button/pacman); omit to run the suite")
+                    help="test name (display_id/ai_equivalence/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--manual", action="store_true",
                     help="run every test that needs a human at the board, in sequence")

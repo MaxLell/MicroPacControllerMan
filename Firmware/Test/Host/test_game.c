@@ -33,6 +33,7 @@
 #include "ghost.h"
 #include "ghost_path.h"
 #include "maze_gen.h"
+#include "mock_rng_bsp.h"
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
@@ -118,12 +119,23 @@ static void prv_eat_every_pellet_except(cell_t in_kept_cell)
  * definition not that. `game_start_on_map` is the seam that exists for this. The generator is
  * tested in `test_maze_gen.c`; these are the game's rules, on the one layout whose corridors
  * are documented outside this codebase. */
+/* The rules, on the table's own timings.
+ *
+ * The jitter of FR-044 is **off** for every test in this file, and that is not a convenience: these
+ * tests say things like "the frightened window ends after exactly this long" and "Inky comes out on
+ * his dot", which are statements about the rule. A rule checked against a timing that moved is not
+ * checked — the test would either pass for the wrong reason or fail depending on a random draw. The
+ * jitter has tests of its own further down, which are about the variation and nothing else. */
 static void prv_start_run(void)
 {
     playfield_map_t map;
+    game_config_t config;
+
+    game_get_default_config(&config);
+    config.has_timing_jitter = false;
 
     playfield_get_arcade_map(&map);
-    game_start_on_map(&g_game, &map);
+    game_start_on_map_configured(&g_game, &map, &config);
 }
 
 /* Move Pacman one cell off his start, onto whatever is on the cell beside him. */
@@ -298,6 +310,13 @@ static void prv_leave_this_many_pellets(uint16_t in_count)
 
 void setUp(void)
 {
+    /* The random source is the mocking boundary, and zero is the useful answer: `game` asks it for
+     * an offset inside a span, so zero means "the shortest timing the jitter allows" — a value, not a
+     * variation, which is what a test wants. A test that needs the *nominal* timing switches the
+     * jitter off in `game_config_t` instead; one that is about the jitter itself says what it
+     * returns. */
+    rng_bsp_get_below_IgnoreAndReturn(0U);
+    rng_bsp_get_u32_IgnoreAndReturn(0U);
     assert_probe_begin();
 
     memset(&g_game, 0, sizeof(g_game));
@@ -385,6 +404,26 @@ void test_a_second_run_starts_from_scratch(void)
     TEST_ASSERT_EQUAL_UINT32(0U, game_get_score(&g_game));
     TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_get_lives(&g_game));
     TEST_ASSERT_TRUE(msg_cell_bitmap_get(prv_state().has_pellet, STEPPED_X, STEPPED_Y));
+}
+
+/* FR-040: the normal maze is the arcade's own layout, and the game fetches it itself rather than
+ * being handed it — which is the only difference from #game_start_on_map and the only thing worth
+ * asserting here. Row by row, because a map that matched everywhere but one row would otherwise
+ * pass on a pellet count. */
+void test_a_run_on_the_normal_maze_plays_the_arcade_layout(void)
+{
+    playfield_map_t arcade;
+
+    playfield_get_arcade_map(&arcade);
+    game_start_on_normal_maze(&g_game);
+
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        TEST_ASSERT_EQUAL_STRING(arcade.rows[row], game_get_maze(&g_game)->rows[row]);
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(GAME_STARTING_LIVES, game_get_lives(&g_game));
+    TEST_ASSERT_EQUAL_UINT(GAME_STATE_RUNNING, game_get_state(&g_game));
 }
 
 /* --- movement and timing (§10.1) ----------------------------------------- */
@@ -713,7 +752,7 @@ void test_an_ordinary_ghost_never_outruns_pacman_before_the_last_level(void)
         prv_start_run();
         prv_jump_to_level(level);
 
-        (void)snprintf(message, sizeof(message), "level %u: a plain ghost outruns Pacman", level);
+        (void)snprintf(message, sizeof(message), "level %u: a plain ghost outruns Pac-Man", level);
         TEST_ASSERT_GREATER_THAN_UINT32_MESSAGE(prv_pacman_period_ms(), prv_measure_ghost_period_ms(GHOST_PINKY),
                                                 message);
     }
@@ -911,6 +950,115 @@ void test_inky_comes_out_at_his_dot_limit_and_clyde_later(void)
     TEST_ASSERT_TRUE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
     prv_eat_pellets(difficulty.clyde_dot_limit);
     TEST_ASSERT_FALSE(ghost_is_waiting_in_house(&g_game.ghosts[GHOST_CLYDE]));
+}
+
+/* --- the timing jitter (FR-044) ------------------------------------------- */
+
+/* Start a run with the jitter on and the generator answering `in_span - 1`, which is the *longest*
+ * timing the jitter allows. Paired with the mock's default of 0 — the shortest — that brackets the
+ * whole range without the test having to know the arithmetic inside `game`. */
+/* Put a power pellet under Pacman's next step and take it, which is what starts a frightened
+ * window — the timing this section measures. */
+static void prv_eat_the_power_pellet(void)
+{
+    g_game.playfield.pellets[STEPPED_Y][STEPPED_X] = PLAYFIELD_PELLET_POWER;
+
+    prv_step_onto_the_pellet();
+}
+
+static uint32_t prv_return_the_top_of_the_span(uint32_t in_span, int in_call_count)
+{
+    (void)in_call_count;
+
+    return (in_span == 0U) ? 0U : (in_span - 1U);
+}
+
+static void prv_start_run_with_jitter(void)
+{
+    playfield_map_t map;
+    game_config_t config;
+
+    game_get_default_config(&config);
+
+    /* The default *is* on, and this test says so out loud rather than relying on it. */
+    TEST_ASSERT_TRUE(config.has_timing_jitter);
+
+    playfield_get_arcade_map(&map);
+    game_start_on_map_configured(&g_game, &map, &config);
+}
+
+/* The two ends of the range, in one test, because a jitter that moved a timing the same way every
+ * time would pass either half alone. */
+void test_the_jitter_moves_a_timing_both_ways_and_never_past_its_bounds(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    /* The generator at the bottom of every span: the shortest allowed frightened window. */
+    prv_start_run_with_jitter();
+    prv_eat_the_power_pellet();
+
+    const uint32_t shortest = g_game.frightened_remaining_ms;
+
+    /* And at the top: the longest. */
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run_with_jitter();
+    prv_eat_the_power_pellet();
+
+    const uint32_t longest = g_game.frightened_remaining_ms;
+
+    TEST_ASSERT_GREATER_THAN_UINT32(shortest, longest);
+
+    /* Never zero and never doubled: a window of nothing would make a power pellet points only,
+     * which is level 17's rule and not something a random draw may impose. */
+    TEST_ASSERT_GREATER_THAN_UINT32(0U, shortest);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(2U * difficulty.frightened_duration_ms, longest);
+
+    /* The nominal value is inside the range it was drawn around, so the jitter is a variation of the
+     * table rather than a replacement for it. */
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(difficulty.frightened_duration_ms, shortest);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(difficulty.frightened_duration_ms, longest);
+}
+
+/* The house is the one the owner asked for by name, and it counts dots rather than milliseconds. */
+void test_the_jitter_moves_how_many_dots_a_ghost_waits_for(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    prv_start_run_with_jitter();
+
+    const uint16_t shortest = g_game.ghost_dot_limit[GHOST_INKY];
+
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run_with_jitter();
+
+    const uint16_t longest = g_game.ghost_dot_limit[GHOST_INKY];
+
+    TEST_ASSERT_GREATER_THAN_UINT16(shortest, longest);
+    TEST_ASSERT_GREATER_THAN_UINT16(0U, shortest);
+
+    /* Pinky's limit is nothing — he leaves as a level begins — and the jitter must not hand him a
+     * wait, which is the one way it could change a rule rather than a timing. */
+    TEST_ASSERT_EQUAL_UINT16(0U, g_game.ghost_dot_limit[GHOST_PINKY]);
+}
+
+/* Switching it off has to actually switch it off, or the tests above this section are checking
+ * nothing at all. */
+void test_the_jitter_can_be_switched_off(void)
+{
+    difficulty_t difficulty;
+
+    difficulty_get(LEVEL_1, &difficulty);
+
+    rng_bsp_get_below_Stub(prv_return_the_top_of_the_span);
+    prv_start_run();
+    prv_eat_the_power_pellet();
+
+    TEST_ASSERT_EQUAL_UINT32(difficulty.frightened_duration_ms, g_game.frightened_remaining_ms);
+    TEST_ASSERT_EQUAL_UINT16(difficulty.inky_dot_limit, g_game.ghost_dot_limit[GHOST_INKY]);
 }
 
 void test_standing_still_cannot_keep_the_ghosts_locked_up(void)
@@ -1179,4 +1327,339 @@ void test_a_null_game_asserts(void)
     ASSERT_PROBE_EXPECT((void)game_get_lives(NULL), "in_game != NULL");
     ASSERT_PROBE_EXPECT((void)game_get_level(NULL), "in_game != NULL");
     ASSERT_PROBE_EXPECT((void)game_is_frightened_active(NULL), "in_game != NULL");
+}
+
+/* --- configurable rules, for the AI's training curriculum ---------------- */
+
+/* DEC-041. What these tests are really protecting is the *default*: the shipped firmware
+ * never sets a config, so the danger is not that the switches fail but that turning them on
+ * for training quietly changes the game everyone else plays. Hence the first test. */
+
+void test_the_default_rules_are_the_whole_game(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    TEST_ASSERT_TRUE(config.has_ghosts);
+    TEST_ASSERT_TRUE(config.has_power_pellets);
+}
+
+void test_starting_without_a_config_plays_under_the_defaults(void)
+{
+    game_init(&g_game);
+    game_start(&g_game, 7U);
+
+    TEST_ASSERT_TRUE(g_game.config.has_ghosts);
+    TEST_ASSERT_TRUE(g_game.config.has_power_pellets);
+}
+
+void test_an_idle_game_already_holds_the_defaults(void)
+{
+    /* game_init loads a level, and loading one reads the rules — so they must be set before
+     * that, not by the first game_start. */
+    game_init(&g_game);
+
+    TEST_ASSERT_TRUE(g_game.config.has_ghosts);
+    TEST_ASSERT_TRUE(g_game.config.has_power_pellets);
+}
+
+void test_a_run_without_power_pellets_has_none_but_the_same_pellet_count(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    game_init(&g_game);
+    game_start(&g_game, 21U);
+    const uint16_t with_power = playfield_get_total_pellet_count(&g_game.playfield);
+
+    config.has_power_pellets = false;
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Substituted, not removed: clearing the level still means the same thing. */
+    TEST_ASSERT_EQUAL_UINT16(with_power, playfield_get_total_pellet_count(&g_game.playfield));
+
+    uint16_t power_pellets = 0U;
+    for (uint8_t row = 0U; row < PLAYFIELD_HEIGHT; ++row)
+    {
+        for (uint8_t column = 0U; column < PLAYFIELD_WIDTH; ++column)
+        {
+            if (g_game.playfield.pellets[row][column] == PLAYFIELD_PELLET_POWER)
+            {
+                power_pellets++;
+            }
+        }
+    }
+
+    TEST_ASSERT_EQUAL_UINT16(0U, power_pellets);
+}
+
+void test_without_power_pellets_the_snapshot_reports_none(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_power_pellets = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+    game_get_state_message(&g_game, &g_probe_state);
+
+    for (uint16_t index = 0U; index < MSG_CELL_BITMAP_BYTES; ++index)
+    {
+        TEST_ASSERT_EQUAL_UINT8(0U, g_probe_state.is_power[index]);
+    }
+}
+
+void test_a_run_without_power_pellets_never_frightens_a_ghost(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_power_pellets = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Eat everything reachable by walking a while in each direction; whatever gets eaten,
+     * none of it may be an energizer. */
+    static const direction_e k_directions[] = {DIRECTION_WEST, DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_SOUTH};
+
+    for (uint16_t step = 0U; step < 4000U; ++step)
+    {
+        game_set_direction(&g_game, k_directions[step % 4U]);
+        game_tick(&g_game, 16U);
+        TEST_ASSERT_FALSE(game_is_frightened_active(&g_game));
+    }
+}
+
+void test_a_run_without_ghosts_keeps_them_still(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_ghosts = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    cell_t before[GHOST_COUNT];
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        before[index] = ghost_get_cell(&g_game.ghosts[index]);
+    }
+
+    for (uint16_t step = 0U; step < 2000U; ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(playfield_are_cells_equal(before[index], ghost_get_cell(&g_game.ghosts[index])));
+    }
+}
+
+void test_a_run_without_ghosts_costs_no_lives_even_on_a_shared_cell(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+    config.has_ghosts = false;
+
+    game_init(&g_game);
+    game_start_configured(&g_game, 21U, &config);
+
+    /* Placed straight onto Pacman, the way the collision tests above do it — under the real
+     * rules this is a caught Pacman on the next step. */
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index, pacman_get_cell(&g_game.pacman), false);
+    }
+
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_set_direction(&g_game, DIRECTION_WEST);
+    for (uint16_t step = 0U; step < 200U; ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(lives_before, game_get_lives(&g_game));
+    TEST_ASSERT_EQUAL_INT(GAME_STATE_RUNNING, game_get_state(&g_game));
+}
+
+void test_ghosts_still_hunt_under_the_default_rules(void)
+{
+    /* The counterweight to the two tests above: if `has_ghosts` were read the wrong way
+     * round, or defaulted to false, every one of them would still pass. */
+    game_init(&g_game);
+    game_start(&g_game, 21U);
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index, pacman_get_cell(&g_game.pacman), false);
+    }
+
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_set_direction(&g_game, DIRECTION_WEST);
+    for (uint16_t step = 0U; (step < 200U) && (game_get_lives(&g_game) == lives_before); ++step)
+    {
+        game_tick(&g_game, 16U);
+    }
+
+    TEST_ASSERT_LESS_THAN_UINT8(lives_before, game_get_lives(&g_game));
+}
+
+void test_a_null_config_asserts(void)
+{
+    game_config_t config;
+    game_get_default_config(&config);
+
+    ASSERT_PROBE_EXPECT(game_get_default_config(NULL), "out_config != NULL");
+    ASSERT_PROBE_EXPECT(game_start_configured(NULL, 1U, &config), "inout_game != NULL");
+    ASSERT_PROBE_EXPECT(game_start_configured(&g_game, 1U, NULL), "in_config != NULL");
+}
+
+/* --- the clone (game_clone) ------------------------------------------------
+ *
+ * The forward model a look-ahead player is built on. Three things have to hold, and only the
+ * first is obvious:
+ *
+ * - a clone starts out as the same game;
+ * - ticking the clone leaves the original untouched — **including its score**, which is the
+ *   failure a byte copy would produce and the reason the function exists at all;
+ * - a clone ticked the same way as the original reaches the same place, so a simulated future is
+ *   the future.
+ */
+
+/* Play a game far enough into a level that a clone has something to be wrong about: pellets
+ * eaten, ghosts out of the house, timers part-way through.
+ *
+ * The desired direction cycles through all four so Pacman takes whichever turn the corridor
+ * offers and keeps finding pellets. Steering him one way only was tried first and does not
+ * work — he ends up against a wall in a stretch he has already eaten, and a test asserting
+ * that a simulation *did* something then measures a Pacman standing still. */
+static void prv_play_a_while(game_t* inout_game, uint16_t in_steps)
+{
+    static const direction_e k_directions[] = {DIRECTION_WEST, DIRECTION_NORTH, DIRECTION_EAST, DIRECTION_SOUTH};
+
+    for (uint16_t step = 0U; step < in_steps; ++step)
+    {
+        game_set_direction(inout_game, k_directions[step % 4U]);
+        game_tick(inout_game, 16U);
+    }
+}
+
+void test_a_clone_starts_out_as_the_same_game(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    TEST_ASSERT_EQUAL_UINT32(game_get_score(&g_game), game_get_score(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_lives(&g_game), game_get_lives(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_level(&g_game), game_get_level(&clone));
+    TEST_ASSERT_EQUAL_UINT16(g_game.playfield.remaining_pellet_count, clone.playfield.remaining_pellet_count);
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(game_get_pacman_cell(&g_game), game_get_pacman_cell(&clone)));
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(
+            playfield_are_cells_equal(game_get_ghost_cell(&g_game, index), game_get_ghost_cell(&clone, index)));
+    }
+}
+
+/* The one a `memcpy` would fail. The clone's bus must be the clone's: eating a pellet in the
+ * simulation raises the simulation's score and nothing else. */
+void test_playing_a_clone_leaves_the_original_alone(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    const uint32_t score_before = game_get_score(&g_game);
+    const uint16_t pellets_before = g_game.playfield.remaining_pellet_count;
+    const cell_t cell_before = game_get_pacman_cell(&g_game);
+    const uint8_t lives_before = game_get_lives(&g_game);
+
+    game_clone(&clone, &g_game);
+
+    prv_play_a_while(&clone, 600U);
+
+    /* The simulation has to have *done* something, or this test would pass on a clone that
+     * never ran. */
+    TEST_ASSERT_GREATER_THAN_UINT32(score_before, game_get_score(&clone));
+
+    TEST_ASSERT_EQUAL_UINT32(score_before, game_get_score(&g_game));
+    TEST_ASSERT_EQUAL_UINT16(pellets_before, g_game.playfield.remaining_pellet_count);
+    TEST_ASSERT_EQUAL_UINT8(lives_before, game_get_lives(&g_game));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(cell_before, game_get_pacman_cell(&g_game)));
+}
+
+/* And the other way round: the original carrying on must not disturb a clone already taken. */
+void test_playing_the_original_leaves_a_clone_alone(void)
+{
+    static game_t clone;
+
+    game_start_on_normal_maze(&g_game);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    const uint32_t clone_score = game_get_score(&clone);
+    const cell_t clone_cell = game_get_pacman_cell(&clone);
+
+    prv_play_a_while(&g_game, 600U);
+
+    TEST_ASSERT_EQUAL_UINT32(clone_score, game_get_score(&clone));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(clone_cell, game_get_pacman_cell(&clone)));
+}
+
+/* What makes a simulated future worth anything: played the same way, it comes out the same
+ * place. The jitter is off, because with it on the clone draws its own timings — which is
+ * correct behaviour, and the reason this test says so explicitly. */
+void test_a_clone_played_the_same_way_reaches_the_same_place(void)
+{
+    static game_t clone;
+    game_config_t config;
+
+    game_get_default_config(&config);
+    config.has_timing_jitter = false;
+
+    game_start_on_map_configured(&g_game, game_get_maze(&g_game), &config);
+    prv_play_a_while(&g_game, 200U);
+
+    game_clone(&clone, &g_game);
+
+    for (uint16_t step = 0U; step < 400U; ++step)
+    {
+        const direction_e direction = (step % 3U) == 0U ? DIRECTION_NORTH : DIRECTION_WEST;
+
+        game_set_direction(&g_game, direction);
+        game_tick(&g_game, 16U);
+
+        game_set_direction(&clone, direction);
+        game_tick(&clone, 16U);
+    }
+
+    TEST_ASSERT_EQUAL_UINT32(game_get_score(&g_game), game_get_score(&clone));
+    TEST_ASSERT_EQUAL_UINT8(game_get_lives(&g_game), game_get_lives(&clone));
+    TEST_ASSERT_TRUE(playfield_are_cells_equal(game_get_pacman_cell(&g_game), game_get_pacman_cell(&clone)));
+
+    for (uint8_t index = 0U; index < GHOST_COUNT; ++index)
+    {
+        TEST_ASSERT_TRUE(
+            playfield_are_cells_equal(game_get_ghost_cell(&g_game, index), game_get_ghost_cell(&clone, index)));
+    }
+}
+
+void test_cloning_nothing_asserts(void)
+{
+    static game_t clone;
+
+    ASSERT_PROBE_EXPECT(game_clone(NULL, &g_game), "out_clone != NULL");
+    ASSERT_PROBE_EXPECT(game_clone(&clone, NULL), "in_source != NULL");
+    ASSERT_PROBE_EXPECT(game_clone(&g_game, &g_game), "out_clone != in_source");
 }

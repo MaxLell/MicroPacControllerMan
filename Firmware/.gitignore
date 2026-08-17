@@ -10,9 +10,34 @@ build-test/
 *.map
 *.list
 
+# The exception: one flashable image is committed, for a machine that has no cross-toolchain — see
+# Prebuilt/README.md, which also says why that is a copy and how it goes stale. Named files under a
+# directory that is not itself excluded, so the negation is actually reached.
+!Prebuilt/*.hex
+!Prebuilt/*.bin
+
 # CubeMX cache / generation metadata
 .mxproject
 
 # Python harness cache
 __pycache__/
 *.pyc
+
+# The trainer's virtual environment — recreated from Training/requirements.txt
+.venv/
+
+# What a training run leaves behind. `winner.json` is kept, because it is what the firmware's
+# weights were generated from; a checkpoint is a pickled population, only useful to resume the run
+# that wrote it, and a log is a log.
+Training/checkpoint-neat-*
+Training/train.log
+
+# What `campaign.py` leaves behind: one log and one winner per run — a working area, not a record,
+# since the winner that gets adopted is exported over `winner.json`.
+#
+# The **summary** is the exception and is committed. It is the evidence a decision was made on, it is
+# what M6 §14 quotes, and a campaign that ran on another machine can otherwise only be reported by
+# retyping its numbers. Written as `directory/*` with an exception rather than `directory/`, because
+# git does not descend into an excluded directory and the negation would never be reached.
+Training/campaign/*
+!Training/campaign/summary.md

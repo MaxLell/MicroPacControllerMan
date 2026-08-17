@@ -26,6 +26,7 @@ settings, transfer budgets, tool choices, and the questions that milestone must 
 
 - [M2 Board Bring-Up](../Design/M2-Board-Bring-Up.md) — display and joystick on the X-NUCLEO-GFX01M2.
 - [M4 Random Mazes](../Design/M4-Random-Mazes.md) — which generator, why that one, how the port was proved to be the same generator, and how a maze nobody drew gets drawn.
+- [M6 Pacman AI](../Design/M6-Pacman-AI.md) — why neuroevolution rather than gradient RL, what the agent sees and does in Pacman's own frame, what training costs, and the two traps between host and target inference. *(Design, not as-built — nothing is implemented yet.)*
 
 ### See also (not part of the spec set)
 

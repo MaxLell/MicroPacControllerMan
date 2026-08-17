@@ -15,6 +15,7 @@
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
+#include "rng_bsp.h"
 #include "shell.h"
 #include "spi_bsp.h"
 #include "sw_timer.h"
@@ -25,7 +26,27 @@
  * app_main - private
  * ========================================================================= */
 
-#define APP_MAIN_BOOT_BANNER "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
+#define APP_MAIN_BOOT_BANNER     "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
+
+/*! \brief The help texts the console's own commands are registered with.
+ *
+ * Named rather than written inline **so that they can be measured**. `cli_binding_t::help` is a
+ * `char[CLI_MAX_HELPER_STRING_LENGTH]` and the initialiser copies into it, so a text that does not
+ * fit is truncated to an array with **no terminator left in it** — after which `help` prints this
+ * command's text and then keeps reading into the next binding's name. The compiler says so and
+ * nothing else does, which is how `select` shipped five characters over.
+ *
+ * The assertions below are the fix rather than the shortening: a build has to fail on the next one.
+ */
+#define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
+#define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
+#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up|down|left|right' moves it"
+#define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
+
+_Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_START) <= CLI_MAX_HELPER_STRING_LENGTH, "'start' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_SELECT) <= CLI_MAX_HELPER_STRING_LENGTH, "'select' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_BUTTON) <= CLI_MAX_HELPER_STRING_LENGTH, "'button' help is truncated");
 
 static void prv_on_systick(void)
 {
@@ -61,12 +82,19 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         return CLI_OK_STATUS;
     }
 
-    for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+    /* All three tables, each under the name of the game it belongs to (FR-041). Labelled rather than
+     * numbered, because "table 2" is a number only this file knows the meaning of. */
+    for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        cli_print("  %u. %lu", (unsigned)(place + 1U), (unsigned long)high_score_get(place));
+        cli_print("%s:", shell_get_mode_name((shell_mode_e)table));
+
+        for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
+        {
+            cli_print("  %u. %lu", (unsigned)(place + 1U), (unsigned long)high_score_get(table, place));
+        }
     }
 
-    cli_print("'highscore reset' clears them.");
+    cli_print("'highscore reset' clears all three.");
 
     return CLI_OK_STATUS;
 }
@@ -85,6 +113,78 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
 
     shell_press_start();
 
+    /* Said out loud when nothing happened, because the one way pressing start can fail is worth a
+     * sentence: the Pac-Man AI game refuses to begin at all if the generated weight table cannot be
+     * evaluated, rather than starting a game that plays itself with nobody playing it. */
+    if ((shell_get_screen() == SHELL_SCREEN_MENU) && (shell_get_selected_mode() == SHELL_MODE_AI))
+    {
+        cli_print("the Pac-Man AI game could not start: the weight table cannot be evaluated");
+
+        return CLI_FAIL_STATUS;
+    }
+
+    return CLI_OK_STATUS;
+}
+
+/* `select` shows what the menu is on; `select up`/`down` moves between games and
+ * `select left`/`right` picks which agent the AI game uses.
+ *
+ * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
+ * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
+ * score — be walked from `run_ott.py` without anybody at the board (FR-040, VT-INT-011). */
+static int prv_select_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_context;
+
+    if (in_argument_count > 1)
+    {
+        if (strcmp(in_arguments[1], "up") == 0)
+        {
+            shell_move_selection(DIRECTION_NORTH);
+        }
+        else if (strcmp(in_arguments[1], "down") == 0)
+        {
+            shell_move_selection(DIRECTION_SOUTH);
+        }
+        else if (strcmp(in_arguments[1], "left") == 0)
+        {
+            shell_move_selection(DIRECTION_WEST);
+        }
+        else if (strcmp(in_arguments[1], "right") == 0)
+        {
+            shell_move_selection(DIRECTION_EAST);
+        }
+        else
+        {
+            cli_print("'select up', 'down', 'left' or 'right'");
+
+            return CLI_FAIL_STATUS;
+        }
+    }
+
+    /* The agent's name goes with it, so a test can read back what left and right did rather than
+     * having to trust that they did anything. */
+    static const char* const k_ai_names[] = {"none", "neat", "search"};
+
+    cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
+    cli_print("agent: %s", k_ai_names[shell_get_selected_ai()]);
+
+    return CLI_OK_STATUS;
+}
+
+/* `button` presses the board button from the console.
+ *
+ * The counterpart to `select`, and a device rather than a decision for the same reason: it presses,
+ * and the shell decides what pressing means on the screen that is up (FR-003/030/043). It is what
+ * lets the endless mode be switched — and therefore checked — without a finger on B1. */
+static int prv_button_command(int in_argument_count, char* in_arguments[], void* in_context)
+{
+    (void)in_argument_count;
+    (void)in_arguments;
+    (void)in_context;
+
+    shell_press_user_button();
+
     return CLI_OK_STATUS;
 }
 
@@ -92,6 +192,13 @@ static void prv_init_platform(void)
 {
     systick_bsp_init();
     dio_bsp_init();
+
+    /* Before anything that plays: the game draws its timing jitter when a level loads (FR-044), and
+     * the maze seed of a run comes from here too. A generator that failed to come up hands out zero,
+     * which the game reads as "no jitter" — a playable game rather than a refusal. Whether it came
+     * up is reported after the console exists, which is not yet. */
+    (void)rng_bsp_init();
+
     console_init();
     flash_bsp_init();
     spi_bsp_init();
@@ -132,12 +239,48 @@ static void prv_poll_input(void)
         }
     }
 
+    /* The same two keys again, and deliberately read the other way: the menu's selection moves once
+     * per *press* (FR-040), where the game wants the level of a held stick. Taking the latch costs
+     * the game nothing, because the game never looks at it. */
+    if (joystick_take_press(JOYSTICK_KEY_NORTH))
+    {
+        shell_move_selection(DIRECTION_NORTH);
+    }
+
+    if (joystick_take_press(JOYSTICK_KEY_SOUTH))
+    {
+        shell_move_selection(DIRECTION_SOUTH);
+    }
+
+    /* Sideways picks which agent the AI game uses. Taken as an edge like the other two, so holding
+     * the stick over does not flick between the two agents once a frame. */
+    if (joystick_take_press(JOYSTICK_KEY_WEST))
+    {
+        shell_move_selection(DIRECTION_WEST);
+    }
+
+    if (joystick_take_press(JOYSTICK_KEY_EAST))
+    {
+        shell_move_selection(DIRECTION_EAST);
+    }
+
     /* Start comes from either key, and both are taken as an *edge* so a thumb resting on
      * one does not keep pressing it. FR-003 names the Nucleo's own button; the centre of
      * the stick is where a player's hand already is, and having both costs one line. */
-    if (joystick_take_press(JOYSTICK_KEY_CENTER) || user_button_take_press())
+    if (joystick_take_press(JOYSTICK_KEY_CENTER))
     {
         shell_press_start();
+    }
+
+    /* The board button means one of four things and the shell works out which (FR-003/030/043): it
+     * knows the screen and the game, and this file knows neither. It used to be a fall-through here,
+     * which was one condition too many the moment a third meaning arrived.
+     *
+     * The stick's centre keeps meaning start only — a player reaching for it mid-run is asking to
+     * play, not to stop playing. */
+    if (user_button_take_press())
+    {
+        shell_press_user_button();
     }
 }
 
@@ -156,10 +299,19 @@ static void prv_report_progress(void)
     static shell_screen_e g_reported_screen = SHELL_SCREEN_GAME;
     static uint8_t g_reported_level;
     static uint8_t g_reported_lives;
+    static bool g_reported_infinite;
 
     const shell_screen_e screen = shell_get_screen();
     const uint8_t level = game_session_get_level();
     const uint8_t lives = game_session_get_lives();
+    const bool is_infinite = shell_is_infinite();
+
+    if (is_infinite != g_reported_infinite)
+    {
+        g_reported_infinite = is_infinite;
+
+        cli_print("endless mode %s", is_infinite ? "on - a finished run starts the next one" : "off");
+    }
 
     if ((screen == g_reported_screen) && (level == g_reported_level) && (lives == g_reported_lives))
     {
@@ -173,7 +325,8 @@ static void prv_report_progress(void)
 
     if (screen == SHELL_SCREEN_GAME)
     {
-        cli_print("  level %u - %u lives, %lu points", (unsigned)level, (unsigned)lives,
+        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(shell_get_selected_mode()),
+                  (unsigned long)shell_get_run_count(), (unsigned)level, (unsigned)lives,
                   (unsigned long)game_session_get_score());
     }
     else if (screen == SHELL_SCREEN_SCORE)
@@ -224,18 +377,31 @@ void app_main(void)
     ott_init();
 
     {
-        cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL,
-                                            "Show the three best scores; 'highscore reset' clears them"};
+        cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL, APP_MAIN_HELP_HIGH_SCORE};
 
-        cli_binding_t start_binding = {"start", prv_start_command, NULL, "Press start: begins a run from the menu"};
+        cli_binding_t start_binding = {"start", prv_start_command, NULL, APP_MAIN_HELP_START};
+
+        cli_binding_t select_binding = {"select", prv_select_command, NULL, APP_MAIN_HELP_SELECT};
+
+        cli_binding_t button_binding = {"button", prv_button_command, NULL, APP_MAIN_HELP_BUTTON};
 
         cli_register(&high_score_binding);
         cli_register(&start_binding);
+        cli_register(&select_binding);
+        cli_register(&button_binding);
     }
 
     high_score_init();
 
     cli_print(APP_MAIN_BOOT_BANNER);
+
+    if (!rng_bsp_is_available())
+    {
+        /* Said rather than swallowed: the game is still playable, but every run of a level would be
+         * paced identically and the ghosts would leave the house on the same dot every time — which
+         * looks like a design and is a fault. */
+        cli_print("the hardware RNG did not come up: timings will not vary (FR-044/FR-045)");
+    }
 
     if (ott_execute_pending())
     {

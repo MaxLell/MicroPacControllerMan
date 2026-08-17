@@ -69,14 +69,85 @@ void game_session_start(uint32_t in_maze_seed);
  */
 void game_session_start_on_map(const playfield_map_t* in_map);
 
+/*! \brief Begin a run on the normal maze — the arcade's own layout, every level (FR-040).
+ *
+ * One of the two games the menu offers, and the only one the AI may be handed control in. Takes no
+ * map on purpose: see #game_start_on_normal_maze for why nobody should be holding one.
+ */
+void game_session_start_on_normal_maze(void);
+
 /*! \brief Ask for a direction.
  *
  * A request rather than a move: the turn happens at the first cell where it becomes
  * possible (§10.1), which is why a held stick has to keep asking.
  *
+ * **Ignored while the AI is playing** (FR-031). Exclusivity lives here rather than in each of the
+ * three callers, because this is the one door a direction comes through — so it holds however many
+ * devices are wired to it.
+ *
  * \param[in]       in_direction: the way the player is pushing
  */
 void game_session_set_direction(direction_e in_direction);
+
+/*! \brief Who is steering Pacman.
+ *
+ * Two of these are machines and they are *different* machines, which is the whole reason this is
+ * an enumeration and not the flag it replaced. The trained network answers from what it can see at
+ * the moment it is asked; the search answers from what actually happens when the run is played
+ * forward. Being able to swap between them inside one run is what makes them comparable — the same
+ * maze, the same ghosts, the same seed.
+ */
+typedef enum
+{
+    GAME_SESSION_PLAYER_HUMAN = 0, /*!< The joystick (FR-030)                                    */
+    GAME_SESSION_PLAYER_NETWORK,   /*!< The trained weights `pacman_ai` carries (FR-038)         */
+    GAME_SESSION_PLAYER_LOOKAHEAD  /*!< The search of `pacman_lookahead` (DEC-050)               */
+} game_session_player_e;
+
+/*! \brief Hand Pacman to one of the machines, or take him back (FR-030).
+ *
+ * Refused, and reported as refused, when the player asked for cannot play: the generated weight
+ * table may fail to evaluate, and the search needs a run in progress to clone. Better a run that
+ * stays under the player's control than one where the stick is dead and nothing plays.
+ *
+ * The choice is the *run's*, so it survives a level change and a lost life (FR-033) — neither of
+ * those goes near it. #game_session_start resets it, which is what makes every new run start under
+ * player control.
+ *
+ * \param[in]       in_player: who should be steering
+ * \return          `true` when control is now where the caller asked for it
+ */
+bool game_session_set_player(game_session_player_e in_player);
+
+/*! \brief Who is steering Pacman right now. */
+game_session_player_e game_session_get_player(void);
+
+/*! \brief Hand Pacman to the trained agent, or take him back.
+ *
+ * #game_session_set_player said as a yes or no, kept because most callers only care whether a
+ * *person* is playing — FR-034's high-score lockout, the joystick door, the on-target tests. It
+ * cannot select the search; that needs the enumeration.
+ *
+ * \param[in]       in_is_enabled: `true` to let the trained agent play
+ * \return          `true` when control is now where the caller asked for it
+ */
+bool game_session_set_ai_enabled(bool in_is_enabled);
+
+/*! \brief Whether *any* machine is playing right now, network or search.
+ *
+ * Deliberately not "is the network playing". Everything that reads this is asking the FR-034
+ * question — did a person earn this score — and a search earns it no more than a network does. */
+bool game_session_is_ai_enabled(void);
+
+/*! \brief Tell the frame whether the endless mode is on, so the HUD can say so (FR-043).
+ *
+ * The session has no opinion about the loop — it does not restart anything — and passes this to the
+ * view. Whether a finished run is followed by another is the shell's, because the shell is what
+ * knows about screens.
+ *
+ * \param[in]       in_is_infinite: `true` while a finished run will be followed by another
+ */
+void game_session_set_infinite(bool in_is_infinite);
 
 /*! \brief Advance and draw the game if the frame is due.
  *
@@ -104,5 +175,16 @@ uint8_t game_session_get_lives(void);
 
 /*! \brief The level being played, counting from 1. */
 uint8_t game_session_get_level(void);
+
+/*! \brief What the run currently looks like — the same message the view is drawn from.
+ *
+ * For a caller that has to *report* or *record* the run rather than draw it: the on-target AI test
+ * says where Pacman is and which way the agent sent him, and a recorded state is what FR-039's
+ * equivalence check replays. The four scalar getters above answer the common questions more
+ * cheaply; this is the whole picture.
+ *
+ * \param[out]      out_state: filled in, must not be `NULL`
+ */
+void game_session_get_state_message(msg_game_state_t* out_state);
 
 #endif /* GAME_SESSION_H */
