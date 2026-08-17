@@ -26,7 +26,27 @@
  * app_main - private
  * ========================================================================= */
 
-#define APP_MAIN_BOOT_BANNER "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
+#define APP_MAIN_BOOT_BANNER     "MicroPacControllerMan booted. Type 'ott' for tests, 'reset' to restart the game."
+
+/*! \brief The help texts the console's own commands are registered with.
+ *
+ * Named rather than written inline **so that they can be measured**. `cli_binding_t::help` is a
+ * `char[CLI_MAX_HELPER_STRING_LENGTH]` and the initialiser copies into it, so a text that does not
+ * fit is truncated to an array with **no terminator left in it** — after which `help` prints this
+ * command's text and then keeps reading into the next binding's name. The compiler says so and
+ * nothing else does, which is how `select` shipped five characters over.
+ *
+ * The assertions below are the fix rather than the shortening: a build has to fail on the next one.
+ */
+#define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
+#define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
+#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up|down|left|right' moves it"
+#define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
+
+_Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_START) <= CLI_MAX_HELPER_STRING_LENGTH, "'start' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_SELECT) <= CLI_MAX_HELPER_STRING_LENGTH, "'select' help is truncated");
+_Static_assert(sizeof(APP_MAIN_HELP_BUTTON) <= CLI_MAX_HELPER_STRING_LENGTH, "'button' help is truncated");
 
 static void prv_on_systick(void)
 {
@@ -357,16 +377,13 @@ void app_main(void)
     ott_init();
 
     {
-        cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL,
-                                            "Show the three best scores; 'highscore reset' clears them"};
+        cli_binding_t high_score_binding = {"highscore", prv_high_score_command, NULL, APP_MAIN_HELP_HIGH_SCORE};
 
-        cli_binding_t start_binding = {"start", prv_start_command, NULL, "Press start: begins a run from the menu"};
+        cli_binding_t start_binding = {"start", prv_start_command, NULL, APP_MAIN_HELP_START};
 
-        cli_binding_t select_binding = {"select", prv_select_command, NULL,
-                                        "Show the menu's selection; 'select up'/'down'/'left'/'right' moves it"};
+        cli_binding_t select_binding = {"select", prv_select_command, NULL, APP_MAIN_HELP_SELECT};
 
-        cli_binding_t button_binding = {"button", prv_button_command, NULL,
-                                        "Press the board button: start, hand over to the AI, or loop"};
+        cli_binding_t button_binding = {"button", prv_button_command, NULL, APP_MAIN_HELP_BUTTON};
 
         cli_register(&high_score_binding);
         cli_register(&start_binding);

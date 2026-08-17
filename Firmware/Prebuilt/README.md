@@ -21,8 +21,8 @@ rather than assuming.
 | flash | 120,040 B of 504 kB — 23.3 % |
 | RAM | 235,736 B of 256 kB — 89.9 %, plus 12,008 B of SRAM4 — 73.3 % |
 | weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — **3,531 against FR-037's 4,600** |
-| `pacman.hex` | sha256 `9ec0492a9c227ca668f8a2d1da7c1b8822c02d9c1005ecaa40ad34d4c566d30f` |
-| `pacman.bin` | sha256 `8426b7d63ca1d73914c99b8e2c9dc9ff64547dd0993f926dc261102ceb17af3d` |
+| `pacman.hex` | sha256 `2aa9a944400a690625fbd7c4bf1094163c00f2b13cf08528d6e85638c2df0dd4` |
+| `pacman.bin` | sha256 `b2d0a569e087752cb8eb656ae33ae5882786a428003607e1ef57f2cfc61c67e8` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and

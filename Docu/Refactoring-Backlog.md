@@ -349,3 +349,17 @@ argument that the frame cost is unchanged is a host measurement.
 draws, not 9,553, because the second lever buys more ticks than the three-times-the-budget row that
 figure came from. The board was re-run and `ott lookahead_cost` now measures a *frame* rather than
 a decision, which is the thing that has to fit once a decision spans ten of them.
+
+### RF-020 — done, 2026-08-17
+
+**A console help text was silently truncated to an unterminated string, and the build's one warning
+said so.** `cli_binding_t::help` is a `char[CLI_MAX_HELPER_STRING_LENGTH]` and the initialiser copies
+into it, so `select`'s text — five characters over — left an array with no terminator in it, after
+which `help` printed that entry and kept reading into the next binding's name.
+
+Nothing else would have caught it. The build has always been described as warning-free and had one,
+which is the more useful lesson here: a warning nobody reads is a test nobody runs.
+
+The shortening is not the fix; the four `_Static_assert`s beside the texts in `app_main.c` are, so a
+build fails on the next one. Verified on the board: `help` prints all seven commands with each text
+ending where it should.
