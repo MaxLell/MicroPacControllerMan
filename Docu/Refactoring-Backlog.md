@@ -316,3 +316,27 @@ state message built once per tick to answer "did Pacman change cell" — is fixe
 Anyone who does pick this up should start with `perf record` on a single-worker run rather than with
 another microbenchmark; this entry exists because the first microbenchmark was measured against the
 unoptimised library and overstated the state message by a factor of five.
+
+### RF-019
+
+**The look-ahead search spends a sixth of its budget watching a wall, and it is not deferred
+because it is small — it is waiting on a decision the owner has not taken yet.**
+
+`prv_walk_to_next_decision` sets a direction and lets the game steer. When that direction runs into
+a wall — a corridor that bends, a branch chosen a moment too early — Pacman stops, and the walk has
+no way to notice except to wait out `PACMAN_LOOKAHEAD_MAX_CELL_TICKS`, **32 ticks**, and give up.
+Measured over FR-037's twenty draws: **17.8 % of every tick the search simulates is spent on a
+Pacman who is already stuck**, and 13 % of all legs end that way.
+
+He is stuck the instant neither his queued turn nor his facing is open, which is exactly the
+condition `pacman_advance` returns `false` on. Ending the leg there instead of 32 ticks later is
+worth **+41 % of score at an unchanged frame cost** — 3,132 to 4,432 on the host — because the
+budget still binds and the extra legs are clones at 2 % of a decision. It needs a way to read
+Pacman's queued direction, which today only `pacman.c` can see.
+
+Why it is written down rather than done: it is one of two levers on the same problem
+([M6 §15.5](Design/M6-Pacman-AI.md)), the other being to let a decision think across more than one
+frame, and the two are worth **9,553** together. Which of them to build, and whether to build them
+at all, is [DEC-051](PrePlanning/11-Decisions-and-As-Built.md)'s question to reopen rather than
+this file's to answer. Anything picked up here needs `ott lookahead_cost` re-run on the board: the
+argument that the frame cost is unchanged is a host measurement.

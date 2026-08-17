@@ -235,7 +235,7 @@ silently working around a wart.
     answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
 
-- **A look-ahead player is in the game, and it scores 7,076 (DEC-050/051).** `App/pacman_lookahead`
+- **A look-ahead player is in the game, and as shipped it scores 3,132 (DEC-050/051).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -248,9 +248,28 @@ silently working around a wart.
     target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* as one of the
     two agents the `PAC-MAN AI` game can be played by, which is not the same as shipping it as the
     agent FR-038 asks for.
-  - **What it settles:** 7,076 over FR-037's own twenty draws, against 4,600 asked for, 2,706 from
-    the shipped trained agent and 518 from a random policy; best run 16,560, reaching level 4. So
-    the score is reachable and **the gap is the agent's, not the game's**.
+  - **What it settles, and the correction that had to be made to it** (M6 §15.4/§15.5): the 7,076
+    this line used to claim is real but belongs to a **5,000-tick** search, measured before the
+    board cut the allowance to 500 and left standing afterwards. **What ships scores 3,132** over
+    FR-037's own twenty draws — *below* the 4,600 asked for, though still above the trained agent's
+    2,706 and a random policy's 518. The conclusion survives: given the time, the same code reaches
+    7,076 with a best run of 16,560 at level 4, so **the score is reachable and the gap is the
+    agent's, not the game's** — it now also has a price, about **three times** the thinking a frame
+    pays for.
+  - **It dithers, and the dithering is a symptom.** 7.0 % of decisions walk back to the cell of two
+    decisions ago. Outside a 1.63-junction horizon every branch evaluates alike — 15.2 % of
+    multi-branch decisions are exact ties — and nothing in the evaluation pulls toward food it
+    cannot already see. Suppressing the oscillation entirely is measured and **costs score**
+    (2,945), as do a coarser simulation step and pruning the reversal branch: they buy depth and
+    lose fidelity. The only lever that works is **more simulated ticks of the real game**, and the
+    frames to spend them in exist — 51.5 per junction-to-junction leg, worst 18, against the one
+    frame a decision uses today.
+  - **A sixth of the budget is spent watching a wall (RF-019).** A leg whose direction runs into a
+    wall has no way to notice except to wait out the 32-tick backstop, so **17.8 % of every
+    simulated tick is a Pacman who is already stuck** — he is stuck the instant neither his queued
+    turn nor his facing is open, which is `pacman_advance`'s own condition. Ending the leg there is
+    worth **+41 % of score at an unchanged frame cost** (3,132 → 4,432), and **9,553** together
+    with three times the budget. Written down, not done: which lever to pull is the owner's call.
   - **DEC-049's arithmetic was six times too kind** and the board said so: a simulated cell costs
     **250 us**, not the 40 the four greedy ghost steps suggested, because a cell is seven
     `game_tick` calls of Pacman, four ghosts, the timers and the bus. A frame's spare 13 ms buys

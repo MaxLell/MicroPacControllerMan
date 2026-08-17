@@ -66,15 +66,22 @@ the gap between `1UP` and `LEVEL`:
 
 ```
    1UP   3531        NEAT        LEVEL 1
-   1UP   7076        SEARCH      LEVEL 4
+   1UP   3132        SEARCH      LEVEL 1
 ```
 
 so there is nothing to remember. **B1 in that game still means the endless mode** (`LOOP` on the
 lives row), unchanged.
 
-Expect `SEARCH` to look obviously better. It averages **7,076** over FR-037's twenty draws against
-`NEAT`'s **3,531**, and it reached level 4 where the network clears level 1. It is also *slower to
-decide* — about 10 ms of each frame — which you will not see, because a frame has 20.
+Expect `SEARCH` to look a little better and to **dither**. It averages **3,132** over FR-037's
+twenty draws against `NEAT`'s **3,531** on its own measurement — the two are close, and neither
+meets the 4,600 the requirement asks for. It is also *slower to decide* — about 10 ms of each frame
+— which you will not see, because a frame has 20.
+
+**The dithering is worth watching for**, because it is the honest symptom of a real limit: about
+one decision in fourteen walks back the way it came, and it does that because it can only see 1.63
+junctions ahead and past that every direction looks alike. Given ten times the thinking time the
+same code averages 7,076 and reaches level 4 — but ten times does not fit in a frame.
+[M6 §15.5](../../Docu/Design/M6-Pacman-AI.md) has the measurements.
 
 `NORMAL MAZE` is the game you play, and there **B1 hands Pac-Man to the trained network and takes
 him back**, exactly as before. The search is deliberately not offered there. Any run you touch B1

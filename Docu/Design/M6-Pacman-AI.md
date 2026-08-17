@@ -823,12 +823,16 @@ partial look, then to any legal move, rather than answering "no direction" to a 
 |---|---|
 | depth ceiling | 3 junctions |
 | budget | 500 simulated ticks |
-| **look-ahead actually reached** | **2 junctions** |
+| **look-ahead actually reached** | **1.63 junctions on average** — the ceiling is reached on no ordinary decision |
 | decision cost | **9.7 ms mean, 11 ms worst**, of 13 spare |
 | a tick | 19 us |
 | RAM | 45 kB — one 15 kB `game_t` per level of depth |
 
-RAM is the ceiling, not time. A fourth junction is a fourth clone and the target has about 26 kB
+RAM is the ceiling *of the depth constant*, and §15.5 is the correction to what that sentence used
+to imply: the depth constant is not what binds. **Time is.** At 500 ticks the search finishes its
+second deepening on about six decisions in ten and never gets to try the third, so the fourth clone
+the next paragraph counts the cost of would go unused. A fourth junction is a fourth clone and the
+target has about 26 kB
 left as it is; the run went from 71.6 % to **89.9 %** the moment the on-target test called the
 module. Until something calls it the linker drops it whole, which is why the first target build
 after adding it reported no change at all — worth knowing before reading a size report as evidence.
@@ -836,31 +840,179 @@ after adding it reported no change at all — worth knowing before reading a siz
 
 ### 15.4 What it scores, and what that settles
 
-Two junctions of look-ahead, on FR-037's own maze and FR-037's own twenty draws (seeds 1000..1019):
+On FR-037's own maze and FR-037's own twenty draws (seeds 1000..1019), **and at two budgets, because
+the two answer different questions**:
 
 | | mean over 20 runs | best | worst |
 |---|---|---|---|
 | uniform random | 518 | — | — |
 | the shipped trained agent, against these ghosts | 2,706 | — | — |
-| **`pacman_lookahead`** | **7,076** | **16,560, level 4** | 2,640 |
+| **`pacman_lookahead` as the board runs it** — depth 3, **500 ticks** | **3,132** | 4,150, level 1 | 2,140 |
+| **`pacman_lookahead` given all the time it wants** — depth 3, **5,000 ticks** | **7,076** | **16,560, level 4** | 2,640 |
 | FR-037 asks for | 4,600 | | |
 
-**It clears the threshold by half again, and it more than doubles the trained agent.** That is the
-thing §2 kept it in reserve to answer, and the answer is worth more than the score itself: *the
-gap is the agent's, not the game's*. Before this, 4,600 on the jittered game was a number nobody had
-reached and could reasonably have been suspected of being out of reach — the jitter took FR-037
-back in §14.3 and no trained agent has met it since. It is reachable. What is missing is the
-policy, not the possibility.
+**This table used to have one row where it now has two, and the row it had was the second one.** The
+7,076 was measured before §15.2's budget existed — with the search allowed to run to its depth
+ceiling — and it was left standing when the board cut the allowance to 500 ticks. It is a real
+figure and it is reproducible to the point, best run and worst run; it is simply **not the figure
+for the firmware that ships**. What ships scores **3,132**, which is *below* FR-037's threshold
+rather than half again above it. §15.5 is where that came from and what it costs to close.
 
-**It does not satisfy FR-037**, and it is not meant to: FR-038 asks for trained weights evaluated on
-the target, and a search is not weights. It is the upper mark, and it is now a measured one.
+The conclusion the section was written for **survives the correction, and is the reason it matters
+that the two rows are now separate**: 4,600 on the jittered game is demonstrably reachable by a
+policy that plays this game under these rules — the jitter took FR-037 back in §14.3 and no trained
+agent has met it since. *The gap is the agent's, not the game's.* What has changed is that reaching
+it is now known to cost **about three times the thinking a frame currently pays for**, which is a
+statement about the budget and not about the maze.
 
-Two honest qualifications. The figure comes from a purpose-written host harness playing whole runs,
-not from `evaluate.py`, which knows how to drive a network and not a search — so it has not been
-through VT-UNIT-010's own arithmetic. And it is the *host* build; the target runs the same code, and
-`ott lookahead_cost` shows the decisions costing 11 ms of a 13 ms allowance there, but no whole run
-has been played out on the board.
+**Neither row satisfies FR-037**, and neither is meant to: FR-038 asks for trained weights evaluated
+on the target, and a search is not weights. The unconstrained row is the upper mark, and it is a
+measured one.
 
-The remaining use is the other one §2 named: a teacher. An agent cloned from this player's choices
-starts from a policy that scores 7,000 rather than from noise, and that is a different training
-problem from the one §14 has been losing.
+Two honest qualifications, unchanged. Both figures come from a purpose-written host harness playing
+whole runs, not from `evaluate.py`, which knows how to drive a network and not a search — so neither
+has been through VT-UNIT-010's own arithmetic. And they are the *host* build; the target runs the
+same code, and `ott lookahead_cost` shows the decisions costing 11 ms of a 13 ms allowance there,
+but no whole run has been played out on the board.
+
+The remaining use is the other one §2 named: a teacher. An agent cloned from the unconstrained
+player's choices starts from a policy that scores 7,000 rather than from noise — and the teacher may
+think for as long as it likes, because it is not inside a frame.
+
+### 15.5 The horizon, and why the player dithers
+
+The player visibly **oscillates**: it walks a cell forward, a cell back, forward again, and does
+that until a ghost arrives. The owner saw it on the board before any of this was measured. What
+follows is what the host says about it, over the same twenty draws.
+
+#### What the dithering is
+
+**7.0 % of all decisions return to the cell of two decisions ago**, and **26.7 %** revisit a cell
+from the last eight. It is not a rare glitch; it is a seventh of the player's decisions.
+
+Three things produce it, and only the first is worth fixing.
+
+1. **Outside the horizon every branch is worth exactly the same.** `prv_evaluate` knows three terms:
+   points gained, lives lost, and the squared distance to the nearest killing ghost — **capped at
+   64**. If no pellet lies inside the horizon and no ghost is inside eight cells, every branch
+   evaluates to `0 - 0 + 64`. Measured: **15.2 % of all multi-branch decisions are exact ties.** The
+   winner is then whichever `g_branch_order` names first, and *that* flips as soon as Pacman stands
+   one cell further on. **Nothing in the evaluation pulls towards food it cannot already see** — the
+   function is blind past the horizon, and at 500 ticks the horizon is 1.63 junctions.
+2. **The value is a delta from a root that moves every cell.** There is no memory between decisions
+   and no hysteresis, so each cell re-argues the question from nothing.
+3. **Reversal is a legal branch at every level**, so "one leg out and straight back" sits in the
+   tree as a plan with a good score. The danger is pushed past the horizon instead of avoided —
+   the textbook horizon effect, and then repeated in the other direction one cell later.
+
+#### The dithering is the symptom, not the illness
+
+Every cheap way of suppressing it was measured, at the shipped budget:
+
+| | mean score | A→B→A |
+|---|---|---|
+| as it ships | 3,132 | 7.0 % |
+| break ties by carrying straight on (current direction first, reversal last) | 3,463 | 5.3 % |
+| never expand the reversal branch unless nothing else is open | 2,982 | 3.8 % |
+| both | 2,945 | **0.0 %** |
+| a straight-line pull toward the nearest uneaten pellet, plus carrying straight on | 3,556 | 5.9 % |
+
+**The dithering can be removed completely and the player gets *worse*.** Whatever it looks like, the
+oscillation is the search honestly reporting that it cannot tell the branches apart. Fixing the
+report does not give it anything to say.
+
+#### What the budget actually buys
+
+The same twenty draws, depth ceiling 3 throughout, varying only the tick budget:
+
+| budget | 500 | 750 | 1,000 | 1,500 | 2,000 | 3,000 | 4,000 | 5,000 |
+|---|---|---|---|---|---|---|---|---|
+| mean score | 3,132 | 3,271 | 3,624 | **5,399** | 5,872 | 5,674 | 6,714 | **7,076** |
+| junctions reached | 1.63 | | | 2.55 | 2.81 | | | 3.00 |
+
+**FR-037's 4,600 is crossed between 1,000 and 1,500 ticks** — about **three times** what a frame
+pays for now — and the curve saturates at 5,000, where the depth ceiling of 3 is reached on every
+decision. So the whole useful range is 500 → 5,000, a factor of ten, and it is bought with time
+alone.
+
+Two ways of buying horizon **without** more time were measured, and **neither works** — they buy
+depth by simulating a game nobody plays. (A third does work, and it is not on this list because it
+buys nothing at all: it stops *wasting* what is already paid for. That is the section after next.)
+
+| | junctions reached | mean score |
+|---|---|---|
+| as it ships | 1.63 | 3,132 |
+| a 32 ms simulation step instead of 16 | 2.03 | 3,092 |
+| a 48 ms step | 2.19 | 3,471 |
+| never expanding the reversal branch | 2.11 | 2,982 |
+| both | 2.46 | 3,203 |
+| *for comparison:* three times the budget | 2.55 | **5,399** |
+
+Read the last two rows together. Cheap tricks reach **the same depth** as three times the budget and
+score **two thousand points less**. Depth is not the quantity that matters — *simulated ticks of the
+real game* is. A coarser step simulates a game nobody plays and a pruned tree hides options that
+exist, and both pay for their depth in the fidelity the whole module was built to have.
+
+#### Where the time goes
+
+Profiled on the host, one decision at the shipped budget:
+
+| | share |
+|---|---|
+| `game_tick` — 451 ns each, 500 of them | **90 %** |
+| `game_clone` — 423 ns each, one per branch | 2 % |
+| everything else | 8 % |
+
+No overhead to reclaim *around* the ticks, then. But a fifth of the ticks themselves buy nothing.
+
+#### **A sixth of the budget is spent watching a wall**
+
+`prv_walk_to_next_decision` sets a direction and lets the game steer. When that direction runs into
+a wall — a corridor that bends, a branch chosen a moment too early — Pacman stops, and the walk has
+no way to know except to wait out #PACMAN_LOOKAHEAD_MAX_CELL_TICKS, **32 ticks**, and give up.
+Measured over the twenty runs: **17.8 % of every tick the search simulates is spent on a Pacman that
+is already stuck**, and 13 % of all legs end that way.
+
+He is stuck the instant neither his queued turn nor his facing is open — which is exactly the
+condition `pacman_advance` returns `false` on, and nothing in a corridor will change it. Ending the
+leg there instead of 32 ticks later:
+
+| | mean score | junctions reached | stalled ticks |
+|---|---|---|---|
+| as it ships | 3,132 | 1.63 | 17.8 % |
+| **stall recognised at once** | **4,432** | 1.89 | 1.0 % |
+| stall recognised at once, **and three times the budget** | **9,553** | 2.79 | 0.8 % |
+
+**+41 % of score for the same frame**, and the decision costs what it did — host mean 331 us against
+359 us, worst *lower*, because the tick budget still binds and the extra legs are clones at 2 %.
+
+It reads like a trade — the leaf is now priced 32 ticks earlier, and ghosts move in 32 ticks — and
+it is not one, because **the stall is an artefact of the leg and not a thing that happens**. In the
+played game Pacman is asked again on every cell and is handed a direction that is open at the moment
+of asking, so he never stands still; only the search stands him still, by setting one direction and
+letting it ride for a whole leg. The 32 ticks were simulating a Pacman who does not exist, and
+walking ghosts towards him.
+
+Note the third row. It is above the 7,076 this section had to correct, and it is the two levers
+multiplied — reclaimed waste *and* bought time.
+
+#### What there is to give
+
+A decision is taken once per cell, and the game is generous with frames:
+
+| | mean | minimum |
+|---|---|---|
+| frames per cell | 10.6 | 1 |
+| frames per junction-to-junction leg | **51.5** | **18** |
+
+The search currently does all its thinking inside **one** of those frames and idles through the
+rest. Nothing between two junctions is a decision — a corridor offers no choice — so the answer for
+the *next* junction could be worked out across the whole walk towards it. Even the worst leg
+measured is 18 frames, which is **thirty-six times** the current allowance and past the point where
+the curve above saturates.
+
+The obstacles are named here rather than solved, because how to spend this is the owner's call:
+the search has to become resumable across frames instead of a single recursive call; and it would
+be searching from the state Pacman is *predicted* to arrive at, which drifts from the state he
+actually arrives at because FR-044's jitter is drawn by the played game and the clone may not draw
+(§15.1).

@@ -42,9 +42,14 @@
 
 /*! \brief How many junctions ahead the search may look.
  *
- * Three, and the limit is RAM rather than time: a level of depth is a `game_t` that has to be
- * kept while its branches are tried, the target has about 74 kB spare and a `game_t` is 15 kB.
- * A fourth level would leave the firmware 14 kB, which is not a margin.
+ * Three, and what stops it being four is RAM: a level of depth is a `game_t` that has to be kept
+ * while its branches are tried, the target has about 74 kB spare and a `game_t` is 15 kB. A fourth
+ * level would leave the firmware 14 kB, which is not a margin.
+ *
+ * **It is a ceiling that is not reached, and that is the more useful fact.** At
+ * #PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET the search finishes 1.63 deepenings on an average decision,
+ * so a fourth clone would be memory bought for a level the budget never pays for. Whatever binds
+ * this module, it is not this constant.
  */
 #define PACMAN_LOOKAHEAD_MAX_DEPTH           (3U)
 
@@ -67,6 +72,15 @@
  * A search that reaches the budget stops where it is and throws away the deepening it was in the
  * middle of, keeping the last one that finished — see \ref pacman_lookahead_decide_within — which
  * is why the ceiling can be this tight without the answer becoming lopsided.
+ *
+ * **What this number costs, measured** ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)): it is
+ * the difference between a player scoring **3,132** and the same code scoring **7,076**, and
+ * FR-037's 4,600 lies between 1,000 and 1,500 ticks. It is also why the player visibly dithers —
+ * past a 1.63-junction horizon every branch evaluates alike, so the tie-break decides and it flips
+ * one cell later. **Raising it is the only thing measured to help**: a coarser simulation step and
+ * a pruned reversal branch both buy the same depth for free and lose score doing it. What a tick
+ * *costs* is the figure to redo if the game gets slower; the depth and the maze do not enter into
+ * it.
  */
 #define PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET (500U)
 
