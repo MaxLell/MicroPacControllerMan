@@ -14,19 +14,19 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that made the look-ahead player think across frames (DEC-052), on `feat/m6-lookahead` |
+| built from | the commit that gave the look-ahead player's leaves eyes (DEC-053), on `feat/lookahead-evaluation` |
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 120,040 B of 504 kB — 23.3 % |
-| RAM | 235,736 B of 256 kB — 89.9 %, plus 12,008 B of SRAM4 — 73.3 % |
-| weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — **3,531 against FR-037's 4,600** |
-| `pacman.hex` | sha256 `2aa9a944400a690625fbd7c4bf1094163c00f2b13cf08528d6e85638c2df0dd4` |
-| `pacman.bin` | sha256 `b2d0a569e087752cb8eb656ae33ae5882786a428003607e1ef57f2cfc61c67e8` |
+| flash | 120,568 B of 504 kB — 23.4 % |
+| RAM | 240,120 B of 256 kB — 91.6 %, plus 12,008 B of SRAM4 — 73.3 % |
+| weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — scores **3,531**, against 2,600 for a cleared level 1 |
+| `pacman.hex` | sha256 `305bad6b5e0b14ff9e8bc2461623e561a7797b1574536291c898ff2f57481c2d` |
+| `pacman.bin` | sha256 `3d8c368965239b578abef1f9758ba6ebef905407c63dc1793cc4bb02a25f9689` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost`. The host side is green too: 485 unit tests, both builds.
+`lookahead_cost`. The host side is green too: 487 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -66,22 +66,22 @@ the gap between `1UP` and `LEVEL`:
 
 ```
    1UP   3531        NEAT        LEVEL 1
-   1UP  11652        SEARCH      LEVEL 5
+   1UP  21870        SEARCH      LEVEL 6
 ```
 
 so there is nothing to remember. **B1 in that game still means the endless mode** (`LOOP` on the
 lives row), unchanged.
 
-Expect `SEARCH` to look **much** better. It averages **11,652** against `NEAT`'s **3,531**, and it
-is the only thing in this firmware that clears the 4,600 the requirement asks for — though it does
-not *satisfy* that requirement, which wants trained weights and not a search. It is also *slower to
-decide*, but you will not see that either: since DEC-052 it thinks a slice at a time across the ten
-frames a cell lasts, and a slice is under 3 ms of the 13 a frame has spare.
+Expect `SEARCH` to look **much** better. It averages **21,870** and reaches **level 5.9** against
+`NEAT`'s 3,531 and level 1 — for scale, a cleared level 1 is 2,600 points. It is also *slower to
+decide*, and you will not see that either: since DEC-052 it thinks a slice at a time across the ten
+frames a cell lasts, and a slice is under 4.5 ms of the 13 a frame has spare.
 
-**It still dithers a little** — about one decision in nine walks back the way it came, down from one
-in five. What is left is a real limit rather than a bug: nothing in its evaluation pulls toward food
-it cannot already see, so a stretch of maze with no pellet and no ghost in reach leaves every
-direction worth exactly the same. [M6 §16.5](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
+**Since DEC-053 its leaves can see.** Each position it considers looks around itself by maze
+distance — nearest killing ghost, nearest frightened one, nearest pellet, ways out — and the six
+weights that balance those were **fitted by playing games** rather than chosen by argument. What the
+fit decided is visible in how it plays: it hunts ghosts rather than hoovering pellets, because a
+four-ghost sweep is 3,000 points and a whole level of pellets is 2,440.
 
 `NORMAL MAZE` is the game you play, and there **B1 hands Pac-Man to the trained network and takes
 him back**, exactly as before. The search is deliberately not offered there. Any run you touch B1
@@ -103,8 +103,8 @@ ott lookahead_cost
 ```
 
 The board reboots into the test, plays two thousand *frames* of a real run and prints what one
-frame's slice of thinking cost — expect a mean near 2.9 ms and a worst near 11 ms of the 13 a frame
-has spare, ten frames and about 1,400 simulated ticks to a decision, and 2.97 of the 3 junctions
+frame's slice of thinking cost — expect a mean near 4.5 ms and a worst near 11 ms of the 13 a frame
+has spare, ten frames and about 1,800 simulated ticks to a decision, and 2.8 of the 3 junctions
 reached. It measures frames rather than decisions because since DEC-052 a decision is deliberately
 larger than a frame, so the slice is the thing that has to fit. `reset` returns it to the game. `help` lists the rest; `ott pacman` starts a run with no
 menu in front of it.

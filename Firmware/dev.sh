@@ -17,7 +17,7 @@
 #   After training — take a winner into the firmware
 #     ./dev.sh adopt-weights                    # Training/winner.json
 #     ./dev.sh adopt-weights path/to/other.json # a campaign run's winner
-#     ./dev.sh adopt-weights --force ...        # adopt one that does not meet FR-037
+#     ./dev.sh adopt-weights --force ...        # adopt one that scores worse than what ships
 #
 #   Training on this machine, detached — survives the terminal
 #     ./dev.sh train --hours 1     # a campaign that is finished in an hour
@@ -250,9 +250,14 @@ shift || true
 # is really a stale file. It refuses instead, on the digest, which is the safety net; this is the
 # thing that keeps you off it.
 #
-# It also gates on VT-UNIT-010: a winner that does not meet FR-037 is not adopted unless you say
-# --force. Training produces a winner every time, including a bad one, and the one thing that must
-# not happen quietly is a worse agent replacing a better one in the firmware.
+# It also gates on a **regression**: a winner that scores below what is already shipped is not
+# adopted unless you say --force. Training produces a winner every time, including a bad one, and the
+# one thing that must not happen quietly is a worse agent replacing a better one in the firmware.
+#
+# It used to gate on FR-037's 4,600 instead, which was withdrawn on 2026-08-17 (DEC-053). That check
+# had stopped working anyway: the shipped weights do not reach 4,600 either, so it was being
+# overridden with --force every single time — a guard nobody can satisfy is a guard nobody reads.
+# The score it compares against lives in Training/adopted-score.txt and is written by this command.
 do_adopt_weights() {
     local force=""
     local winner=""
@@ -275,18 +280,29 @@ do_adopt_weights() {
     local python=Training/.venv/bin/python
     [ -x "$python" ] || python=python3
 
-    step "Measuring $winner (VT-UNIT-010)"
+    step "Measuring $winner"
 
     # The host library first: evaluate.py and the recorder both load it, and a stale one measures a
     # different game than the sources describe.
     do_host_build
 
-    if "$python" Training/evaluate.py --winner "$winner"; then
+    local shipped_score=""
+    local gate=()
+
+    if [ -f Training/adopted-score.txt ]; then
+        shipped_score=$(cat Training/adopted-score.txt)
+        gate=(--at-least "$shipped_score")
+        echo "  the shipped weights measured $shipped_score; a winner below that is a regression"
+    else
+        echo "  no Training/adopted-score.txt yet, so there is nothing to regress against"
+    fi
+
+    if "$python" Training/evaluate.py --winner "$winner" "${gate[@]}"; then
         echo ""
     elif [ "$force" = yes ]; then
-        fail "It does not meet FR-037 — adopting anyway, because --force."
+        fail "It scores worse than what ships — adopting anyway, because --force."
     else
-        fail "$winner does not meet FR-037, so it is not being adopted."
+        fail "$winner scores worse than what ships, so it is not being adopted."
         {
             echo "  Train longer, or adopt it deliberately with:"
             echo ""
@@ -313,11 +329,19 @@ do_adopt_weights() {
     step "Formatting what was generated"
     ./format.sh Test/Target/scripts/ott_ai_equivalence_states.c App/pacman_ai
 
-    done_message "Adopted. Four files changed — commit them together:"
+    # What the *next* adoption has to beat. Written after the export, so it always describes the
+    # weights that are actually in the tree.
+    step "Recording what these weights scored"
+    "$python" Training/evaluate.py --winner Training/winner.json 2>/dev/null \
+        | awk '/^score:/ { print $2 }' > Training/adopted-score.txt
+    echo "  Training/adopted-score.txt now says $(cat Training/adopted-score.txt)"
+
+    done_message "Adopted. Five files changed — commit them together:"
     echo "  Training/winner.json"
     echo "  App/pacman_ai/ai_weights.c"
     echo "  App/pacman_ai/ai_weights.h"
     echo "  Test/Target/scripts/ott_ai_equivalence_states.c"
+    echo "  Training/adopted-score.txt"
     echo ""
     echo "Then, on the machine with the board: ./dev.sh suite"
     echo "ott ai_equivalence is what proves the port agrees with the host about the new weights."

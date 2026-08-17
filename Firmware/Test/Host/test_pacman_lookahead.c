@@ -281,11 +281,98 @@ void test_it_does_not_walk_into_a_ghost_it_can_see_coming(void)
     TEST_ASSERT_NOT_EQUAL(deadly, pacman_lookahead_decide(&g_game));
 }
 
+/* --- what a leaf can see, and what the weights do with it ----------------- */
+
+void test_the_weights_can_be_set_and_put_back(void)
+{
+    pacman_lookahead_weights_t defaults;
+    pacman_lookahead_weights_t altered;
+
+    pacman_lookahead_get_default_weights(&defaults);
+
+    altered = defaults;
+    altered.prey = 12345;
+
+    pacman_lookahead_set_weights(&altered);
+    pacman_lookahead_set_weights(NULL);
+
+    /* Nothing to read the weights back through, so the property is stated where it matters: the
+     * defaults are what a board plays, and a test that left the trainer's weights behind would
+     * quietly change every test that follows it in this file. */
+    game_start_on_normal_maze(&g_game);
+
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, pacman_lookahead_decide(&g_game));
+}
+
+/* The frightened-ghost term has to actually steer, and the honest way to show that is to flip its
+ * sign and require the answer to change. Asserting *which* way the search should go would be
+ * asserting my own guess about a position four junctions deep; asserting that the term is the thing
+ * deciding is the property that matters — if the scan could not see the ghost round the corner, or
+ * the term were not wired into the evaluation, both signs would answer the same.
+ *
+ * It is the companion to #test_it_does_not_walk_into_a_ghost_it_can_see_coming: that one says a
+ * killer repels, this one that the *value* of prey is what the search is acting on. */
+void test_the_frightened_ghost_term_is_what_decides_when_it_is_the_only_term(void)
+{
+    direction_e open_directions[4];
+    pacman_lookahead_weights_t weights;
+    uint8_t index;
+
+    game_start_on_normal_maze(&g_game);
+
+    const uint8_t open_count = prv_collect_open_directions(&g_game, open_directions);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8_MESSAGE(2U, open_count, "the start cell is meant to be a corridor");
+
+    cell_t bait = game_get_pacman_cell(&g_game);
+
+    for (index = 0U; index < 3U; ++index)
+    {
+        const cell_t next = playfield_wrap_cell(playfield_step(bait, open_directions[0]));
+
+        TEST_ASSERT_TRUE_MESSAGE(playfield_is_walkable(game_get_playfield(&g_game), next),
+                                 "the corridor is meant to run at least three cells that way");
+        bait = next;
+    }
+
+    /* Blinky on the bait cell inside a frightened window, the other three shut in the house where
+     * Pacman may not go and the scan cannot reach them. */
+    ghost_reset(&g_game.ghosts[GHOST_BLINKY], GHOST_BLINKY, bait, false);
+    g_game.frightened_remaining_ms = 60000U;
+
+    for (index = 1U; index < GHOST_COUNT; ++index)
+    {
+        ghost_reset(&g_game.ghosts[index], (ghost_personality_e)index,
+                    playfield_get_ghost_start(game_get_playfield(&g_game), index), true);
+    }
+
+    /* Nothing on but prey, so nothing else can be the reason for either answer. */
+    pacman_lookahead_get_default_weights(&weights);
+    weights.point = 0;
+    weights.death = 0;
+    weights.threat = 0;
+    weights.food = 0;
+    weights.escape = 0;
+
+    weights.prey = 1000;
+    pacman_lookahead_set_weights(&weights);
+    const direction_e towards = pacman_lookahead_decide(&g_game);
+
+    weights.prey = -1000;
+    pacman_lookahead_set_weights(&weights);
+    const direction_e away = pacman_lookahead_decide(&g_game);
+
+    pacman_lookahead_set_weights(NULL);
+
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(towards, away,
+                                  "wanting a frightened ghost and avoiding one gave the same answer, so the "
+                                  "leaf is not seeing it");
+}
+
 /* --- it does not spend the budget watching a wall (RF-019) ---------------- */
 
 /* A leg sets one direction and lets the game steer, so a corridor that bends strands Pacman — and
  * the walk used to have no way of noticing except to wait out
- * #PACMAN_LOOKAHEAD_MAX_CELL_TICKS. Over FR-037's twenty runs that was **17.8 % of every tick the
+ * #PACMAN_LOOKAHEAD_MAX_CELL_TICKS. Over the twenty measured runs that was **17.8 % of every tick the
  * search simulated** ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)).
  *
  * Stated as work per tick, because that is what was being wasted and what a regression would take
@@ -532,4 +619,5 @@ void test_deciding_about_nothing_asserts(void)
     ASSERT_PROBE_EXPECT(pacman_lookahead_restart(&g_game, 1U, 0U), "in_tick_budget > 0U");
     ASSERT_PROBE_EXPECT((void)pacman_lookahead_think(0U), "in_slice_ticks > 0U");
     ASSERT_PROBE_EXPECT(pacman_lookahead_get_report(NULL), "out_report != NULL");
+    ASSERT_PROBE_EXPECT(pacman_lookahead_get_default_weights(NULL), "out_weights != NULL");
 }

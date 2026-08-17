@@ -5,23 +5,23 @@
     python3 evaluate.py --maze generated      # the same agent on mazes nobody has played
 
 Measures two policies on the **same** maze in the **same** run — the trained network and a uniform
-random one — and holds the result against FR-037: at least 4,600 points, and more than random. Both
+random one, and reports both. Since DEC-053 there is no threshold to hold it against: what it
 figures are taken here rather than one of them quoted from a document, because a baseline measured
 somewhere else is a baseline that can drift (M6 §13).
 
 Exit code 0 means the requirement is met, 1 means it is not, so this is usable as a gate.
 
 **The maze is the normal one and the figure is a mean over twenty runs.** The AI may only be handed
-control in the normal maze (FR-040), so that is the maze FR-037 is about. It was briefly measurable in
+control in the normal maze (FR-040), so that is the maze the figure is about. It was briefly measurable in
 a single episode — one fixed maze and a game with nothing random in it play out identically every
 time — and FR-044's timing jitter ended that: a run is a draw again, and both policies have a spread.
 
 **A run here has its three lives.** Training may end an episode at the first death (FR-036), which is
-how it makes dying cost something; that is a training rule. FR-037 asks what a *run* scores, so this
+how it makes dying cost something; that is a training rule. This asks what a *run* scores, so this
 measures runs, whichever trainer produced the network.
 
 ``--maze generated`` answers a different and no longer required question — how the agent does on a
-maze it has never seen — and says so rather than returning an FR-037 verdict.
+maze it has never seen — and says so rather than letting the number stand as the headline one.
 """
 
 import argparse
@@ -45,8 +45,13 @@ EPISODES = 20
 #: nothing.
 GENERATED_FIRST_SEED = 1000
 
-#: FR-037's bar.
-REQUIRED_MEAN_SCORE = 4600.0
+#: The scale the score is read against — a cleared level 1, before a single ghost is eaten.
+#:
+#: Not a bar. FR-037 asked for 4,600 and was withdrawn on 2026-08-17
+#: ([DEC-053](../../Docu/PrePlanning/11-Decisions-and-As-Built.md)) because the owner wants the score
+#: maximised rather than cleared. This number is printed for scale and nothing fails on it; what can
+#: fail is `--at-least`, which the caller sets to whatever is already shipped.
+CLEARED_LEVEL_ONE = 2600.0
 
 
 def _report(title: str, scores: Sequence[int], steps: Sequence[int], levels: Sequence[int],
@@ -75,7 +80,10 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--winner", default=os.path.join(_HERE, "winner.json"))
     parser.add_argument("--stage", type=int, default=STAGE_FULL, choices=[1, 2, 3])
     parser.add_argument("--maze", default="normal", choices=["normal", "generated"],
-                        help="the maze FR-037 is about, or mazes the agent has never seen")
+                        help="the maze the AI is offered, or mazes the agent has never seen")
+    parser.add_argument("--at-least", type=float, default=None,
+                        help="fail if the mean score falls below this — what is already shipped, "
+                             "so that a worse winner cannot be adopted quietly")
     parser.add_argument("--episodes", type=int, default=EPISODES,
                         help="runs each policy is averaged over")
     parser.add_argument("--rng-seed", type=int, default=1, help="the random baseline's own draw")
@@ -122,27 +130,41 @@ def main(argv: Sequence[str]) -> int:
         random_mean = _report("uniform random", *env.run(seeds, arguments.stage, maze), cap=cap)
 
     beats_random = trained_mean > random_mean
-    meets_bar = trained_mean >= REQUIRED_MEAN_SCORE
 
-    print(f"\nFR-037: {trained_mean:.1f} vs. required {REQUIRED_MEAN_SCORE:.0f} — "
-          f"{'met' if meets_bar else 'NOT met'}")
-    print(f"         {trained_mean:.1f} vs. random {random_mean:.1f} "
-          f"({trained_mean / max(random_mean, 1.0):.1f}x) — {'met' if beats_random else 'NOT met'}")
+    print(f"\nscore:  {trained_mean:.1f}   ({trained_mean / CLEARED_LEVEL_ONE:.2f} cleared levels)")
+    print(f"        {trained_mean:.1f} vs. random {random_mean:.1f} "
+          f"({trained_mean / max(random_mean, 1.0):.1f}x) — "
+          f"{'ahead' if beats_random else 'BEHIND, which means something is broken'}")
+
+    if arguments.at_least is not None:
+        held = trained_mean >= arguments.at_least
+        print(f"        against the {arguments.at_least:.1f} asked for: "
+              f"{'ahead' if held else 'BEHIND'}")
 
     if is_generated:
-        # Said rather than silently passing or failing: FR-037 is about the maze the AI is allowed
-        # to play, and this is not it.
-        print("\nthe generated mazes are not what FR-037 asks about, so this is not a "
-              "VT-UNIT-010 result")
+        # Said rather than left to be assumed: the AI is only allowed to play the normal maze, so a
+        # figure from generated ones answers the generalisation question and not this one.
+        print("\nthese are generated mazes, which the AI is not offered — a generalisation figure, "
+              "not the headline one")
         return 0
 
     if arguments.stage != STAGE_FULL:
         # Likewise: the earlier stages have fewer things worth points in them, so their scores are
-        # not the figure FR-037 is about (M6 §6).
-        print(f"\nstage {arguments.stage} is not stage 3, so this is not a VT-UNIT-010 result")
+        # not comparable with a full game's (M6 §6).
+        print(f"\nstage {arguments.stage} is not stage 3, so this is not a whole-game figure")
         return 0
 
-    return 0 if (meets_bar and beats_random) else 1
+    # **A regression is a failure; a low score is not.** Training produces a winner every time,
+    # including one worse than what is already shipped, and that is the mistake worth a non-zero
+    # exit. Losing to a random policy is the other one, because it means something is broken rather
+    # than weak.
+    if not beats_random:
+        return 1
+
+    if (arguments.at_least is not None) and (trained_mean < arguments.at_least):
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":

@@ -74,8 +74,8 @@
  * is why the ceiling can be this tight without the answer becoming lopsided.
  *
  * **What this number costs, measured** ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)): it is
- * the difference between a player scoring **3,132** and the same code scoring **7,076**, and
- * FR-037's 4,600 lies between 1,000 and 1,500 ticks. It is also why the player visibly dithers —
+ * the difference between a player scoring **3,132** and the same code scoring **7,076**. It is also
+ * why that version of the player visibly dithered —
  * past a 1.63-junction horizon every branch evaluates alike, so the tie-break decides and it flips
  * one cell later. **Raising it is the only thing measured to help**: a coarser simulation step and
  * a pruned reversal branch both buy the same depth for free and lose score doing it. What a tick
@@ -103,18 +103,91 @@ typedef struct
  * pacman_lookahead - public API
  * ========================================================================= */
 
+/*! \brief How far a leaf looks around itself, in cells of maze distance.
+ *
+ * The evaluation's own horizon, and a different thing from the search's: the search sees three
+ * junctions of *future*, this sees twenty cells of *surroundings* at the position it ends on. It is
+ * what stops a leaf being blind to everything the branches did not walk into
+ * ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)), and it bounds the scan that measures it.
+ */
+#define PACMAN_LOOKAHEAD_SCAN_RADIUS (20U)
+
+/*! \brief The most cells one scan may look at, whatever the radius allows.
+ *
+ * **The radius bounds the answer; this bounds the work, and only one of those is what a frame needs.**
+ * Twenty cells of radius reaches a few hundred cells in an open part of the maze and a dozen in a
+ * corridor, so a radius alone makes the worst frame a property of where Pacman happens to be
+ * standing: measured on the board, a scan free to sweep its whole radius took the worst frame to
+ * **23 ms of the 13 a frame has spare**, while the mean stayed comfortable.
+ *
+ * It is the same lesson [DEC-050](../../../Docu/PrePlanning/11-Decisions-and-As-Built.md) learned
+ * about the search itself — a budget has to be denominated in what is actually paid for. Every cell
+ * a scan visits costs the same, so cells are the unit, and forty-eight of them is about a fifth of
+ * an unbounded sweep.
+ *
+ * What it costs in answers is small and one-sided: a distance further than this reads as
+ * #PACMAN_LOOKAHEAD_SCAN_RADIUS, which is what "nothing near" already meant.
+ */
+#define PACMAN_LOOKAHEAD_SCAN_CELLS  (48U)
+
+/*! \brief What each thing a leaf can see is worth, relative to the others.
+ *
+ * **These are meant to be fitted, not argued.** The three the module started with were chosen by
+ * reasoning — ten a point so that one pellet outranks the whole safety range — which works while
+ * there are three of them and stops working at seven, because what decides the playing style is the
+ * *ratios* and nobody can reason those out. They are a struct rather than `#define`s so a host
+ * trainer can vary them; the target takes the defaults and never calls the setter.
+ *
+ * Every term is "more is better" and bounded, so the fit has no cliffs in it: distances are counted
+ * as `PACMAN_LOOKAHEAD_SCAN_RADIUS - distance`, which is *nearness*.
+ *
+ * **There was an eighth**, the count of pellets within the radius, and it is gone: the fit gave it a
+ * weight of 2 where it gave the frightened ghosts 53, and it was the only term that made the scan
+ * sweep its whole radius rather than stopping at the nearest thing of each kind. The cheapest term
+ * to compute was carrying the most and the dearest was carrying almost nothing — on the board the
+ * difference was 23 ms of a frame that has 13.
+ */
+typedef struct
+{
+    int32_t point;  /*!< per point of score the branch gained                        */
+    int32_t death;  /*!< subtracted per life it cost                                 */
+    int32_t threat; /*!< per cell of maze distance to the nearest killing ghost      */
+    int32_t prey;   /*!< per cell of nearness to the nearest frightened ghost        */
+    int32_t food;   /*!< per cell of nearness to the nearest uneaten pellet          */
+    int32_t escape; /*!< per direction out of the cell that is not a wall            */
+} pacman_lookahead_weights_t;
+
+/*! \brief The weights the firmware ships with.
+ *
+ * \param[out]      out_weights: filled in, must not be `NULL`
+ */
+void pacman_lookahead_get_default_weights(pacman_lookahead_weights_t* out_weights);
+
+/*! \brief Use these weights until told otherwise. `NULL` restores the defaults.
+ *
+ * For the host trainer. Nothing on the target calls it, and the defaults are what a board plays.
+ *
+ * \param[in]       in_weights: weights to adopt, or `NULL` for #pacman_lookahead_get_default_weights
+ */
+void pacman_lookahead_set_weights(const pacman_lookahead_weights_t* in_weights);
+
 /*! \brief What one frame may spend on thinking.
  *
  * A frame is 20 ms and drawing plus deciding measured 7, so 13 are spare and a tick costs 22 us on
- * this part. Three hundred and fifty is **7.7 ms**, which leaves the margin that
- * #PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET spends: a whole 500-tick decision measured 11.2 ms mean
- * and 13 ms worst on the board, which passed `ott lookahead_cost` with nothing to spare.
+ * this part.
+ *
+ * **It was 350 and had to come down to 250, because the frame is shared now.** A slice pays for its
+ * ticks *and* for one leaf scan per leg it reaches (#PACMAN_LOOKAHEAD_SCAN_CELLS), and the two
+ * together took the worst frame to 14 ms of 13. Two hundred and fifty is about 5.5 ms of ticks and
+ * leaves the scans room. It costs almost nothing in thinking: a decision spends about 2,000 ticks
+ * across the ten frames its cell lasts, so 200 a frame is the average and the slice only binds the
+ * expensive frames — which are exactly the ones the ceiling is for.
  *
  * A slice is checked *between* legs and never inside one, so a frame can overrun it by up to one
  * leg — about thirty ticks, two thirds of a millisecond. That is the price of being able to pause
  * with no half-finished state, and it is paid out of the margin above.
  */
-#define PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS   (350U)
+#define PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS   (250U)
 
 /*! \brief What a whole decision may spend when it is allowed to think across frames.
  *

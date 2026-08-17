@@ -177,7 +177,7 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--episodes", type=int, default=EPISODES_PER_GENOME,
                         help="episodes each candidate is scored on per generation")
     parser.add_argument("--episode", choices=["one-life", "whole-run"], default="one-life",
-                        help="stop an episode at the first death, or play the run out as FR-037 does")
+                        help="stop an episode at the first death, or play the run out as a scored run does")
     parser.add_argument("--max-seconds", type=float, default=None,
                         help="stop cleanly after this long, whatever generation it is on")
     parser.add_argument("--ghost-bonus", type=int, default=GHOST_BONUS,

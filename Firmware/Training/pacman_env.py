@@ -24,7 +24,7 @@ STAGE_GHOSTS = 2
 STAGE_FULL = 3
 
 #: Which maze a run is played on. The AI may only be handed control in the normal one (FR-040), so
-#: that is where training and FR-037 live and the seeds are then ignored. ``MAZE_GENERATED`` is kept
+#: that is where training and the measured score live and the seeds are then ignored. ``MAZE_GENERATED`` is kept
 #: so the question "how does this agent do on a maze nobody has played" can still be asked.
 MAZE_NORMAL = 0
 MAZE_GENERATED = 1
@@ -192,14 +192,14 @@ class PacmanEnv:
             )
 
     def use_random_policy(self, rng_seed: int = 1) -> None:
-        """Play uniformly at random — the baseline FR-037 is measured against."""
+        """Play uniformly at random — the baseline every score is read against."""
         self._lib.env_use_random_policy(self._batch, ctypes.c_uint32(rng_seed & 0xFFFFFFFF))
 
     def set_episode_ends_at_first_death(self, ends_at_first_death: bool) -> None:
         """End every episode at the first life lost (FR-036), instead of when the run is over.
 
         Training's rule, not the game's, and the only mechanism that makes dying cost something —
-        see ``env_api.h``. Off unless asked for, because FR-037 measures what a *run* scores.
+        see ``env_api.h``. Off unless asked for, because the reported score is what a *run* scores.
         """
         self._lib.env_set_episode_ends_at_first_death(self._batch, ctypes.c_bool(ends_at_first_death))
 
@@ -229,7 +229,7 @@ class PacmanEnv:
         """Decisions each episode spent within four cells of a ghost that could kill.
 
         Read separately rather than returned by `run`, so that the callers which only want what
-        FR-037 measures are not touched by a figure only training has a use for.
+        `evaluate.py` measures are not touched by a figure only training has a use for.
         """
         self._lib.env_danger_decisions(self._batch, self._danger)
 

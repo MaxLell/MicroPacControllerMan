@@ -59,8 +59,7 @@ A few items are structural/process requirements rather than automatically observ
 | FR-033 | AI Control Persistence | VT-INT-023 |
 | FR-034 | AI Run Not Recorded | VT-INT-025 |
 | FR-035 | Observation Bounded by the Display | VT-UNIT-009 |
-| FR-036 | The AI's Objective | VT-UNIT-010 |
-| FR-037 | AI Play Strength | VT-UNIT-010 |
+| FR-036 | The AI's Objective | Code review (`Training/env_api.c` computes the fitness; VT-UNIT-010 verified it against FR-037's threshold and went with it — [DEC-053](11-Decisions-and-As-Built.md)) |
 | FR-038 | Inference Only on the Target | Code review (no training code is linked into the target build — see gap note above) |
 | FR-039 | Host / Target Inference Equivalence | VT-UNIT-011 (host half), VT-INT-024 (target half) |
 | NFR-006 | AI Inference Budget | VT-INT-023 |

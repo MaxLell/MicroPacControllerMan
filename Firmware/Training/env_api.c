@@ -98,7 +98,7 @@ struct env_batch_s
      *         games do not all take the same random walk. */
     uint32_t rng_state;
 
-    /*! \brief Whether episodes end at the first life lost. Off by default, because FR-037 is about
+    /*! \brief Whether episodes end at the first life lost. Off by default, because a reported score is about
      *         what a *run* scores and a run has three lives; training turns it on. */
     bool ends_at_first_death;
 };
@@ -128,7 +128,7 @@ static void prv_config_for_stage(uint8_t in_stage, game_config_t* const out_conf
 /*! \brief One decision, carried out — the only place the episode rules live.
  *
  * Both the batched Python interface and the C-side runner go through here, which is what lets
- * FR-037 compare a trained agent against the random baseline: the two differ in how the action
+ * `evaluate.py` compares a trained agent against the random baseline: the two differ in how the action
  * was chosen and in nothing else.
  *
  * \return points gained during this decision

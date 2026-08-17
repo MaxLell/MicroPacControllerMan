@@ -15,11 +15,11 @@ it is the only maze worth training on.
 
 **Fitness is not the score.** It is the score *plus* a bonus for every ghost eaten (FR-036): the
 game's own 200/400/800/1600 is the same currency as the pellets that produced it, so the score alone
-cannot say "this was worth more". FR-037 still measures the plain score, and `evaluate.py` does not
+cannot say "this was worth more". The plain score is still what `evaluate.py` measures, and it does not
 know this bonus exists.
 
 **An episode ends at the first death** by default, where a run has three lives — that is what makes
-dying cost anything. `--episode whole-run` trains on what FR-037 measures instead, and comparing the
+dying cost anything. `--episode whole-run` trains on what `evaluate.py` measures instead, and comparing the
 two is an experiment rather than a setting.
 
 **A genome is scored on twelve episodes, not one.** FR-044 jitters the game's timings, so a run is a
@@ -97,7 +97,7 @@ CURRICULUM = [
 #: Without this a stage takes whatever it is given, and the two teaching stages will take all of it:
 #: stage 2 promotes on a fitness bar it does not reliably clear, and its 200-generation cap is far
 #: more than a short run can pay for. That is survivable overnight and fatal in an hour — the winner
-#: comes out of stage 2, and stage 3 is the only stage FR-037 is measured on.
+#: comes out of stage 2, and stage 3 is the only stage a whole-game score is measured on.
 #:
 #: It can only ever *end* a stage early. A stage that promotes before its share is spent hands the
 #: rest to the one after it, which is why the last entry is 1.0 and not a third: stage 3 gets
@@ -298,7 +298,7 @@ def main(argv: Sequence[str]) -> int:
     parser.add_argument("--episodes", type=int, default=EPISODES_PER_GENOME,
                         help="episodes each genome is scored on per generation")
     parser.add_argument("--episode", choices=["one-life", "whole-run"], default="one-life",
-                        help="stop an episode at the first death, or play the run out as FR-037 does")
+                        help="stop an episode at the first death, or play the run out as a scored run does")
     parser.add_argument("--no-deletion", action="store_true",
                         help="forbid NEAT from removing nodes and connections: grow only")
     parser.add_argument("--max-seconds", type=float, default=None,

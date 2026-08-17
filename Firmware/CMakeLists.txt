@@ -196,6 +196,12 @@ if(PACMAN_HOST_BUILD)
     target_link_libraries(pacman_ai_record PRIVATE pacman_host)
     target_include_directories(pacman_ai_record PRIVATE Training)
 
+    # One candidate of Training/fit_lookahead.py. Its own executable rather than a mode of something
+    # else, because the driver runs one process per candidate to use every core — `pacman_lookahead`
+    # is not reentrant.
+    add_executable(pacman_lookahead_fitness Training/fit_lookahead.c)
+    target_link_libraries(pacman_lookahead_fitness PRIVATE pacman_host)
+
     add_library(pacman_env SHARED ${PACMAN_HOST_SOURCES} Training/env_api.c)
     target_include_directories(pacman_env PUBLIC
         $<TARGET_PROPERTY:pacman_host,INTERFACE_INCLUDE_DIRECTORIES>

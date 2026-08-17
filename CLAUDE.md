@@ -164,7 +164,7 @@ silently working around a wart.
 - **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
   **NEAT**, ported to the target as `const` weights, and offered in two of the three games the menu
   now lists. Everything is built and everything that touches hardware is verified there.
-  **FR-037 is not met at the time of writing**, and it was: the agent that reached 4,980 on the
+  **The play-strength requirement was not met, and has since been withdrawn** (DEC-053): the agent that reached 4,980 on the
   deterministic game averages **2,197** over twenty runs of the jittered one (DEC-047), because it had
   memorised a trajectory rather than learned to play. Retraining against the jittered game, with the
   reshaped objective, is what [M6 §14](Docu/Design/M6-Pacman-AI.md) records.
@@ -193,8 +193,8 @@ silently working around a wart.
     stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
     `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
     its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
-  - **The agent that ships is `arcade-danger`, at 3,531, and it does not meet FR-037** (DEC-051).
-    Adopted deliberately with `--force`, because 4,600 is the requirement and 3,531 is the best
+  - **The agent that ships is `arcade-danger`, at 3,531** (DEC-051).
+    Adopted deliberately with `--force`, because 4,600 was then the requirement and 3,531 is the best
     trained agent this project has had — up from 2,827, which is the largest step any single change
     has bought. The change is a continuous cost for danger (M6 §14.6): the fitness charges ten
     points for every decision taken with a killing ghost within four cells. It stopped the agent
@@ -203,7 +203,7 @@ silently working around a wart.
     bonus per ghost eaten (it cost score, and more training made it worse), a bonus for finishing a
     level (identically zero until one is finished, so no gradient at all), a bigger population, and
     — the night of 2026-08-09 — **more capacity**: 32 hidden units scored 2,634, *below* the
-    16-unit baseline. Comparisons are made at **100 episodes**, not FR-037's twenty — at twenty the
+    16-unit baseline. Comparisons are made at **100 episodes**, not the acceptance set's twenty — at twenty the
     standard error is larger than the differences being argued about.
   - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
     2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
@@ -220,7 +220,7 @@ silently working around a wart.
     **The budget is an input and the runs share it** (M6 §14.5): a run whose share falls below the
     least it is worth starting with is *dropped and named*, not shortened into a different
     experiment, and the stages share a run's budget the same way so that a short run still reaches
-    stage 3 — the only stage FR-037 is measured on. A trainer that exits non-zero is reported as
+    stage 3 — the only stage a whole-game score is measured on. A trainer that exits non-zero is reported as
     failed with the tail of its log; it used to look exactly like a run that found nothing, which
     is how three of four runs crashed in seconds and left nine hours of a night idle.
     **Why two trainers:** NEAT's winner used **6 of 23 inputs** — it deletes structure whenever the
@@ -231,11 +231,11 @@ silently working around a wart.
     genome — a fixed maze plus a game with nothing random in it makes a score a *measurement* — and
     FR-044's jitter ended that: six episodes per genome now, and the acceptance seeds 1000..1019 are
     reserved again, because a score on the draws it trained against answers nothing.
-    `evaluate.py --maze generated` still asks the generalisation question and says out loud that the
-    answer is not an FR-037 verdict.
+    `evaluate.py --maze generated` still asks the generalisation question and says out loud that it is a
+    generalisation figure and not the headline one.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
 
-- **A look-ahead player is in the game, and since DEC-052 it scores 11,652 (DEC-050/051/052).** `App/pacman_lookahead`
+- **A look-ahead player is in the game, and since DEC-052/053 it scores 21,870 at level 5.9 (DEC-050/051/052/053).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -251,7 +251,7 @@ silently working around a wart.
   - **What it settles, and the correction that had to be made to it** (M6 §15.4/§15.5): the 7,076
     this line used to claim is real but belongs to a **5,000-tick** search, measured before the
     board cut the allowance to 500 and left standing afterwards. **What ships scores 3,132** over
-    FR-037's own twenty draws — *below* the 4,600 asked for, though still above the trained agent's
+    the twenty draws 1000..1019 — *below* the 4,600 then asked for, though still above the trained agent's
     2,706 and a random policy's 518. The conclusion survives: given the time, the same code reaches
     7,076 with a best run of 16,560 at level 4, so **the score is reachable and the gap is the
     agent's, not the game's** — it now also has a price, about **three times** the thinking a frame
@@ -265,8 +265,8 @@ silently working around a wart.
     frames to spend them in exist — 51.5 per junction-to-junction leg, worst 18, against the one
     frame a decision uses today.
   - **Both levers §15.5 named are built (DEC-052, M6 §16), and the player scores 11,652** over a
-    hundred draws against 3,123 before them — 11,947 over FR-037's own twenty, against 4,600 asked
-    for. Neither costs a millisecond of frame time that was not already there.
+    hundred draws against 3,123 before them — 11,947 over the twenty draws 1000..1019, against 4,600
+    then asked for. Neither costs a millisecond of frame time that was not already there.
     - **A stranded Pacman is noticed at once (RF-019, done).** A leg sets one direction and lets it
       ride, so a bend stranded him and the walk could only wait out the 32-tick backstop: **17.8 %
       of every simulated tick**. `pacman_is_stuck` is the rule, written as the negation of
@@ -297,6 +297,31 @@ silently working around a wart.
       cannot already see. Breaking ties by carrying straight on measured 3,573 against 3,123 and is
       deliberately **not** built, because it changes what the player decides rather than how much it
       may think.
+  - **A leaf can see now, and the weights were fitted rather than argued (DEC-053, M6 §17).**
+    The evaluation had three terms and went blind past eight cells; it has six, all of them from
+    **one bounded breadth-first walk** outwards from the leaf — nearest killing ghost, nearest
+    frightened one, nearest pellet, ways out of the cell — so distances are *maze* distances and a
+    ghost behind a wall is as far as the way round to it. **A\* is the wrong tool** and was rejected
+    for a reason worth keeping: it answers one-to-one, this is forty-five leaves against four ghosts,
+    and on a unit-cost grid it degenerates to breadth-first with a heap bolted on.
+    - **`Training/fit_lookahead.py` fits the six weights** with a (1+9) evolution strategy on seeds
+      2000.., driving the shipped loop through `fit_lookahead.c` so what is fitted is what ships.
+      1.5 h took 10,368 → 30,874, and it generalised (30,262 on the untrained 1000..1019).
+    - **What the fit found matters more than the number: it stopped playing for pellets and started
+      playing for ghosts.** `point` 10 → **2**, `prey` 20 → **53**. That is the game's own arithmetic
+      — a four-ghost sweep is 3,000 against 2,440 for a level of pellets — and the hand-picked
+      weights had it backwards. No amount of arguing finds that.
+    - **The board rejected the first two versions**, and the middle step is the lesson: stopping the
+      scan as soon as it has its answers cut the *mean* and left the worst frame at 23 ms of 13,
+      because the worst case is exactly where there is nothing nearby to stop for. **An early exit
+      fixes the common case; only a cap fixes the worst one**, and a frame budget is a worst-case
+      promise. So the bound is now the *work* — at most 48 cells visited — plus a slice down from 350
+      to 250 ticks. Worst frame 11 ms of 13, and it passes.
+    - **That cost a third of the gain, honestly reported**: 30,262 → **21,870** at Ø level 5.90. Still
+      nearly double §16 and it runs on the board, which the 30,262 does not.
+    - Left undone on purpose: the weights are the best ones for the *uncapped* player, so refitting
+      against the shipped configuration is the next hour of wall clock. `density` was deleted —
+      weight 2, and the only term forcing a full sweep.
   - **DEC-049's arithmetic was six times too kind** and the board said so: a simulated cell costs
     **250 us**, not the 40 the four greedy ghost steps suggested, because a cell is seven
     `game_tick` calls of Pacman, four ghosts, the timers and the bus. A frame's spare 13 ms buys
@@ -354,7 +379,7 @@ silently working around a wart.
   three tests of its own.
   - **It cost the AI its requirement, and that is the point.** The agent trained on the
     deterministic game scored **4,980 on its one episode and 2,197 over twenty jittered runs**: it
-    had memorised a trajectory. FR-037 is a mean over 20 runs again, and the agent is being retrained
+    had memorised a trajectory. The score is a mean over 20 runs again, and the agent is being retrained
     against the game it actually plays.
   - **Training's objective is no longer the score** (FR-036): **+500 a ghost** on top of it, and an
     episode ends at the **first** life lost. A flat penalty per life was rejected — a run ends
@@ -404,7 +429,7 @@ ceedling test:all
 # Train the AI (host only; needs the host build for libpacman_env.so — DEC-040)
 python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
 Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
-Training/.venv/bin/python Training/evaluate.py              # VT-UNIT-010: FR-037 and its baseline
+Training/.venv/bin/python Training/evaluate.py              # the score and its random baseline
 ./dev.sh train --hours 1                                    # a campaign that is finished in an hour
 ./dev.sh train                                              # the whole thing, which is a night
 ./dev.sh train-stop                                         # stop it

@@ -42,7 +42,7 @@ typedef struct env_batch_s env_batch_t;
 
 /*! \brief Which rules a run plays under — the curriculum of [M6 §6](../../Docu/Design/M6-Pacman-AI.md).
  *
- * Stage 3 is the real game, and it is the only stage FR-037 may be measured at: the earlier ones
+ * Stage 3 is the real game, and it is the only stage a whole-game score may be read at: the earlier ones
  * score lower because they have fewer things worth points in them, so their fitness is not
  * comparable with it.
  */
@@ -56,7 +56,7 @@ typedef enum
 /*! \brief Which of the game's two mazes a run is played on.
  *
  * The shipped game offers both (FR-040), but the AI may only be handed control in the normal
- * one — so #ENV_MAZE_NORMAL is where training and FR-037 belong, and the seeds passed alongside
+ * one — so #ENV_MAZE_NORMAL is where training and the measured score belong, and the seeds passed alongside
  * it are ignored: there is one normal maze and every level of a run plays it.
  *
  * #ENV_MAZE_GENERATED stays because the question "how does this agent do on a maze nobody has
@@ -161,7 +161,7 @@ void env_ghosts_eaten(const env_batch_t* in_batch, uint16_t* out_ghosts_eaten);
  * *because* the lives are gone, and where it is not constant it rewards the run that stopped early
  * by idling.
  *
- * Off by default, because FR-037 asks what a **run** scores and a run has three lives. Evaluation
+ * Off by default, because a reported score is what a **run** scores and a run has three lives. Evaluation
  * therefore leaves it alone and training turns it on.
  *
  * \param[in,out]   inout_batch: the batch
@@ -197,7 +197,7 @@ bool env_set_net(env_batch_t* inout_batch, uint16_t in_input_count, uint16_t in_
 
 /*! \brief Play uniformly at random instead of with a network — the baseline of VT-UNIT-010.
  *
- * Deliberately a *mode of the same runner* rather than a loop of its own in Python. FR-037 is a
+ * Deliberately a *mode of the same runner* rather than a loop of its own in Python. The score is a
  * comparison against this baseline, so the two figures have to come out of one harness; if the
  * baseline had its own episode loop, a difference between the loops would look like a difference
  * between the policies.

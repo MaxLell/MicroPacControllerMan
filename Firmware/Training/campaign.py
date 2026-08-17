@@ -4,7 +4,7 @@
     ./dev.sh train --hours 1                  # the same thing, detached, with the log followed
 
 Runs each configuration below for its share of the wall-clock time it is given, measures the winner
-against FR-037 on the **normal maze**, and appends a row to `Training/campaign/summary.md`. Read that
+on the **normal maze**, and appends a row to `Training/campaign/summary.md`. Read that
 file when it is done; it is the whole point of this script.
 
 Four things make it safe to leave alone.
@@ -17,7 +17,7 @@ does to a budget that cannot pay for all of them.
 
 **A run that cannot be paid for is dropped, not shortened.** Each run says the least time it is worth
 starting with (`min_hours`), because a run too short to reach stage 3 does not produce a weaker
-answer — it produces a stage-2 network, and stage 3 is the only stage FR-037 is about. Its share goes
+answer — it produces a stage-2 network, and stage 3 is the only stage a whole-game score means anything at. Its share goes
 to the runs that remain.
 
 **Every run is time-budgeted, not generation-budgeted.** A generation is not a fixed amount of
@@ -78,7 +78,7 @@ _CAMPAIGN_LIBRARY = os.path.join(_OUT_DIR, "libpacman_env.so")
 #: The default budget is their sum, which is what these figures used to mean literally.
 #:
 #: `min_hours` is the least it is worth starting with. It is not a preference — below it the run
-#: does not reach stage 3 in any useful number of generations, and stage 3 is the only stage FR-037
+#: does not reach stage 3 in any useful number of generations, and stage 3 is the only stage the score
 #: is measured on. Measured on four cores: a NEAT generation costs about 14 s (250 genomes x 12
 #: episodes) and an ES one about 3 s (32 x 12), which is the whole reason their floors differ by
 #: six times. `--episode whole-run` plays three lives instead of one, so its generations cost
@@ -202,15 +202,15 @@ def _evaluate(winner_path: str) -> "tuple[str, dict]":
     text = result.stdout + result.stderr
     numbers = {"trained": None, "random": None, "met": result.returncode == 0}
 
-    # Parsed off evaluate.py's own verdict lines rather than recomputed, so the summary cannot
-    # disagree with the harness that produced it:
+    # Parsed off evaluate.py's own report rather than recomputed, so the summary cannot disagree
+    # with the harness that produced it:
     #
-    #   FR-037: 2400.0 vs. required 4600 — NOT met
-    #            2400.0 vs. random 433.5 (5.5x) — met
+    #   score:  2400.0   (0.92 cleared levels)
+    #           2400.0 vs. random 433.5 (5.5x) — ahead
     for line in text.splitlines():
         stripped = line.strip()
 
-        if stripped.startswith("FR-037:"):
+        if stripped.startswith("score:"):
             numbers["trained"] = float(stripped.split()[1])
         elif " vs. random " in stripped:
             numbers["random"] = float(stripped.split(" vs. random ")[1].split()[0])
@@ -224,13 +224,16 @@ def _write_summary(rows: list, dropped: list, hours: float) -> None:
 
     with open(path, "w") as handle:
         handle.write("# Training campaign\n\n")
-        handle.write("FR-037 asks for **4,600** points on the normal maze — the only maze the AI\n")
-        handle.write("may be handed control in (FR-040) — and for more than a uniform-random policy\n")
-        handle.write("on the same maze. Both figures are the mean of twenty runs on the same twenty\n")
-        handle.write("draws: the game's timings are jittered (FR-044), so a run is a draw rather than\n")
-        handle.write("a measurement. Every figure below comes out of `Training/evaluate.py`, which\n")
-        handle.write("measures both policies in one run so the comparison cannot drift.\n\n")
-        handle.write("| run | what | budget | score | vs. random | factor | nodes | conns | gen | FR-037 |\n")
+        handle.write("Scores on the normal maze — the only maze the AI may be handed control in\n")
+        handle.write("(FR-040) — against a uniform-random policy on the same maze. **There is no\n")
+        handle.write("threshold**: FR-037 asked for 4,600 and was withdrawn on 2026-08-17 (DEC-053),\n")
+        handle.write("because what is wanted is the score maximised rather than a bar cleared. For\n")
+        handle.write("scale, a cleared level 1 is 2,600. Both figures are the mean of twenty runs on\n")
+        handle.write("the same twenty draws: the game's timings are jittered (FR-044), so a run is a\n")
+        handle.write("draw rather than a measurement. Every figure below comes out of\n")
+        handle.write("`Training/evaluate.py`, which measures both policies in one run so the\n")
+        handle.write("comparison cannot drift.\n\n")
+        handle.write("| run | what | budget | score | vs. random | factor | nodes | conns | gen | ok |\n")
         handle.write("|---|---|---|---|---|---|---|---|---|---|\n")
 
         for row in rows:

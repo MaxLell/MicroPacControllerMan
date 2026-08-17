@@ -9,7 +9,7 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 > (FR-029/FR-040..043), each with its own high scores — RAM **71.6 %**
 > (187,584 of 256 kB), flash **21.6 %** (111,504 of the 504 kB left
 > after the high-score page), both builds warning-free, **449** host unit tests green. **Every
-> requirement in the spec has a passing test**, FR-037's play strength included, though
+> requirement in the spec has a passing test** — the play-strength one was withdrawn rather than met ([DEC-053](../Docu/PrePlanning/11-Decisions-and-As-Built.md)), though
 > [M6 §14](../Docu/Design/M6-Pacman-AI.md) records how narrow that margin is; the two timing budgets
 > that used to sit here as unmet are **withdrawn** rather than satisfied
 > ([DEC-036](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The known edges are recorded in
@@ -249,10 +249,10 @@ is a command rather than a recipe:
 ```
 ./dev.sh adopt-weights                        # Training/winner.json
 ./dev.sh adopt-weights Training/campaign/normal-seed1.json
-./dev.sh adopt-weights --force <file>         # one that does not meet FR-037
+./dev.sh adopt-weights --force <file>         # one that scores worse than what ships
 ```
 
-It measures the winner first and **refuses to adopt one that fails VT-UNIT-010**, because training
+It measures the winner first and **refuses to adopt one that scores below what is already shipped**, because training
 produces a winner every time including a bad one, and the thing that must not happen quietly is a
 worse agent replacing a better one. Then it exports `App/pacman_ai/ai_weights.[ch]`, rebuilds the
 host library and **re-records the FR-039 state set** — in that order. Exporting weights changes what

@@ -7,6 +7,14 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
+> **FR-037 no longer exists.** The owner withdrew the play-strength requirement and its test on
+> **2026-08-17** ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)) — he wants the score
+> maximised, not a line crossed — so every mention of it below §17 is **history**, kept because the
+> sections are dated records of what was true when they were written and because a threshold that was
+> chased and missed for a fortnight is part of how this milestone went. What survives is the *scale*:
+> 4,600 was ten times a random policy, and a cleared level 1 is 2,600. [§17](#17-a-leaf-that-can-see-and-weights-that-were-fitted-rather-than-argued)
+> is the current state, and the player there scores **21,870**.
+
 > **As-built, with FR-037 outstanding again — and this time for an instructive reason.** Everything
 > below is implemented and, where it touches hardware, verified on the board: `Services/neural_net`,
 > `App/pacman_ai`, `Firmware/Training/`, the takeover in the game, the agent's own game with its
@@ -104,7 +112,7 @@ generations** and stage 2 after **13**. Stage 3 is where the time goes, and §14
 resources is *not* learning at all — it is minimax, alpha-beta and expectimax over an evaluation
 function. It would very likely outscore a small evolved network, and it needs no training. It is
 rejected because FR-038 and the owner's brief ask for trained weights ported to the target, not a
-search. But it earns a place as a **reference opponent**: an expectimax agent gives FR-037 an
+search. But it earns a place as a **reference opponent**: an expectimax agent gives the score an
 upper reference to compare against, and if evolution stalls it is the natural teacher for
 behaviour cloning.
 
@@ -235,7 +243,7 @@ Two honest limitations of the seam as built:
 - **Demotion is substitution, not removal.** A power pellet becomes an ordinary one, so the pellet
   counts are unchanged and "the level is cleared" keeps its meaning and its code path. The score
   is lower by what the four energizers and any eaten ghost would have paid — which matters when
-  comparing a stage-2 fitness against a stage-3 one, and is why FR-037 is only ever measured at
+  comparing a stage-2 fitness against a stage-3 one, and is why a whole-game score is only ever read at
   stage 3.
 
 ## 7 The training harness
@@ -248,7 +256,7 @@ Firmware/Training/env_api.c        -> libpacman_env.so, the game as a shared lib
 Firmware/Training/pacman_env.py    -> the ctypes shim, and nothing else
 Firmware/Training/net.py           -> a genome flattened into what neural_net reads
 Firmware/Training/train.py         -> neat-python, the evolution loop, the curriculum
-Firmware/Training/evaluate.py      -> VT-UNIT-010: FR-037 and its baseline, one run
+Firmware/Training/evaluate.py      -> the score and its random baseline, one run
 Firmware/Training/export_c.py      -> the winner -> App/pacman_ai/ai_weights.[ch]
 Firmware/Training/record_states.c  -> pacman_ai_record: the FR-039 state set as C
 Firmware/Training/config-neat.txt  -> the evolution's settings
@@ -281,7 +289,7 @@ void         env_destroy(env_batch_t*);
 ```
 
 `maze` is `ENV_MAZE_NORMAL` or `ENV_MAZE_GENERATED`, and the seeds are ignored for the former —
-there is one normal maze and every level of a run plays it. Training and FR-037 use the normal maze
+there is one normal maze and every level of a run plays it. Training and the measured score use the normal maze
 only; the generated path stays so that "how does this agent do on a maze nobody has ever played"
 remains a question that can be *asked* (`evaluate.py --maze generated`), even though nothing gates
 on the answer any more.
@@ -438,7 +446,7 @@ the live flag rather than the sticky one.
 
 ## 13 The acceptance seed set — retired
 
-**Superseded by [DEC-045](../PrePlanning/11-Decisions-and-As-Built.md).** FR-037 is now measured on
+**Superseded by [DEC-045](../PrePlanning/11-Decisions-and-As-Built.md).** the score is now measured on
 one full run of the **normal maze**, against twenty episodes of a uniform-random policy on the same
 maze, because that is the only maze the game hands the AI control in (FR-040). A score on twenty
 mazes the agent will never be handed control in answers nothing about the agent a player can switch
@@ -459,19 +467,20 @@ in a diff, whereas swapping seed 7 for seed 8 because seed 7 is unkind looks lik
 The range starts at 1000 to stay clear of the low seeds the maze tests already use, so a
 regression in the generator cannot be masked by a policy that has over-fitted to the same mazes.
 
-Twenty runs is enough for the comparison FR-037 asks for, since the bar is a factor of ten over a
+Twenty runs is enough for the comparison FR-037 asked for, since the bar is a factor of ten over a
 random policy rather than a few per cent. It is **not** enough to claim a small improvement over
 another agent; a comparison that close needs a larger set and should say so at the time.
 
 The random-policy baseline is re-measured by the same harness (VT-UNIT-010) rather than quoted from
 this document — the 464.3-point figure here was taken over 329 episodes on generated mazes and
 exists to justify the threshold, not to be compared against. On the normal maze the same harness
-measures **433.5** over twenty episodes, which is close enough to leave FR-037's 4,600 where it is:
+measures **433.5** over twenty episodes, which is close enough to leave the 4,600 FR-037 asked for where it is:
 the bar was set at ten times random, and ten times random has not moved.
 
 ## 14 Play strength: what was measured, and what is being done
 
-FR-037 is **not met yet**, and this section is the record of why rather than a promise about it.
+FR-037 was **not met yet** when this was written, and this section is the record of why rather than a
+promise about it. The requirement was withdrawn on 2026-08-17 ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)).
 
 The first full run of the curriculum, 150 genomes on four mazes per generation:
 
@@ -482,7 +491,7 @@ The first full run of the curriculum, 150 genomes on four mazes per generation:
 | stage 3, best fitness reached | ~3,500, at about generation 95 of 320, then flat |
 | **on the acceptance seeds, stage 3** | **2,270 mean** — max 3,080, min 1,290, level 2 reached |
 | the same harness's random baseline | **431 mean** |
-| factor over random | **5.3**, where FR-037 asks for 10 |
+| factor over random | **5.3**, where FR-037 asked for 10 |
 
 The agent walks, eats and avoids ghosts. What it does not do is finish level 1 — it dies at
 something like 85–95 % of it, which is exactly what a mean of 2,270 against a 2,440-point level
@@ -534,7 +543,7 @@ cheaper measurement fell out of it.
 
 The starting point is measured rather than assumed. The agent the firmware ships — trained on
 generated mazes — plays the normal maze for **2,400 points** against **433.5** for a uniform-random
-policy on the same maze: a factor of 5.5, where FR-037 asks for 10, and the same gap the generated
+policy on the same maze: a factor of 5.5, where FR-037 asked for 10, and the same gap the generated
 mazes showed. So the change of maze on its own buys nothing; what it buys is a fitness signal that
 can tell ability from luck, and generations cheap enough to use a lot of.
 
@@ -549,7 +558,8 @@ than of the mazes, since a run with the maze fixed has nothing else left to be l
 | `normal-seed1` | 90 min, 276 generations | **4,980** | **11.5×** | **met** |
 | `normal-seed2` | 75 min, 320 generations | 4,260 | 9.8× | not met |
 
-**FR-037 is met by the agent that ships** — seed 1's network, 35 nodes with 8 hidden and 19
+**FR-037 was met by the agent that shipped at the time** — later taken back by §14.3's jitter, and the
+requirement withdrawn altogether on 2026-08-17 ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)) — seed 1's network, 35 nodes with 8 hidden and 19
 connections, 334 bytes of tables, verified on the board by VT-INT-024 against the host. It clears
 level 1 and dies in level 2.
 
@@ -583,7 +593,7 @@ became stochastic. §14.2's worry about the margin was right and understated it.
 
 Two consequences, both taken:
 
-- **FR-037 is a mean over 20 runs again.** The single-episode form DEC-045 earned lasted an hour.
+- **the score is a mean over 20 runs again.** The single-episode form DEC-045 earned lasted an hour.
 - **The objective is reshaped** (FR-036): +500 a ghost on top of the score, and an episode ends at
   the *first* life lost. The second is what makes dying cost anything at all — see
   [DEC-047](../PrePlanning/11-Decisions-and-As-Built.md) for why a flat penalty per life is a
@@ -710,7 +720,7 @@ over nineteen. Much slower, not stopped, and the remaining mechanism is not yet 
 Everything §14.5 left open was measured across five runs of four hours each, all on the 23 features,
 all with restarts, all on the acceptance seeds at **100 episodes** rather than twenty. That change of
 sample size is the first result: at n=20 the standard error is about 170 points against differences
-of 150–350, and three conclusions drawn at that size had to be withdrawn. The figure FR-037 asks for
+of 150–350, and three conclusions drawn at that size had to be withdrawn. The figure FR-037 asked for
 is a mean of twenty runs, which is fine as an acceptance gate and far too few to compare two agents
 with.
 
@@ -754,7 +764,7 @@ different achievement from scoring well and the one that a run to level 21 is ma
 the generations, and with restarts already supplying the exploration, the generations are worth more.
 
 Still true, and still the thing in the way: level 2 is not level 21, and the score is a long way from
-FR-037's 4,600. What the night established is which levers move it — a dense, continuous cost for
+the 4,600 FR-037 asked for. What the night established is which levers move it — a dense, continuous cost for
 being in danger — and which do not: a bigger population, a richer observation (§14.5), a sparse
 terminal bonus, or paying the agent for the ghosts it eats.
 
@@ -840,7 +850,7 @@ after adding it reported no change at all — worth knowing before reading a siz
 
 ### 15.4 What it scores, and what that settles
 
-On FR-037's own maze and FR-037's own twenty draws (seeds 1000..1019), **and at two budgets, because
+On the normal maze and the twenty draws 1000..1019 (seeds 1000..1019), **and at two budgets, because
 the two answer different questions**:
 
 | | mean over 20 runs | best | worst |
@@ -849,13 +859,13 @@ the two answer different questions**:
 | the shipped trained agent, against these ghosts | 2,706 | — | — |
 | **`pacman_lookahead` as the board runs it** — depth 3, **500 ticks** | **3,132** | 4,150, level 1 | 2,140 |
 | **`pacman_lookahead` given all the time it wants** — depth 3, **5,000 ticks** | **7,076** | **16,560, level 4** | 2,640 |
-| FR-037 asks for | 4,600 | | |
+| FR-037 asked for | 4,600 | | |
 
 **This table used to have one row where it now has two, and the row it had was the second one.** The
 7,076 was measured before §15.2's budget existed — with the search allowed to run to its depth
 ceiling — and it was left standing when the board cut the allowance to 500 ticks. It is a real
 figure and it is reproducible to the point, best run and worst run; it is simply **not the figure
-for the firmware that ships**. What ships scores **3,132**, which is *below* FR-037's threshold
+for the firmware that ships**. What ships scores **3,132**, which is *below* the threshold FR-037 asked for
 rather than half again above it. §15.5 is where that came from and what it costs to close.
 
 The conclusion the section was written for **survives the correction, and is the reason it matters
@@ -865,7 +875,7 @@ agent has met it since. *The gap is the agent's, not the game's.* What has chang
 it is now known to cost **about three times the thinking a frame currently pays for**, which is a
 statement about the budget and not about the maze.
 
-**Neither row satisfies FR-037**, and neither is meant to: FR-038 asks for trained weights evaluated
+**Neither row satisfied FR-037**, and neither was meant to: FR-038 asks for trained weights evaluated
 on the target, and a search is not weights. The unconstrained row is the upper mark, and it is a
 measured one.
 
@@ -930,7 +940,7 @@ The same twenty draws, depth ceiling 3 throughout, varying only the tick budget:
 | mean score | 3,132 | 3,271 | 3,624 | **5,399** | 5,872 | 5,674 | 6,714 | **7,076** |
 | junctions reached | 1.63 | | | 2.55 | 2.81 | | | 3.00 |
 
-**FR-037's 4,600 is crossed between 1,000 and 1,500 ticks** — about **three times** what a frame
+**the 4,600 FR-037 asked for is crossed between 1,000 and 1,500 ticks** — about **three times** what a frame
 pays for now — and the curve saturates at 5,000, where the depth ceiling of 3 is reached on every
 decision. So the whole useful range is 500 → 5,000, a factor of ten, and it is bought with time
 alone.
@@ -983,10 +993,10 @@ leg there instead of 32 ticks later:
 | **stall recognised at once** | **4,432** | 1.89 | 1.0 % |
 | stall recognised at once, **and three times the budget** | **9,553** | 2.79 | 0.8 % |
 
-Those are FR-037's own twenty draws, which is the right set to *accept* against and the wrong one to
+Those are the twenty draws 1000..1019, which is the right set to *accept* against and the wrong one to
 *compare* on — §14 says so about training and it is just as true here. Over a hundred draws the
 same change is **3,123 → 3,889, +25 %**. Both numbers are honest and they are answers to different
-questions; the twenty-draw one is quoted first because it is the one FR-037 asks for, and the
+questions; the twenty-draw one is quoted first because it is the one FR-037 asked for, and the
 hundred-draw one is the size of the effect.
 
 The decision costs what it did — host mean 331 us against 359 us, worst *lower*, because the tick
@@ -1030,12 +1040,12 @@ owner's instruction: **stop wasting the ticks a decision already has** (RF-019),
 confining a decision to one frame**. The first is worth a quarter, the second nearly quadruples the
 player, and neither costs a millisecond of frame time it did not already have.
 
-| over 100 draws (seeds 1000..1099) | mean score | over FR-037's own twenty |
+| over 100 draws (seeds 1000..1099) | mean score | over the reserved twenty |
 |---|---|---|
 | the search as §15.4 corrected it | 3,123 | 3,132 |
 | **+ a stranded Pacman noticed at once** | 3,889 | 4,432 |
 | **+ thinking across the frames of a cell** | **11,652** | **11,947** |
-| FR-037 asks for | 4,600 | 4,600 |
+| what FR-037 asked for, before it was withdrawn | 4,600 | 4,600 |
 
 ### 16.1 A stranded Pacman, noticed (RF-019)
 
@@ -1138,3 +1148,115 @@ the same and the tie-break flipping one cell later. Breaking ties by carrying st
 3,573 against 3,123 on the one-shot search and cut the dithering with it; it is not built, because
 it changes what the player *decides* rather than how much it gets to think, and that is a separate
 decision to take.
+
+## 17 A leaf that can see, and weights that were fitted rather than argued
+
+[§16.5](#165-the-dithering-is-better-and-is-not-gone) left one cause standing: **beyond its horizon
+the evaluation knew nothing.** Three terms — score gained, lives lost, and the straight-line distance
+to the nearest killing ghost capped at eight cells — and past that cap every branch was worth exactly
+the same. This section is that fixed, on the owner's instruction, and the **play-strength requirement
+withdrawn** ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)) because what he wants is the
+score maximised rather than a line crossed.
+
+| on seeds 1000..1019 | mean score | mean level |
+|---|---|---|
+| §15.4's corrected figure | 3,132 | 1.0 |
+| §16, thinking across frames | 11,947 | 2.9 |
+| **§17, a leaf that can see** | **21,870** | **5.90** |
+| for scale: a cleared level 1 | 2,600 | |
+| for scale: a uniform-random policy | 433 | |
+
+### 17.1 One walk outwards, four answers
+
+A leaf now looks around itself by **breadth-first search over the open cells**, and the numbers it
+gets back are maze distances rather than straight lines. That is the whole difference: a ghost behind
+a wall is now as far away as the way round to it, which is what a straight line could never say and
+what let a leaf mistake a cul-de-sac for an open corridor.
+
+The obvious objection is cost, and `prv_safety_of`'s old comment made it: a breadth-first walk over
+868 cells is more than the leg that produced the position cost to simulate. It is right, and the
+answer is that the walk is **bounded and shared**:
+
+- **One walk, four answers** — the nearest killing ghost, the nearest *frightened* one, the nearest
+  uneaten pellet, and the count of ways out of the cell. Asking separately would be four walks over
+  the same cells.
+- **It stops when it has them.** Breadth-first means the first of a kind it meets is the nearest, so
+  there is nothing a wider sweep could revise. Outside a frightened window it does not look for prey
+  at all, because there is none to find.
+- **It never visits more than #PACMAN_LOOKAHEAD_SCAN_CELLS.** This is the one that had to be
+  measured to be believed — see §17.3.
+
+**A\* was considered and is the wrong tool**, which is worth writing down because it is the obvious
+one. A\* answers one-to-one; this is many-to-one, forty-five leaves against four ghosts, and on a
+grid where every step costs the same it degenerates towards breadth-first with a heap bolted on. The
+question shapes the algorithm: bounded breadth-first from the leaf, not a shortest path to a target.
+
+### 17.2 The weights, and what they turned out to want
+
+Seven hand-picked constants became **six fitted ones** in `pacman_lookahead_weights_t`, settable at
+runtime so the host can vary them and left at their defaults on the board.
+
+`Training/fit_lookahead.py` fits them with a (1+9) evolution strategy on **seeds 2000..2015**, so
+that 1000..1019 stays a set nobody trained against. It drives the shipped loop through
+`Training/fit_lookahead.c`, one process per candidate, so the thing being fitted is the player that
+ships. The fitness is deterministic — fixed seeds, no jitter to average out — so what has to be
+guarded against is fitting sixteen draws rather than the game. It was not: **30,874 on the training
+seeds against 30,262 on the acceptance seeds**, before the cost work of §17.3 brought both down.
+
+One and a half hours of wall clock took the hand-picked weights from 10,368 to 30,874, and **what it
+found is more interesting than the number**:
+
+| | hand-picked | fitted |
+|---|---|---|
+| `point` — per point of score gained | 10 | **2** |
+| `prey` — per cell of nearness to a frightened ghost | 20 | **53** |
+| `threat` — per cell of distance to a killer | 3 | 13 |
+| `escape` — per way out of the cell | 5 | 10 |
+| `food` — per cell of nearness to a pellet | 5 | 2 |
+
+**It stopped playing for pellets and started playing for ghosts.** That is not a quirk of the fit; it
+is the game's own arithmetic, which nobody had put into the evaluation: a four-ghost sweep is 3,000
+points where a whole level of pellets is 2,440, and the pellets get eaten on the way to the ghosts
+anyway. The hand-picked weights had it exactly backwards, and no amount of arguing would have found
+that — which is the case for fitting rather than arguing, made by the thing itself.
+
+### 17.3 What the board said, twice
+
+The scan runs at every leaf, forty-five times a decision, and the first version of it did not fit:
+
+| | worst frame, of 13 ms spare |
+|---|---|
+| §16, before the scan | 11 ms |
+| radius 20, unbounded sweep | **23 ms** |
+| + stops when it has its answers | **23 ms** |
+| + at most 48 cells visited | 14 ms |
+| + slice down from 350 to 250 ticks | **11 ms — passes** |
+
+The middle row is the instructive one. Stopping early cut the *mean* and left the worst frame exactly
+where it was, because the worst case is precisely the position where there is nothing nearby to stop
+for: an emptied stretch of maze with the ghosts elsewhere. **An early exit improves the common case
+and a cap improves the worst one, and a frame budget is a worst-case promise.**
+
+So the bound moved from the radius to the *work*: at most forty-eight cells visited, whatever the
+radius allows. It is the same lesson [DEC-050](../PrePlanning/11-Decisions-and-As-Built.md) learned
+about the search itself — a budget has to be denominated in what is actually paid for, and every cell
+a scan visits costs the same. What it costs in answers is one-sided and small: a distance beyond the
+cap reads as the radius, which is what "nothing near" already meant.
+
+**The cap and the smaller slice cost score, and that is the honest bottom line**: 30,262 on the
+acceptance seeds became **21,870**. A third of the gain went to making it fit in a frame. It is still
+nearly double §16's 11,947 and it reaches level 5.9 where §16 reached 2.9 — and unlike the 30,262 it
+runs on the board.
+
+### 17.4 What is left
+
+- **The weights were fitted before the cap and the slice change**, so they are the best weights for a
+  player that no longer exists. Refitting against the shipped configuration is the obvious next
+  hour of wall clock and nobody has spent it.
+- **`density` is gone** — pellets within the radius, weight 2 out of a range where prey got 53. It
+  was the only term that forced a full sweep, so the cheapest term to compute was carrying the most
+  and the dearest almost nothing.
+- The two levers §16 named and this section did not use: silencing the message bus inside a clone
+  (90 % of a decision is `game_tick`, and every tick pays for a broker whose output the search throws
+  away), and drawing less often in the AI's own game (7 ms of a 20 ms frame goes on drawing a game
+  nobody is steering). Either would buy back what §17.3 spent.

@@ -65,6 +65,8 @@
  */
 static const direction_e g_branch_order[] = {DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_EAST, DIRECTION_WEST};
 
+#define PACMAN_LOOKAHEAD_BRANCH_COUNT_VALUE ((uint8_t)(sizeof(g_branch_order) / sizeof(g_branch_order[0])))
+
 /*! \brief One game per level of depth, because a branch has to be tried without losing the
  *         position it branched from.
  *
@@ -153,47 +155,204 @@ static bool g_is_search_finished;
 /*! \brief The deepest *complete* deepening's answer, which is what a caller is given. */
 static direction_e g_best;
 
-/* The straight-line distance to the nearest ghost that could kill him, squared and capped.
+/*! \brief What one look around a leaf found, all of it in maze distance.
  *
- * Straight-line and not a maze distance on purpose: a maze distance is a breadth-first walk over
- * 868 cells, which is more than the whole leg that produced this position cost to simulate. This
- * term only sorts branches that scored the same, and for that a rough answer is the right price.
- * A frightened ghost is not counted — it is food, and `game` says which is which. */
-static int32_t prv_safety_of(const game_t* const in_game)
+ * Distances are #PACMAN_LOOKAHEAD_SCAN_RADIUS when nothing of that kind is in range, which is the
+ * honest reading of "not near anything" and keeps every term bounded. */
+typedef struct
 {
-    const cell_t pacman = game_get_pacman_cell(in_game);
-    int32_t nearest = PACMAN_LOOKAHEAD_SAFE_DISTANCE;
+    uint8_t ghost_distance;
+    uint8_t prey_distance;
+    uint8_t food_distance;
+    uint8_t escape_count;
+} pacman_lookahead_scan_t;
+
+#define PACMAN_LOOKAHEAD_CELL_COUNT ((uint16_t)(PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT))
+
+/*! \brief The breadth-first scan's own memory, stamped rather than cleared.
+ *
+ * A scan runs at every leaf — forty-five times a decision — so clearing 868 bytes each time would
+ * be most of what the scan costs. The stamp is the decision's own counter: a cell belongs to this
+ * scan when its mark equals the current stamp, so the previous scan's marks are stale rather than
+ * wrong and nothing has to be erased. */
+static uint16_t g_scan_mark[PACMAN_LOOKAHEAD_CELL_COUNT];
+static uint16_t g_scan_stamp;
+static uint16_t g_scan_queue[PACMAN_LOOKAHEAD_CELL_COUNT];
+
+static uint16_t prv_cell_index(cell_t in_cell)
+{
+    return (uint16_t)((in_cell.y * PLAYFIELD_WIDTH) + in_cell.x);
+}
+
+/* Everything the evaluation wants to know about a leaf, from **one** walk outwards.
+ *
+ * Breadth-first over the open cells, so the numbers are maze distances and a ghost behind a wall is
+ * as far away as the way round to it — which straight-line distance could not say, and which is the
+ * whole reason a leaf ever mistook a trap for an open corridor. The tunnel wraps, because Pacman
+ * does.
+ *
+ * **One walk, four answers.** Asking separately would mean four walks over the same cells, and the
+ * radius is what makes even one affordable: a scan reaches twenty cells, not the whole 868, so it
+ * costs a fraction of the leg that produced the position it is scoring.
+ */
+static void prv_scan_around(const game_t* const in_game, pacman_lookahead_scan_t* const out_scan)
+{
+    const playfield_t* const playfield = game_get_playfield(in_game);
+    const cell_t start = game_get_pacman_cell(in_game);
+
+    cell_t ghost_cell[GHOST_COUNT];
+    bool is_prey[GHOST_COUNT];
+    uint16_t head = 0U;
+    uint16_t tail = 0U;
     uint8_t index;
+
+    bool is_looking_for_killer = true;
+    bool is_looking_for_prey = false;
+    bool is_looking_for_food = true;
+
+    out_scan->ghost_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
+    out_scan->prey_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
+    out_scan->food_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
+    out_scan->escape_count = 0U;
 
     for (index = 0U; index < GHOST_COUNT; ++index)
     {
-        if (game_is_ghost_frightened(in_game, index))
+        ghost_cell[index] = game_get_ghost_cell(in_game, index);
+        is_prey[index] = game_is_ghost_frightened(in_game, index);
+
+        /* Nothing to look for when there is nothing to find: outside a frightened window this
+         * saves the scan from sweeping its whole radius for a ghost that cannot be eaten. */
+        is_looking_for_prey = is_looking_for_prey || is_prey[index];
+    }
+
+    for (index = 0U; index < PACMAN_LOOKAHEAD_BRANCH_COUNT_VALUE; ++index)
+    {
+        if (pacman_may_step(&in_game->pacman, playfield, g_branch_order[index]))
+        {
+            ++out_scan->escape_count;
+        }
+    }
+
+    ++g_scan_stamp;
+
+    /* The queue holds cells; the distance of each is kept beside it in the mark array, which is
+     * why the mark is a stamp *and* a depth: `g_scan_mark` is the stamp, `g_scan_depth` the ring. */
+    static uint8_t g_scan_depth[PACMAN_LOOKAHEAD_CELL_COUNT];
+
+    g_scan_mark[prv_cell_index(start)] = g_scan_stamp;
+    g_scan_depth[prv_cell_index(start)] = 0U;
+    g_scan_queue[tail] = prv_cell_index(start);
+    ++tail;
+
+    while ((head < tail) && (head < PACMAN_LOOKAHEAD_SCAN_CELLS))
+    {
+        const uint16_t here = g_scan_queue[head];
+        const uint8_t depth = g_scan_depth[here];
+        cell_t cell;
+
+        ++head;
+
+        cell.x = (int16_t)(here % PLAYFIELD_WIDTH);
+        cell.y = (int16_t)(here / PLAYFIELD_WIDTH);
+
+        for (index = 0U; index < GHOST_COUNT; ++index)
+        {
+            if (!playfield_are_cells_equal(cell, ghost_cell[index]))
+            {
+                continue;
+            }
+
+            if (is_prey[index])
+            {
+                if (depth < out_scan->prey_distance)
+                {
+                    out_scan->prey_distance = depth;
+                    is_looking_for_prey = false;
+                }
+            }
+            else if (depth < out_scan->ghost_distance)
+            {
+                out_scan->ghost_distance = depth;
+                is_looking_for_killer = false;
+            }
+            else
+            {
+                /* already have a nearer one of this kind */
+            }
+        }
+
+        if (is_looking_for_food && (playfield_get_pellet(playfield, cell) != PLAYFIELD_PELLET_NONE))
+        {
+            out_scan->food_distance = depth;
+            is_looking_for_food = false;
+        }
+
+        /* **Everything it came for is known, so it stops.** Because the walk is breadth-first the
+         * first of a kind it meets is the nearest one, and there is nothing a wider sweep could
+         * revise. That is what makes the scan affordable at forty-five leaves a decision: the board
+         * measured a full-radius sweep at 23 ms of a frame that has 13, and the usual exit is a
+         * handful of cells. */
+        if (!is_looking_for_killer && !is_looking_for_prey && !is_looking_for_food)
+        {
+            break;
+        }
+
+        if (depth >= (uint8_t)(PACMAN_LOOKAHEAD_SCAN_RADIUS - 1U))
         {
             continue;
         }
 
-        const uint32_t squared = playfield_get_squared_distance(pacman, game_get_ghost_cell(in_game, index));
-
-        if ((int32_t)squared < nearest)
+        for (index = 0U; index < PACMAN_LOOKAHEAD_BRANCH_COUNT_VALUE; ++index)
         {
-            nearest = (int32_t)squared;
+            const cell_t next = playfield_wrap_cell(playfield_step(cell, g_branch_order[index]));
+            const uint16_t next_index = prv_cell_index(next);
+
+            if (!playfield_is_walkable(playfield, next) || (g_scan_mark[next_index] == g_scan_stamp))
+            {
+                continue;
+            }
+
+            g_scan_mark[next_index] = g_scan_stamp;
+            g_scan_depth[next_index] = (uint8_t)(depth + 1U);
+            g_scan_queue[tail] = next_index;
+            ++tail;
         }
     }
-
-    return nearest;
 }
+
+/*! \brief The weights in force. Defaults until a host trainer says otherwise. */
+static pacman_lookahead_weights_t g_weights = {
+    .point = 2,
+    .death = 70791,
+    .threat = 13,
+    .prey = 53,
+    .food = 2,
+    .escape = 10,
+};
 
 /* What a simulated position is worth, measured against the position the search started from.
  *
- * Everything here is a difference rather than an absolute, which is what makes the numbers mean
- * "what this branch got me" instead of "how the run is going". */
+ * The score and the lives are differences rather than absolutes, which is what makes them mean
+ * "what this branch got me" instead of "how the run is going". Everything the scan found is an
+ * absolute, because it is a fact about where the branch *ends* and there is nothing to subtract.
+ *
+ * Distances enter as **nearness** — radius minus distance — so that every term reads "more is
+ * better" and none of them can run away. */
 static int32_t prv_evaluate(const game_t* const in_leaf, const game_t* const in_root)
 {
     const int32_t points = (int32_t)game_get_score(in_leaf) - (int32_t)game_get_score(in_root);
     const int32_t lives_lost = (int32_t)game_get_lives(in_root) - (int32_t)game_get_lives(in_leaf);
+    const int32_t radius = (int32_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
 
-    return (points * PACMAN_LOOKAHEAD_POINT_WEIGHT) - (lives_lost * PACMAN_LOOKAHEAD_DEATH_PENALTY)
-           + prv_safety_of(in_leaf);
+    pacman_lookahead_scan_t scan;
+
+    prv_scan_around(in_leaf, &scan);
+
+    return (points * g_weights.point) - (lives_lost * g_weights.death)
+           + ((int32_t)scan.ghost_distance * g_weights.threat)
+           + ((radius - (int32_t)scan.prey_distance) * g_weights.prey)
+           + ((radius - (int32_t)scan.food_distance) * g_weights.food)
+           + ((int32_t)scan.escape_count * g_weights.escape);
 }
 
 /* Whether a cell is somewhere a decision gets made: more than the way in and one way on.
@@ -288,7 +447,7 @@ static uint16_t prv_walk_to_next_decision(game_t* const inout_game, direction_e 
     return cells;
 }
 
-#define PACMAN_LOOKAHEAD_BRANCH_COUNT ((uint8_t)(sizeof(g_branch_order) / sizeof(g_branch_order[0])))
+#define PACMAN_LOOKAHEAD_BRANCH_COUNT PACMAN_LOOKAHEAD_BRANCH_COUNT_VALUE
 
 /* Where a level stands: level 0 on the root, every other on the clone the level above walked. */
 static const game_t* prv_state_at(uint8_t in_level)
@@ -557,6 +716,34 @@ void pacman_lookahead_get_report(pacman_lookahead_report_t* out_report)
     ASSERT(out_report != NULL);
 
     *out_report = g_report;
+}
+
+void pacman_lookahead_get_default_weights(pacman_lookahead_weights_t* out_weights)
+{
+    static const pacman_lookahead_weights_t k_defaults = {
+        .point = 2,
+        .death = 70791,
+        .threat = 13,
+        .prey = 53,
+        .food = 2,
+        .escape = 10,
+    };
+
+    ASSERT(out_weights != NULL);
+
+    *out_weights = k_defaults;
+}
+
+void pacman_lookahead_set_weights(const pacman_lookahead_weights_t* in_weights)
+{
+    if (in_weights == NULL)
+    {
+        pacman_lookahead_get_default_weights(&g_weights);
+
+        return;
+    }
+
+    g_weights = *in_weights;
 }
 
 direction_e pacman_lookahead_decide(const game_t* in_game)
