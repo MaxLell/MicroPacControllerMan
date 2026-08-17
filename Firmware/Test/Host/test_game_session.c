@@ -17,7 +17,6 @@
  * path has to be named even where this file calls none of it directly. */
 #include "active_object.h"
 #include "agent.h"
-#include "ai_weights.h"
 #include "assert_probe.h"
 #include "circular_buffer.h"
 #include "custom_assert.h"
@@ -36,9 +35,7 @@
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
-#include "neural_net.h"
 #include "pacman.h"
-#include "pacman_ai.h"
 #include "pacman_lookahead.h"
 #include "playfield.h"
 #include "render.h"
@@ -100,8 +97,29 @@ static uint32_t prv_run_one_frame(void)
     return g_region_count;
 }
 
+/* Make the search play badly, on purpose, for the whole of this file.
+ *
+ * **These tests are about the shell's flow, not about how well the search plays** — the lockout, the
+ * loop, which table a run reaches. With the weights the firmware ships, an AI run reaches level six
+ * and takes tens of millions of simulated ticks to finish; a test that played one to the end ran for
+ * twelve minutes before it was killed. Zero weights make every position worth the same, so the
+ * search falls back to the first way out of each cell and the run ends in the time a test may have.
+ *
+ * It is the shipped code either way, driven through its own public setter — not a stub, and not a
+ * second implementation of anything. */
+static void prv_make_the_search_hopeless(void)
+{
+    pacman_lookahead_weights_t hopeless = {0};
+
+    hopeless.death = 1;
+
+    pacman_lookahead_set_weights(&hopeless);
+}
+
 void setUp(void)
 {
+    prv_make_the_search_hopeless();
+
     g_now_ms = TEST_START_TICK;
     g_region_count = 0U;
 

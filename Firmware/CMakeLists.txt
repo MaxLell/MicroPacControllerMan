@@ -97,8 +97,6 @@ if(PACMAN_HOST_BUILD)
         App/maze_gen/maze_gen.c
         App/ghost_path/ghost_path.c
         App/pacman/pacman.c
-        App/pacman_ai/ai_weights.c
-        App/pacman_ai/pacman_ai.c
         App/pacman_lookahead/pacman_lookahead.c
         App/playfield/playfield.c
         App/score/score.c
@@ -116,7 +114,6 @@ if(PACMAN_HOST_BUILD)
         Services/active_object/active_object.c
         Services/circular_buffer/circular_buffer.c
         Services/msg_broker/msg_broker.c
-        Services/neural_net/neural_net.c
         Services/msg_queue/msg_queue.c
         Services/sw_timer/sw_timer.c
         ThirdParty/embedded_utils/custom_assert.c)
@@ -135,7 +132,6 @@ if(PACMAN_HOST_BUILD)
         App/high_score
         App/maze_gen
         App/pacman
-        App/pacman_ai
         App/pacman_lookahead
         App/playfield
         App/score
@@ -154,7 +150,6 @@ if(PACMAN_HOST_BUILD)
         Services/circular_buffer
         Services/msg
         Services/msg_broker
-        Services/neural_net
         Services/msg_queue
         Services/sw_timer
         ThirdParty/embedded_utils)
@@ -181,34 +176,11 @@ if(PACMAN_HOST_BUILD)
                        "Install it with: sudo apt-get install -y libsdl2-dev")
     endif()
 
-    # The AI's training environment (DEC-040): the same game again, as a shared library
-    # Python can open with ctypes. `Training/` is host-only and nothing in the target build
-    # refers to it.
-    #
-    # It compiles the game a *second* time rather than linking `pacman_host`, and that is
-    # deliberate: training is the one consumer that cares about speed over debuggability, so
-    # it gets -O2 while the library the SDL app and the debugger use stays at -g. The source
-    # list is shared, so the two cannot drift apart.
-    # The FR-039 recorder: plays the trained network on the host and prints the states, with the
-    # host's own decisions about them, as the C the on-target test replays. C rather than Python so
-    # that it calls the very `pacman_ai_decide` the target calls, on the very same structs.
-    add_executable(pacman_ai_record Training/record_states.c)
-    target_link_libraries(pacman_ai_record PRIVATE pacman_host)
-    target_include_directories(pacman_ai_record PRIVATE Training)
-
     # One candidate of Training/fit_lookahead.py. Its own executable rather than a mode of something
     # else, because the driver runs one process per candidate to use every core — `pacman_lookahead`
     # is not reentrant.
     add_executable(pacman_lookahead_fitness Training/fit_lookahead.c)
     target_link_libraries(pacman_lookahead_fitness PRIVATE pacman_host)
-
-    add_library(pacman_env SHARED ${PACMAN_HOST_SOURCES} Training/env_api.c)
-    target_include_directories(pacman_env PUBLIC
-        $<TARGET_PROPERTY:pacman_host,INTERFACE_INCLUDE_DIRECTORIES>
-        Training)
-    target_compile_definitions(pacman_env PUBLIC PACMAN_HOST_BUILD)
-    target_compile_options(pacman_env PRIVATE -Wall -Wextra -O2)
-    set_target_properties(pacman_env PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
     return()
 endif()
@@ -238,8 +210,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/high_score/high_score.c
     App/maze_gen/maze_gen.c
     App/pacman/pacman.c
-    App/pacman_ai/ai_weights.c
-    App/pacman_ai/pacman_ai.c
     App/pacman_lookahead/pacman_lookahead.c
     App/playfield/playfield.c
     App/render/render.c
@@ -267,16 +237,12 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Services/active_object/active_object.c
     Services/circular_buffer/circular_buffer.c
     Services/msg_broker/msg_broker.c
-    Services/neural_net/neural_net.c
     Services/msg_queue/msg_queue.c
     Services/sw_timer/sw_timer.c
     Test/Target/ott.c
-    Test/Target/scripts/ott_ai_equivalence.c
-    Test/Target/scripts/ott_ai_frame_cost.c
     Test/Target/scripts/ott_lookahead_cost.c
     Test/Target/scripts/ott_search_budget.c
     Test/Target/scripts/ott_ai_high_score.c
-    Test/Target/scripts/ott_ai_equivalence_states.c
     Test/Target/scripts/ott_pacman_ai.c
     Test/Target/ott_framebuffer.c
     Test/Target/ott_scenarios.c
@@ -308,7 +274,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     App/high_score
     App/maze_gen
     App/pacman
-    App/pacman_ai
     App/pacman_lookahead
     App/playfield
     App/render
@@ -336,7 +301,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Services/circular_buffer
     Services/msg
     Services/msg_broker
-    Services/neural_net
     Services/msg_queue
     Services/sprite
     Services/sw_timer

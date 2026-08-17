@@ -92,15 +92,13 @@ void game_session_set_direction(direction_e in_direction);
 /*! \brief Who is steering Pacman.
  *
  * Two of these are machines and they are *different* machines, which is the whole reason this is
- * an enumeration and not the flag it replaced. The trained network answers from what it can see at
- * the moment it is asked; the search answers from what actually happens when the run is played
- * forward. Being able to swap between them inside one run is what makes them comparable — the same
- * maze, the same ghosts, the same seed.
+ * an enumeration and not the flag it replaced, and it is kept as one although there is only one
+ * machine left: the trained network went in DEC-054, and what the type says — *which* player, not
+ * *whether* a machine plays — is still the right question for a caller to answer.
  */
 typedef enum
 {
-    GAME_SESSION_PLAYER_HUMAN = 0, /*!< The joystick (FR-030)                                    */
-    GAME_SESSION_PLAYER_NETWORK,   /*!< The trained weights `pacman_ai` carries (FR-038)         */
+    GAME_SESSION_PLAYER_HUMAN = 0, /*!< The joystick                                             */
     GAME_SESSION_PLAYER_LOOKAHEAD  /*!< The search of `pacman_lookahead` (DEC-050)               */
 } game_session_player_e;
 
@@ -122,13 +120,13 @@ bool game_session_set_player(game_session_player_e in_player);
 /*! \brief Who is steering Pacman right now. */
 game_session_player_e game_session_get_player(void);
 
-/*! \brief Hand Pacman to the trained agent, or take him back.
+/*! \brief Hand Pacman to the machine, or take him back.
  *
  * #game_session_set_player said as a yes or no, kept because most callers only care whether a
  * *person* is playing — FR-034's high-score lockout, the joystick door, the on-target tests. It
  * cannot select the search; that needs the enumeration.
  *
- * \param[in]       in_is_enabled: `true` to let the trained agent play
+ * \param[in]       in_is_enabled: `true` to let the machine play
  * \return          `true` when control is now where the caller asked for it
  */
 bool game_session_set_ai_enabled(bool in_is_enabled);

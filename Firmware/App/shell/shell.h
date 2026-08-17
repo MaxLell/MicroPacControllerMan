@@ -123,17 +123,11 @@ void shell_set_direction(direction_e in_direction);
  */
 void shell_move_selection(direction_e in_direction);
 
-/*! \brief Which agent the AI game will hand Pac-Man to, as a `game_session_player_e`.
- *
- * Moved by pushing the menu's cursor left or right while `PAC-MAN AI` is selected, and reported
- * here so a test or the console can say what the menu is showing without reading pixels. */
-uint8_t shell_get_selected_ai(void);
-
 /*! \brief Which game the menu is offering to start, and which one a run in progress is (FR-040).
  *
  * One value, not two: the selection can only be moved on the menu, so while a run is in progress
- * it still says what that run was started as. That is what makes it the right thing for
- * #shell_toggle_ai and the high-score table to be chosen by.
+ * it still says what that run was started as. That is what makes it the right thing for the
+ * high-score table to be chosen by.
  */
 shell_mode_e shell_get_selected_mode(void);
 
@@ -155,27 +149,14 @@ shell_screen_e shell_get_screen(void);
  * | screen | game | what the button does |
  * |---|---|---|
  * | menu, score | any | start (FR-003) |
- * | a run | normal maze | hand Pac-Man to the agent, or take him back (FR-030) |
  * | a run | Pac-Man AI | turn the endless loop on or off (FR-043) |
- * | a run | random maze | nothing — the agent is not offered there (FR-040) |
+ * | a run | anything a person plays | nothing |
  *
- * The caller's job is to report the press and nothing else. #shell_toggle_ai and
- * #shell_toggle_infinite stay public for a test that means one of them specifically.
+ * **Handing Pac-Man over mid-run is gone** (DEC-054), so a person's run has no use for this button
+ * at all. The caller's job is to report the press and nothing else; #shell_toggle_infinite stays
+ * public for a test that means that one specifically.
  */
 void shell_press_user_button(void);
-
-/*! \brief Hand Pac-Man between the player and the trained agent (FR-030).
- *
- * Only in a **normal-maze** run. Not on the menu or the score screen, where the same button means
- * start (FR-003); not in a random-maze run, where the agent is not offered (FR-040) and a menu that
- * says so must be told the truth by the button; and **not in the Pac-Man AI game**, where the agent
- * plays start to finish and there is nobody to hand back to (FR-042) — a game that let the player
- * take over would be the normal maze under another name. Also does nothing when the weight table
- * cannot be evaluated, which is reported rather than swallowed so a caller can say so.
- *
- * \return          `true` when control actually changed hands
- */
-bool shell_toggle_ai(void);
 
 /*! \brief Whether the agent is playing right now, for a caller that reports what the board does. */
 bool shell_is_ai_playing(void);

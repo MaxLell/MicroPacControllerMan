@@ -14,19 +14,18 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that gave the look-ahead player's leaves eyes (DEC-053), on `feat/lookahead-evaluation` |
+| built from | the commit that deleted the trained network (DEC-054), on `feat/lookahead-evaluation` |
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 120,568 B of 504 kB — 23.4 % |
-| RAM | 240,120 B of 256 kB — 91.6 %, plus 12,008 B of SRAM4 — 73.3 % |
-| weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — scores **3,531**, against 2,600 for a cleared level 1 |
-| `pacman.hex` | sha256 `305bad6b5e0b14ff9e8bc2461623e561a7797b1574536291c898ff2f57481c2d` |
-| `pacman.bin` | sha256 `3d8c368965239b578abef1f9758ba6ebef905407c63dc1793cc4bb02a25f9689` |
+| flash | 108,092 B of 504 kB — 20.9 % |
+| RAM | 230,888 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
+| `pacman.hex` | sha256 `fde101b8b5ea7904d1b35d13f3e31fb3c2d48818747c7e043ed34d01ae0717f4` |
+| `pacman.bin` | sha256 `3ad2a32fd2be6c5c7b4574087fc9a68194126270c19ac43a7b4402bbe73396a4` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost`. The host side is green too: 487 unit tests, both builds.
+`lookahead_cost` — eleven tests now, two fewer because `ai_equivalence` and `ai_frame_cost` went with the trained network. The host side is green too: 446 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -55,37 +54,31 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-**The two agents live in the `PAC-MAN AI` game and are chosen on the menu.**
+**The machine lives in the `PAC-MAN AI` game.** Push the stick **down** once, to `PAC-MAN AI`, and
+press start.
 
-1. Push the stick **down** once, to `PAC-MAN AI`. The line under it reads `AGENT NEAT`.
-2. Push **left or right** to change it to `AGENT SEARCH`, and back.
-3. Press start.
-
-The agent has Pac-Man from the first frame and keeps him. While it plays, the HUD **names it**, in
-the gap between `1UP` and `LEVEL`:
+There is only one machine now: the trained network was deleted on 2026-08-17
+([DEC-054](../../Docu/PrePlanning/11-Decisions-and-As-Built.md)), so there is nothing to choose and
+sideways on the menu does nothing. It has Pac-Man from the first frame and keeps him. While it plays
+the HUD says so, in the gap between `1UP` and `LEVEL`:
 
 ```
-   1UP   3531        NEAT        LEVEL 1
-   1UP  21870        SEARCH      LEVEL 6
+   1UP  21870        AI          LEVEL 6
 ```
 
-so there is nothing to remember. **B1 in that game still means the endless mode** (`LOOP` on the
-lives row), unchanged.
+**B1 in that game means the endless mode** (`LOOP` on the lives row). In the two games a person
+plays, B1 now does nothing at all — handing Pac-Man over mid-run went with the network.
 
-Expect `SEARCH` to look **much** better. It averages **21,870** and reaches **level 5.9** against
-`NEAT`'s 3,531 and level 1 — for scale, a cleared level 1 is 2,600 points. It is also *slower to
-decide*, and you will not see that either: since DEC-052 it thinks a slice at a time across the ten
-frames a cell lasts, and a slice is under 4.5 ms of the 13 a frame has spare.
+Expect it to average **21,870** and reach **level 5.9** — for scale, a cleared level 1 is 2,600
+points and the trained network it replaced managed 3,531 at level 1. It hunts ghosts rather than
+hoovering pellets, because a four-ghost sweep is 3,000 points where a whole level of pellets is
+2,440, and that is what fitting its evaluation weights against whole games decided for it.
 
-**Since DEC-053 its leaves can see.** Each position it considers looks around itself by maze
-distance — nearest killing ghost, nearest frightened one, nearest pellet, ways out — and the six
-weights that balance those were **fitted by playing games** rather than chosen by argument. What the
-fit decided is visible in how it plays: it hunts ghosts rather than hoovering pellets, because a
-four-ghost sweep is 3,000 points and a whole level of pellets is 2,440.
+**It still dithers a little** — about one decision in twenty walks back the way it came, down from
+one in five before its leaves could see. [M6 §17](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
 
-`NORMAL MAZE` is the game you play, and there **B1 hands Pac-Man to the trained network and takes
-him back**, exactly as before. The search is deliberately not offered there. Any run you touch B1
-in stays out of that game's high-score table (FR-034).
+`NORMAL MAZE` and `RANDOM MAZE` are the games you play, and the machine is not offered in either.
+The AI's own runs go into its own high-score table and stay out of a person's (FR-034/FR-041).
 
 ## The console, if you want the numbers
 

@@ -86,9 +86,10 @@ static const struct
     const char* note; /*!< A second line under the label, or `NULL` */
     const char* name; /*!< For a caller reporting on the console    */
 } g_menu_options[SHELL_MODE_COUNT] = {
-    {"NORMAL MAZE", "AI ON DEMAND", "normal maze"},
-    /* No note: the AI game's second line is #g_selected_ai's name, drawn with the selection because
-     * it changes with it. `PLAYS ITSELF` was there and is what the label already says. */
+    {"NORMAL MAZE", NULL, "normal maze"},
+    /* No note on either: `AI ON DEMAND` went with the mid-run handover and the agent's name went
+     * with the trained network, both in DEC-054, and `PLAYS ITSELF` is what the AI label already
+     * says. */
     {"PAC-MAN AI", NULL, "pac-man ai"},
     {"RANDOM MAZE", NULL, "random maze"},
 };
@@ -115,7 +116,6 @@ static shell_mode_e g_selected_mode;
  * choice already means the endless mode (FR-043). It is also the honest place for it — which agent
  * is playing is a property of the run, and picking it before the run starts is what makes two runs
  * comparable. */
-static game_session_player_e g_selected_ai;
 
 /* Whether a run that ends should be followed by another one (FR-043). Only ever set in the Pac-Man
  * AI game; cleared when a run is started from the menu, so a game begun by hand is one game. */
@@ -313,33 +313,11 @@ static void prv_draw_scores(msg_display_list_t* inout_list)
  * actors of the *previous* list — so a background list drawn after it would wipe it. The scores
  * before it are the reason this is not simply "move the cursor": each game keeps its own table, so
  * the three numbers above the list are part of the selection. */
-/*! \brief The AI names as the menu shows them, indexed by `game_session_player_e`.
- *
- * Both padded to the same width on purpose: they are redrawn in place when the choice moves, and a
- * shorter name would leave the tail of a longer one on the panel.
- *
- * `AGENT` in front of the name rather than arrows around it, which is what this wanted to be: the
- * font is the 1980 ROM's, and that is letters, digits, a space and the one hyphen that had to be
- * drawn by hand — there is no `<` or `>` to have. The word does the arrows' other job anyway, which
- * is to say that this line is a property of the game above it and not a fourth game. */
-static const char* const g_menu_ai_labels[] = {NULL, "AGENT NEAT  ", "AGENT SEARCH"};
-
 static void prv_draw_selection(void)
 {
     msg_display_list_t list = {0};
 
     prv_draw_scores(&list);
-    prv_flush(&list);
-
-    /* Which agent the AI game will use, under its label. Here rather than in #prv_draw_menu because
-     * it changes without the menu being redrawn — left and right move it — and it has to be
-     * redrawn when it does.
-     *
-     * In a flush of its own, because a display list has a fixed capacity and the three score rows
-     * very nearly fill one. Appending to theirs overran it, which the list's own precondition
-     * caught. */
-    prv_draw_centred_text(&list, (int16_t)(prv_get_option_y(SHELL_MODE_AI) + MENU_NOTE_OFFSET_Y),
-                          g_menu_ai_labels[g_selected_ai]);
     prv_flush(&list);
 
     prv_add_cursor(&list, prv_get_cursor_x(g_selected_mode),
@@ -464,15 +442,10 @@ static bool prv_start_run(void)
 
     if (g_selected_mode == SHELL_MODE_AI)
     {
-        /* Whichever agent the menu is showing has Pac-Man from the first frame and keeps him
-         * (FR-042). Refused only when the generated table cannot be evaluated — and then the run
-         * does not start at all rather than falling back to the player, because a game that says it
-         * plays itself must either do that or say it cannot. The search cannot refuse, so choosing
-         * it is also the way to play this game on a firmware whose weights are broken. */
-        if (!game_session_set_player(g_selected_ai))
-        {
-            return false;
-        }
+        /* The search has Pac-Man from the first frame and keeps him (FR-042). It cannot refuse —
+         * there is nothing about it to be unavailable, unlike the trained table this used to have to
+         * check for (DEC-054) — so the return value is discarded deliberately rather than ignored. */
+        (void)game_session_set_player(GAME_SESSION_PLAYER_LOOKAHEAD);
 
         g_has_ai_played = true;
     }
@@ -526,7 +499,6 @@ void shell_init(void)
      * layout, and it is the only one that offers the AI. Only #shell_init sets it — coming back
      * from a run leaves the menu on whatever was last played. */
     g_selected_mode = SHELL_MODE_NORMAL_MAZE;
-    g_selected_ai = GAME_SESSION_PLAYER_NETWORK;
     g_is_selection_drawn = false;
     g_is_infinite = false;
     g_run_count = 0U;
@@ -655,19 +627,11 @@ void shell_move_selection(direction_e in_direction)
         return;
     }
 
-    /* Sideways picks the agent, and only where there is an agent to pick. Up and down move between
-     * games, so left and right are the axis that was free — and putting the choice on the menu
-     * keeps the in-game button meaning the one thing it already meant (FR-043). */
+    /* Sideways does nothing yet. Up and down move between games; the agent choice that used to
+     * live here went with the trained network (DEC-054), and the axis is kept free for the two-axis
+     * menu that replaces this one. */
     if ((in_direction == DIRECTION_WEST) || (in_direction == DIRECTION_EAST))
     {
-        if (g_selected_mode == SHELL_MODE_AI)
-        {
-            g_selected_ai = (g_selected_ai == GAME_SESSION_PLAYER_NETWORK) ? GAME_SESSION_PLAYER_LOOKAHEAD
-                                                                           : GAME_SESSION_PLAYER_NETWORK;
-
-            g_is_selection_drawn = false;
-        }
-
         return;
     }
 
@@ -714,62 +678,18 @@ const char* shell_get_mode_name(shell_mode_e in_mode)
 void shell_press_user_button(void)
 {
     /* The button means one thing per screen and per game, and the table in the header is this
-     * function. It is a chain of "did that mean anything" rather than a switch, because each of the
-     * two toggles already knows the whole of when it applies — a switch here would be a second copy
-     * of those conditions, and the copy is what drifts. */
+     * function. It is a chain of "did that mean anything" rather than a switch, because the toggle
+     * already knows the whole of when it applies — a switch here would be a second copy of that
+     * condition, and the copy is what drifts.
+     *
+     * **Handing Pac-Man over mid-run is gone** (DEC-054): the owner asked for it to go with the
+     * trained network, so in a person's game the button now does nothing at all. */
     if (shell_toggle_infinite())
     {
         return;
     }
 
-    if (shell_toggle_ai())
-    {
-        return;
-    }
-
     shell_press_start();
-}
-
-bool shell_toggle_ai(void)
-{
-    /* Only during a run: on the menu and the score screen the same button means start (FR-003), and
-     * a toggle with no run to toggle would have to invent one. */
-    if (g_screen != SHELL_SCREEN_GAME)
-    {
-        return false;
-    }
-
-    /* And only in the normal maze (FR-040/FR-042). Not the random maze, because the agent was
-     * evolved against the arcade's layout and offering it on a maze nobody has ever played would be
-     * offering something else; and not the Pac-Man AI game, where it plays start to finish and there
-     * is nobody to hand back to. Enforced here rather than at each caller, for the same reason the
-     * joystick lock-out lives in `game_session_set_direction`: one door, so it holds however many
-     * devices are wired to it. */
-    if (g_selected_mode != SHELL_MODE_NORMAL_MAZE)
-    {
-        return false;
-    }
-
-    /* The trained network only, and a plain toggle. The look-ahead search is **not** offered here:
-     * the owner asked for it in the agent's own game, where the choice is made on the menu before
-     * the run starts, rather than as a third state of a button in a game a person is playing. A
-     * cycle was built here first and taken out again — the button had come to mean "step through
-     * whatever machines exist", which is not what a player reaching for it wants. */
-    if (!game_session_set_ai_enabled(!game_session_is_ai_enabled()))
-    {
-        return false;
-    }
-
-    /* Latched here rather than where control goes back to the player, so that the run remembers
-     * what it cannot be told again. */
-    g_has_ai_played = g_has_ai_played || game_session_is_ai_enabled();
-
-    return true;
-}
-
-uint8_t shell_get_selected_ai(void)
-{
-    return (uint8_t)g_selected_ai;
 }
 
 bool shell_is_ai_playing(void)

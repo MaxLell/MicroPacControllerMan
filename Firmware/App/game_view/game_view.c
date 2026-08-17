@@ -476,7 +476,7 @@ static const char* const g_hud_level_label = "LEVEL";
  * have to remember which. Padded to #GAME_VIEW_HUD_AI_SLOTS, and the player's own entry is all
  * spaces rather than nothing — for the same reason a spent life is a blank: the slot exists either
  * way and a hole in it reads as a fault. */
-static const char* const g_hud_player_labels[] = {"      ", "NEAT  ", "SEARCH"};
+static const char* const g_hud_player_labels[] = {"  ", "AI"};
 static const char* const g_hud_loop_label = "LOOP";
 
 _Static_assert(HUD_LOOP_INDEX + GAME_VIEW_HUD_LOOP_SLOTS == GAME_VIEW_HUD_ITEM_COUNT, "HUD item count is wrong");

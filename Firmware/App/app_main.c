@@ -40,7 +40,7 @@
  */
 #define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
 #define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
-#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up|down|left|right' moves it"
+#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up' and 'select down' move it"
 #define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
 
 _Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
@@ -113,21 +113,18 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
 
     shell_press_start();
 
-    /* Said out loud when nothing happened, because the one way pressing start can fail is worth a
-     * sentence: the Pac-Man AI game refuses to begin at all if the generated weight table cannot be
-     * evaluated, rather than starting a game that plays itself with nobody playing it. */
-    if ((shell_get_screen() == SHELL_SCREEN_MENU) && (shell_get_selected_mode() == SHELL_MODE_AI))
-    {
-        cli_print("the Pac-Man AI game could not start: the weight table cannot be evaluated");
-
-        return CLI_FAIL_STATUS;
-    }
-
+    /* Nothing can refuse to start any more. The Pac-Man AI game used to, when the generated weight
+     * table could not be evaluated — better than starting a game that plays itself with nobody
+     * playing it — and the table went with the trained network in DEC-054. The search cannot be
+     * unavailable. */
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on; `select up`/`down` moves between games and
- * `select left`/`right` picks which agent the AI game uses.
+/* `select` shows what the menu is on and `select up`/`down` moves between games.
+ *
+ * Sideways is accepted and does nothing since DEC-054 took the agent choice away with the trained
+ * network. It stays accepted rather than becoming an error, because the two-axis menu that replaces
+ * this one will want it and a harness should not have to learn the difference twice.
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -162,12 +159,7 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         }
     }
 
-    /* The agent's name goes with it, so a test can read back what left and right did rather than
-     * having to trust that they did anything. */
-    static const char* const k_ai_names[] = {"none", "neat", "search"};
-
     cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
-    cli_print("agent: %s", k_ai_names[shell_get_selected_ai()]);
 
     return CLI_OK_STATUS;
 }
@@ -175,8 +167,8 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
 /* `button` presses the board button from the console.
  *
  * The counterpart to `select`, and a device rather than a decision for the same reason: it presses,
- * and the shell decides what pressing means on the screen that is up (FR-003/030/043). It is what
- * lets the endless mode be switched — and therefore checked — without a finger on B1. */
+ * and the shell decides what pressing means on the screen that is up (FR-003/043). It is what lets
+ * the endless mode be switched — and therefore checked — without a finger on B1. */
 static int prv_button_command(int in_argument_count, char* in_arguments[], void* in_context)
 {
     (void)in_argument_count;

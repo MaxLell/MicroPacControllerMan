@@ -161,81 +161,35 @@ silently working around a wart.
   RAM 68.0 %, flash 18.7 %; frame cost unchanged at 8 ms of 16.
   See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
 
-- **M6 Pacman AI — in progress (DEC-038..044, 2026-08-05).** An agent evolved on the host with
-  **NEAT**, ported to the target as `const` weights, and offered in two of the three games the menu
-  now lists. Everything is built and everything that touches hardware is verified there.
-  **The play-strength requirement was not met, and has since been withdrawn** (DEC-053): the agent that reached 4,980 on the
-  deterministic game averages **2,197** over twenty runs of the jittered one (DEC-047), because it had
-  memorised a trajectory rather than learned to play. Retraining against the jittered game, with the
-  reshaped objective, is what [M6 §14](Docu/Design/M6-Pacman-AI.md) records.
-  - **The network that trains is the network that ships** (DEC-042). Training does *not* use
-    neat-python's evaluator: a genome is flattened into the arrays `Services/neural_net` reads and
-    the C side plays the whole episode, so there is exactly one implementation of inference in the
-    project and FR-039 cannot be violated rather than merely being checked. It is also why a
-    generation costs 11 s on two cores instead of the budgeted 12 s per core.
-  - **What the agent sees is Pacman's own frame** — forward/left/right/back, 23 features, distances
-    by breadth-first search over the open cells counting the tunnel wrap. Every level's maze is
-    generated, so a policy in compass coordinates would learn "wall to the north" four times over.
-    The **frightened timer is deliberately not an input**: the player has no countdown either, only
-    the flashing.
-  - **The curriculum is runtime configuration, not a training build** (DEC-041): `game_config_t`
-    turns ghosts and power pellets off so the agent learns to walk, then to fear, then to hunt.
-    Training therefore exercises the code that ships (FR-112).
-  - **In the game:** the board button toggles the AI during a run and still means start on the menu
-    and the score screen — `shell` decides, because `shell` knows the screen. The joystick is dead
-    while the AI plays, enforced in `game_session_set_direction` alone so it holds for all three
-    callers. Two flags, and the difference is FR-034: `game_session` knows whether the AI plays
-    *now*, `shell` latches whether it played *at any point*, and the high-score lockout reads the
-    latch — so handing control back before the last life does not launder the score.
-  - **Verified on the board:** `ott ai_equivalence` (VT-INT-024) replays four states recorded on the
-    host — ordinary play, frightened mode, a tunnel, a life just lost — and the target chose the same
-    direction for every one; `ott ai_high_score` (VT-INT-025) plays two whole runs and shows the AI's
-    stays out of flash while the player's gets in. The whole automatic suite takes 1 min 42 s.
-    `ott pacman_ai` (VT-INT-023) is the manual one and **still needs somebody at the board** — note
-    its buttons are swapped: B1 toggles the AI, the stick's centre confirms.
-  - **The agent that ships is `arcade-danger`, at 3,531** (DEC-051).
-    Adopted deliberately with `--force`, because 4,600 was then the requirement and 3,531 is the best
-    trained agent this project has had — up from 2,827, which is the largest step any single change
-    has bought. The change is a continuous cost for danger (M6 §14.6): the fitness charges ten
-    points for every decision taken with a killing ghost within four cells. It stopped the agent
-    dying badly rather than making it score well.
-    **Four things are measured *not* to help** and are recorded so they are not retried: paying a
-    bonus per ghost eaten (it cost score, and more training made it worse), a bonus for finishing a
-    level (identically zero until one is finished, so no gradient at all), a bigger population, and
-    — the night of 2026-08-09 — **more capacity**: 32 hidden units scored 2,634, *below* the
-    16-unit baseline. Comparisons are made at **100 episodes**, not the acceptance set's twenty — at twenty the
-    standard error is larger than the differences being argued about.
-  - RAM 71.6 %, flash 21.8 %. The shipped NEAT table is **334 bytes** and a dense 23-16-4 one is
-    2,860 — both far inside NFR-007's 300 kB; the search scratch is 4.3 kB of RAM; the rest of the
-    growth is the equivalence test's own recorded states and playfield.
-  - **Training** lives in `Firmware/Training/` (DEC-040), host-only: `train.py` evolves with NEAT,
-    **`train_es.py` fits a fixed 23-16-4 network with a separable evolution strategy** (DEC-048),
-    `evaluate.py` is VT-UNIT-010, `export_c.py` writes `App/pacman_ai/ai_weights.[ch]`,
-    `pacman_ai_record` writes the FR-039 state set, `campaign.py` runs several time-budgeted
-    trainings unattended — each naming its own trainer — and writes one summary to read afterwards.
-    **`./dev.sh train --hours 1` starts a campaign on this machine, detached**, `docker-train` the
-    same one in the container; both refuse to start over leftover
-    winners without being told `--fresh` or `--keep`, because a leftover is *measured* rather than
-    retrained and that silently halves a night.
-    **The budget is an input and the runs share it** (M6 §14.5): a run whose share falls below the
-    least it is worth starting with is *dropped and named*, not shortened into a different
-    experiment, and the stages share a run's budget the same way so that a short run still reaches
-    stage 3 — the only stage a whole-game score is measured on. A trainer that exits non-zero is reported as
-    failed with the tail of its log; it used to look exactly like a run that found nothing, which
-    is how three of four runs crashed in seconds and left nine hours of a night idle.
-    **Why two trainers:** NEAT's winner used **6 of 23 inputs** — it deletes structure whenever the
-    fitness is noisy, and FR-044's jitter is noise (DEC-044/048). A fixed topology cannot prune
-    itself blind, and nothing in C changes: `neural_net` already evaluates an arbitrary graph, so a
-    dense net is a special case of what ships.
-    **Everything trains and is measured on the normal maze** (DEC-045). It was briefly one episode per
-    genome — a fixed maze plus a game with nothing random in it makes a score a *measurement* — and
-    FR-044's jitter ended that: six episodes per genome now, and the acceptance seeds 1000..1019 are
-    reserved again, because a score on the draws it trained against answers nothing.
-    `evaluate.py --maze generated` still asks the generalisation question and says out loud that it is a
-    generalisation figure and not the headline one.
-    See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
+- **M6 Pacman AI — done, and the trained network is gone (DEC-038..054).** M6 was an agent evolved
+  on the host with **NEAT**, ported to the target as `const` weights. **All of it was deleted on
+  2026-08-17 at the owner's request (DEC-054)**: `App/pacman_ai`, `Services/neural_net`, the whole
+  training stack under `Firmware/Training/`, the recorded equivalence states, `ott ai_equivalence`
+  and `ott ai_frame_cost`. The machine that plays is the look-ahead search below.
+  - **The measurements had made the case before the instruction did.** The trained agent settled at
+    **3,531** over a fortnight of campaigns; four separate ideas were measured *not* to help — a
+    per-ghost bonus, a level-completion bonus, a bigger population, and more capacity (32 hidden
+    units scored 2,634, *below* the 16-unit baseline). The search reaches **21,870** in the same
+    frame budget. Keeping both meant keeping a Python dependency set, a container, an export step, a
+    re-recording step and an equivalence test alive for the weaker of the two.
+  - **What went with it in the spec** — thirteen requirements and three tests, the largest spec change
+    the project has made: FR-030/032/033 (the mid-run takeover), FR-035, FR-036, FR-038, FR-039,
+    FR-112, FR-113, NFR-006/007/008, CON-105, VT-UNIT-009, VT-UNIT-011, VT-INT-024. Kept with the
+    *reason* rewritten: FR-031 (the stick is dead while the machine plays), FR-034 (an AI run stays
+    out of a person's table), FR-114 (reproducible episodes, now for `fit_lookahead` and the unit
+    tests). **B1 no longer hands Pac-Man over**, so in a person's game it does nothing at all.
+  - **It bought back headroom**: RAM **91.6 % → 88.1 %**, flash **23.4 % → 20.9 %**. That is the
+    first time either has moved the helpful way, and it is what §17.3 spent capping the leaf scan.
+  - **Two tests had to be rethought, both because the search plays too well to finish a run.**
+    `test_shell.c` ran twelve minutes before it was killed and `ott ai_high_score` timed out at
+    240 s. Both now zero the search's weights through `pacman_lookahead_set_weights`, so every
+    position is worth the same and it dies quickly — the shipped code through its own public setter,
+    and those tests are about which table a run reaches, not about play strength.
+  - **What is still worth reading** in [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md) is §15–§17, the
+    search. §1–§14 are the trained agent and are history — kept because a fortnight of measured
+    negative results is the most useful part of this milestone.
 
-- **A look-ahead player is in the game, and since DEC-052/053 it scores 21,870 at level 5.9 (DEC-050/051/052/053).** `App/pacman_lookahead`
+- **The machine that plays is the look-ahead search: 21,870 at Ø level 5.9 (DEC-050..054).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -345,27 +299,22 @@ silently working around a wart.
   (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
   screen) and start plays what is selected.
   - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
-    drawn by today's geometry renderer rather than that tag's ROM tiles. **B1 hands Pac-Man to the
-    trained agent and takes him back** (FR-030); Pac-Man is **green** while it plays. The
-    look-ahead search is deliberately *not* offered here (DEC-051) — a three-way cycle was built
-    and taken out, because that button is reached for by somebody playing.
-  - `PAC-MAN AI` — the same maze, an agent from the first frame, and no way to take over (FR-042).
-    **Which agent is picked on the menu with left and right** (DEC-051): `AGENT NEAT`, the trained
-    network, or `AGENT SEARCH`, the look-ahead of DEC-050. The in-game HUD **names it** — six
-    glyphs reading `NEAT` or `SEARCH` where it used to read `AI` — so nobody has to remember what
-    they chose. **B1 here still toggles the endless mode** (FR-043): a finished run starts the next
-    one instead of returning to the menu, and the HUD says `LOOP`. With the network it refuses to
-    start at all if the weight table cannot be evaluated, rather than starting a game that plays
-    itself with nobody playing it; the search cannot refuse, so choosing it is also how to play this
-    game on a firmware whose weights are broken.
+    drawn by today's geometry renderer rather than that tag's ROM tiles. A person plays it and B1
+    does nothing: **handing Pac-Man over mid-run went with the trained network** (DEC-054).
+  - `PAC-MAN AI` — the same maze, the look-ahead search from the first frame, and no way to take
+    over (FR-042). The HUD says `AI` in two glyphs; DEC-051's six-glyph agent name went with the
+    choice it existed for. **B1 here toggles the endless mode** (FR-043) — a finished run starts the
+    next instead of returning to the menu, and the HUD says `LOOP`. Nothing can refuse to start any
+    more; the weight table that could be broken is gone.
   - `RANDOM MAZE` — the generated mazes of FR-029, and no AI at all.
   - **Three high-score tables, one per game** (FR-041), in the same flash page at layout version 2.
-    FR-034's lockout narrowed with them: an AI-touched run of a *person's* game reaches no table,
-    not even the agent's, and the agent's own game files into its own.
+    FR-034's lockout: an AI-touched run of a *person's* game reaches no table, and the agent's own
+    game files into its own.
   - **The button has one owner.** `shell_press_user_button` decides what B1 means from the screen
     and the game; `app_main` only reports the press. `select` and `button` on the console push the
     stick and the button the way `start` presses start, which is what makes VT-INT-026/027
-    unattended.
+    unattended. `select left`/`right` are still accepted and do nothing — kept for the two-axis menu
+    that replaces this one, so a harness need not learn the difference twice.
 
 - **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
   timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened
@@ -426,24 +375,22 @@ cmake -B build-host -DPACMAN_HOST_BUILD=ON -G "Unix Makefiles" && cmake --build 
 # Host unit tests (Ceedling + Unity + CMock; needs ruby + `gem install ceedling`)
 ceedling test:all
 
-# Train the AI (host only; needs the host build for libpacman_env.so — DEC-040)
-python3 -m venv Training/.venv && Training/.venv/bin/pip install -r Training/requirements.txt
-Training/.venv/bin/python Training/train.py                 # the whole curriculum, all cores
-Training/.venv/bin/python Training/evaluate.py              # the score and its random baseline
-./dev.sh train --hours 1                                    # a campaign that is finished in an hour
-./dev.sh train                                              # the whole thing, which is a night
-./dev.sh train-stop                                         # stop it
-Training/.venv/bin/python Training/campaign.py --hours 1     # what that wraps -> campaign/summary.md
-Training/.venv/bin/python Training/export_c.py              # winner.json -> App/pacman_ai/ai_weights.[ch]
-./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
+# Fit the look-ahead search's evaluation weights (host only, stdlib only — no venv needed)
+cmake --build build-host -j --target pacman_lookahead_fitness
+FIT_HOURS=1.5 python3 Training/fit_lookahead.py     # -> Training/lookahead_weights.json
+./build-host/pacman_lookahead_fitness 1000 20 2 70791 13 53 2 10    # one candidate, by hand
 ```
 
-**Re-exporting weights means re-recording the FR-039 state set** — that last line, in that order.
-The recorded expectations belong to one weight table and carry its digest, so `ott ai_equivalence`
-refuses to run against a different one rather than reporting a stale recording as a porting fault.
-**`./dev.sh adopt-weights [winner.json]` does the whole sequence**, and refuses a winner that fails
-VT-UNIT-010 unless given `--force` — training produces a winner every time, including one worse than
-what is already shipped.
+**There is no training any more** (DEC-054). NEAT, the evolution strategy, the campaign runner,
+`libpacman_env.so`, the weight export and the equivalence recorder were all deleted with the trained
+network. What is left is `fit_lookahead.py`, which fits **six** numbers — the search's evaluation
+weights — against whole games on fixed seeds. It writes a JSON and touches nothing in the firmware:
+adopting a result means copying the numbers into `pacman_lookahead.c`'s defaults deliberately, and
+then measuring on the board, because a leaf scan that fits a frame is the constraint the fit does not
+know about.
+
+Fit on seeds 2000.., and **never on 1000..1019** — those stay reserved so a reported score is
+measured on draws nothing was fitted to.
 
 - **What gets a unit test: everything above the BSP.** The BSP is the *mocking*
   boundary — mock a `Bsp/` header to test the module above it; don't unit-test the BSP

@@ -47,24 +47,14 @@ A few items are structural/process requirements rather than automatically observ
 | CON-004 | Carrier Hardware | VT-INT-018, VT-INT-019 |
 | CON-005 | Debug Interface | VT-INT-001, VT-INT-002 |
 
-| FR-030 | AI Takeover Toggle | VT-INT-023 |
 | FR-040 | Game Selection | VT-INT-026 |
 | FR-041 | High Scores per Game | VT-UNIT-012, VT-INT-025 (the lockout's other half), ott high_score |
 | FR-042 | Autonomous AI Game | VT-INT-027 |
 | FR-043 | Endless Mode | VT-INT-027 (that it switches), test_shell.c (that it restarts) |
 | FR-044 | Varied Timings | VT-UNIT-013, VT-INT-028 (that the source works on silicon) |
 | FR-045 | Random Source | VT-INT-028 |
-| FR-031 | AI Control Exclusivity | VT-INT-023 |
-| FR-032 | AI Takeover Indication | VT-INT-023 |
-| FR-033 | AI Control Persistence | VT-INT-023 |
+| FR-031 | AI Control Exclusivity | VT-INT-023 (manual), `test_game_session.c` |
 | FR-034 | AI Run Not Recorded | VT-INT-025 |
-| FR-035 | Observation Bounded by the Display | VT-UNIT-009 |
-| FR-036 | The AI's Objective | Code review (`Training/env_api.c` computes the fitness; VT-UNIT-010 verified it against FR-037's threshold and went with it — [DEC-053](11-Decisions-and-As-Built.md)) |
-| FR-038 | Inference Only on the Target | Code review (no training code is linked into the target build — see gap note above) |
-| FR-039 | Host / Target Inference Equivalence | VT-UNIT-011 (host half), VT-INT-024 (target half) |
-| NFR-006 | AI Inference Budget | VT-INT-023 |
-| NFR-007 | Model Footprint | Build tooling (the linker's size report against the stated limits) |
-| NFR-008 | No Heap for Inference | Code review (no allocator is linked; weights are `const`) |
 
 ## 7.2 Software & Test Requirements (FR-1xx / NFR-1xx / CON-1xx)
 

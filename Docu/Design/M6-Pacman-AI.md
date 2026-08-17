@@ -7,6 +7,17 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
+> **The trained agent no longer exists either.** On **2026-08-17** the owner asked for the NEAT
+> implementation to be deleted and only the look-ahead search kept
+> ([DEC-054](../PrePlanning/11-Decisions-and-As-Built.md)). `App/pacman_ai`, `Services/neural_net`,
+> the whole training stack, the recorded equivalence states and two on-target tests are gone, and
+> thirteen requirements went with them. **§1–§14 are therefore history** — the architecture of a
+> network that is not in the tree, and a fortnight of measured results about training it. They are
+> kept deliberately: four separate ideas measured *not* to help is the most useful thing this
+> milestone produced, and a reader who is about to try one of them should find it written down.
+> **[§15](#15-the-look-ahead-player-the-game-as-its-own-forward-model)–[§17](#17-a-leaf-that-can-see-and-weights-that-were-fitted-rather-than-argued)
+> are the current state.**
+
 > **FR-037 no longer exists.** The owner withdrew the play-strength requirement and its test on
 > **2026-08-17** ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)) — he wants the score
 > maximised, not a line crossed — so every mention of it below §17 is **history**, kept because the

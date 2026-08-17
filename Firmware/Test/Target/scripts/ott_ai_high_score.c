@@ -9,7 +9,7 @@
 #include "game_session.h"
 #include "high_score.h"
 #include "ott.h"
-#include "pacman_ai.h"
+#include "pacman_lookahead.h"
 #include "shell.h"
 #include "st7789.h"
 #include "sw_timer.h"
@@ -76,8 +76,9 @@ static bool prv_wait_for_screen(shell_screen_e in_screen, bool in_is_player_stee
 
 /* Play one run from the menu to the score screen, and report what it scored.
  *
- * `in_is_ai` decides who plays; the AI is switched on *after* the run has started, because that is
- * the only way it can be — FR-030 is a toggle during a run.
+ * `in_is_ai` decides who plays, and since DEC-054 it decides it **on the menu**: handing Pac-Man
+ * over mid-run went with the trained network, so the AI's run is the AI's *game* from the first
+ * frame and a person's run is a person's game throughout.
  */
 static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out_reason, size_t in_reason_size)
 {
@@ -86,6 +87,39 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
         (void)snprintf(out_reason, in_reason_size, "the menu never came up");
 
         return false;
+    }
+
+    /* **The search is made hopeless for this test, on purpose.** What is being checked is FR-034's
+     * lockout — which table a run reaches — and not how well the search plays. With the weights the
+     * firmware ships it reaches level six, and a whole run of that is many minutes of wall clock:
+     * this test timed out at 240 s before the weights were touched. Zero weights leave every
+     * position worth the same, so it falls back to the first way out of each cell and dies in the
+     * time a suite can spend. It is the shipped code either way, driven through its own public
+     * setter, and the defaults are put back before the test returns. */
+    if (in_is_ai)
+    {
+        pacman_lookahead_weights_t hopeless = {0};
+
+        hopeless.death = 1;
+
+        pacman_lookahead_set_weights(&hopeless);
+    }
+
+    /* The AI's own game, or the one above it that a person plays. Selected before start, which is
+     * now the only place who-plays is decided. */
+    if (in_is_ai)
+    {
+        while (shell_get_selected_mode() != SHELL_MODE_AI)
+        {
+            shell_move_selection(DIRECTION_SOUTH);
+        }
+    }
+    else
+    {
+        while (shell_get_selected_mode() != SHELL_MODE_NORMAL_MAZE)
+        {
+            shell_move_selection(DIRECTION_NORTH);
+        }
     }
 
     shell_press_start();
@@ -99,30 +133,12 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
 
     if (in_is_ai)
     {
-        if (!shell_toggle_ai())
-        {
-            (void)snprintf(out_reason, in_reason_size, "the AI refused to take over");
-
-            return false;
-        }
-
-        /* Let it actually play for a while. Toggling straight back off would leave nobody steering,
-         * and a run that scores nothing cannot show a lockout: a refused zero looks exactly like a
-         * working one. */
+        /* Let it actually play for a while: a run that scores nothing cannot show a lockout, because
+         * a refused zero looks exactly like a working one. */
         while (sw_timer_is_active(&g_timeout_timer) && (shell_get_screen() == SHELL_SCREEN_GAME)
                && (game_session_get_score() < AI_SCORE_BEFORE_HANDBACK))
         {
             prv_service();
-        }
-
-        /* And now handed back, with the run still going. This is the case FR-034 is really about and
-         * the one a live flag rather than a latch would get wrong — the score keeps climbing under
-         * the player's hand and must still not be recorded. */
-        if ((shell_get_screen() == SHELL_SCREEN_GAME) && !shell_toggle_ai())
-        {
-            (void)snprintf(out_reason, in_reason_size, "the AI refused to hand back");
-
-            return false;
         }
 
         if (!shell_has_ai_played())
@@ -133,10 +149,9 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
         }
     }
 
-    /* Both halves are steered by hand from here: the AI half has handed Pacman back, so if nobody
-     * pushed he would stand still until a ghost arrived and the run would take longer for no
-     * reason. */
-    if (!prv_wait_for_screen(SHELL_SCREEN_SCORE, true))
+    /* The player's half is steered by hand from here; the AI's steers itself and must not be
+     * pushed, because FR-031 makes the stick dead while it plays and pushing would only be noise. */
+    if (!prv_wait_for_screen(SHELL_SCREEN_SCORE, !in_is_ai))
     {
         (void)snprintf(out_reason, in_reason_size, "the %s run did not finish within %u s", in_is_ai ? "AI" : "player",
                        RUN_TIMEOUT_MS / MS_PER_SECOND);
@@ -145,6 +160,8 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
     }
 
     *out_score = game_session_get_score();
+
+    pacman_lookahead_set_weights(NULL);
 
     /* Off the score screen, so the next run can start from the menu. */
     shell_press_start();
@@ -178,13 +195,6 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
         return false;
     }
 
-    if (!pacman_ai_is_available())
-    {
-        (void)snprintf(out_reason, in_reason_size, "the weight table cannot be evaluated on this build");
-
-        return false;
-    }
-
     for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
         for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
@@ -207,13 +217,15 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
 
     if (prv_play_one_run(true, &ai_score, out_reason, in_reason_size))
     {
-        /* The table of the game that was played — the normal maze, which is what this scenario
-         * starts, and not the agent's own game. */
-        const uint32_t best_after_ai = high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE);
+        /* Two tables, because since DEC-054 the AI's run *is* the agent's own game: it belongs in
+         * the agent's table (FR-041) and must stay out of the person's (FR-034). Before DEC-054 the
+         * AI played a normal-maze run the player had handed over, which belonged in no table at all
+         * — the same requirement, a different run. */
+        const uint32_t persons_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE);
         const uint32_t agents_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_AI);
 
-        cli_print("  the AI's run scored %lu, the table holds %lu", (unsigned long)ai_score,
-                  (unsigned long)best_after_ai);
+        cli_print("  the AI's run scored %lu; its own table holds %lu, the person's %lu", (unsigned long)ai_score,
+                  (unsigned long)agents_table_after_ai, (unsigned long)persons_table_after_ai);
 
         if (ai_score == 0U)
         {
@@ -221,18 +233,18 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
              * count as one. */
             (void)snprintf(out_reason, in_reason_size, "the AI's run scored nothing, so the lockout proves nothing");
         }
-        else if (best_after_ai != 0U)
+        else if (persons_table_after_ai != 0U)
         {
-            (void)snprintf(out_reason, in_reason_size, "the AI's run of %lu reached the table",
+            (void)snprintf(out_reason, in_reason_size, "the AI's run of %lu reached the person's table",
                            (unsigned long)ai_score);
         }
-        else if (agents_table_after_ai != 0U)
+        else if (agents_table_after_ai != ai_score)
         {
-            /* A refusal that quietly filed the score under the agent's own game would look like a
-             * working lockout from the normal maze's side. It is not one: this was a normal-maze run
-             * that the player handed over, and it belongs in no table at all (FR-034/FR-041). */
+            /* And the other side of FR-041: a lockout that refused *every* table would pass the
+             * assertion above and be wrong. The agent keeps its own scoreboard. */
             (void)snprintf(out_reason, in_reason_size,
-                           "the AI's run of %lu was filed under the Pac-Man AI game instead", (unsigned long)ai_score);
+                           "the AI's run of %lu did not reach the agent's own table, which holds %lu",
+                           (unsigned long)ai_score, (unsigned long)agents_table_after_ai);
         }
         else
         {

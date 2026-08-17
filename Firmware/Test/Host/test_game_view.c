@@ -1105,9 +1105,12 @@ void test_the_hud_says_nothing_about_the_ai_until_it_takes_over(void)
     }
 }
 
-/* The name, not just "a machine is playing". Once the menu offers a choice of agent, `AI` leaves
- * the player remembering which one they picked — so the HUD says which. */
-void test_the_hud_names_the_agent_that_is_playing(void)
+/* That a machine is playing, in two glyphs reading `AI`.
+ *
+ * DEC-051 had widened this to six so it could name *which* of two agents was playing, and DEC-054
+ * took the trained network away, so there is nothing left to name. The test that named it went with
+ * it; what remains is the question a player actually has. */
+void test_the_hud_says_when_a_machine_is_playing(void)
 {
     msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
     int16_t x;
@@ -1120,45 +1123,10 @@ void test_the_hud_names_the_agent_that_is_playing(void)
 
     const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
 
-    /* **Four, not six.** The name is padded to the field's width, and `NEAT`'s two trailing spaces
-     * were already spaces — so they did not change and are not re-sent. That is the whole point of
-     * comparing the HUD slot by slot, and asserting six here would be asserting the opposite. And
-     * nothing beyond the four: taking over is not a reason to send the score again. */
-    TEST_ASSERT_EQUAL_UINT8(4U, count);
+    /* Two, and nothing else: handing over is not a reason to send the score again. */
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_VIEW_HUD_AI_SLOTS, count);
 
-    static const char k_expected[] = {'N', 'E', 'A', 'T'};
-
-    for (uint8_t offset = 0U; offset < (uint8_t)(sizeof(k_expected) / sizeof(k_expected[0])); ++offset)
-    {
-        prv_get_ai_slot_pixel(offset, &x, &y);
-
-        const msg_display_item_t* const item = prv_find_at(items, count, x, y);
-
-        TEST_ASSERT_NOT_NULL(item);
-        TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(k_expected[offset]), item->drawing.sprite);
-    }
-}
-
-/* The other agent, and the reason the labels are padded to one width: going from the longer name to
- * the shorter has to *clear* what the longer one left, or the panel would read `SEARCH` with NEAT's
- * letters still under its tail. */
-void test_switching_agents_clears_the_longer_name(void)
-{
-    msg_display_item_t items[GAME_VIEW_HUD_ITEM_COUNT * 2U];
-    int16_t x;
-    int16_t y;
-
-    game_view_set_state(&g_view, &g_state);
-    (void)prv_settle();
-
-    game_view_set_player(&g_view, 2U);
-    (void)prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
-
-    game_view_set_player(&g_view, 1U);
-
-    const uint8_t count = prv_collect_hud(items, (uint8_t)(sizeof(items) / sizeof(items[0])));
-
-    static const char k_expected[GAME_VIEW_HUD_AI_SLOTS] = {'N', 'E', 'A', 'T', ' ', ' '};
+    static const char k_expected[GAME_VIEW_HUD_AI_SLOTS] = {'A', 'I'};
 
     for (uint8_t offset = 0U; offset < GAME_VIEW_HUD_AI_SLOTS; ++offset)
     {
@@ -1166,13 +1134,8 @@ void test_switching_agents_clears_the_longer_name(void)
 
         const msg_display_item_t* const item = prv_find_at(items, count, x, y);
 
-        /* Every slot that differs between `SEARCH` and `NEAT  ` has to arrive, the two trailing
-         * spaces included — those are exactly the ones a naive redraw would leave behind. */
-        if (k_expected[offset] != "SEARCH"[offset])
-        {
-            TEST_ASSERT_NOT_NULL(item);
-            TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(k_expected[offset]), item->drawing.sprite);
-        }
+        TEST_ASSERT_NOT_NULL(item);
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)sprite_set_get_glyph(k_expected[offset]), item->drawing.sprite);
     }
 }
 

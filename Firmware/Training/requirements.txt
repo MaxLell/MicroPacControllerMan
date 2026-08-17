@@ -1,6 +1,0 @@
-# The trainer's only dependency. Everything else it needs — the game, the observation, the
-# network evaluator — is the firmware, reached through libpacman_env.so.
-#
-#   python3 -m venv Training/.venv
-#   Training/.venv/bin/pip install -r Training/requirements.txt
-neat-python==2.0.0

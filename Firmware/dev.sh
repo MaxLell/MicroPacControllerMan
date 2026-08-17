@@ -14,22 +14,10 @@
 #     ./dev.sh docker check # run any of the commands above inside it
 #     ./dev.sh docker-build # rebuild the image after editing docker/Dockerfile
 #
-#   After training — take a winner into the firmware
-#     ./dev.sh adopt-weights                    # Training/winner.json
-#     ./dev.sh adopt-weights path/to/other.json # a campaign run's winner
-#     ./dev.sh adopt-weights --force ...        # adopt one that scores worse than what ships
+#   Fit the look-ahead search's evaluation weights (host only, standard library only)
+#     cmake --build build-host -j --target pacman_lookahead_fitness
+#     FIT_HOURS=1.5 python3 Training/fit_lookahead.py
 #
-#   Training on this machine, detached — survives the terminal
-#     ./dev.sh train --hours 1     # a campaign that is finished in an hour
-#     ./dev.sh train               # the whole thing, which is a night
-#     ./dev.sh train --fresh       # ...after throwing away previous winners
-#     ./dev.sh train-stop          # stop it
-#
-#   Training in the container — the same campaign on a machine whose whole job it is
-#     ./dev.sh docker-train        # the campaign, in the background, logs followed
-#     ./dev.sh docker-train --hours 1 # the same budget switch
-#     ./dev.sh docker-train --fresh # ...after throwing away previous winners
-#     ./dev.sh docker-train-stop   # stop it
 #
 #   Commit gate
 #     ./dev.sh install-hook # pre-commit: format the staged files, then run the unit tests
@@ -95,11 +83,13 @@ CONTAINER_WORKDIR="/work/Firmware"
 # current CMakeCache.txt is different than the directory where CMakeCache.txt was created", which is
 # accurate and reads like the tree is broken. It is not: the build directory is somebody else's.
 #
-# `in_expected` is whose it has to be, and it is **not always $PWD**: `docker-train` runs on the host
-# and hands the directory to a container, so what it needs is a directory configured for the
-# container. Asking for $PWD there made the check unsatisfiable — deleting the directory and
+# `in_expected` is whose it has to be, and it is **not always $PWD**: the detached trainer used to run
+# on the host and hand the directory to a container, so what it needed was a directory configured for
+# the container. Asking for $PWD there made the check unsatisfiable — deleting the directory and
 # rebuilding it in the container produced the same complaint, because rebuilding it in the container
-# is precisely what was being asked for. That was a bug, and this parameter is the fix.
+# is precisely what was being asked for. That was a bug, this parameter was the fix, and it is kept
+# although the caller that needed it went with the trainer (DEC-054): `dev.sh docker check` still
+# builds in the container.
 check_build_dir_configured_for() {
     local directory=$1
     local expected=$2
@@ -242,111 +232,6 @@ run_test() {
 cmd="${1:-all}"
 shift || true
 
-# Take a trained network into the firmware.
-#
-# This exists because the order matters and getting it wrong is silent. Exporting weights changes
-# what the target computes, so the FR-039 state set recorded against the *old* weights becomes a
-# recording of a different network — and `ott ai_equivalence` would then report a porting fault that
-# is really a stale file. It refuses instead, on the digest, which is the safety net; this is the
-# thing that keeps you off it.
-#
-# It also gates on a **regression**: a winner that scores below what is already shipped is not
-# adopted unless you say --force. Training produces a winner every time, including a bad one, and the
-# one thing that must not happen quietly is a worse agent replacing a better one in the firmware.
-#
-# It used to gate on FR-037's 4,600 instead, which was withdrawn on 2026-08-17 (DEC-053). That check
-# had stopped working anyway: the shipped weights do not reach 4,600 either, so it was being
-# overridden with --force every single time — a guard nobody can satisfy is a guard nobody reads.
-# The score it compares against lives in Training/adopted-score.txt and is written by this command.
-do_adopt_weights() {
-    local force=""
-    local winner=""
-
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            --force) force=yes ;;
-            *) winner=$1 ;;
-        esac
-        shift
-    done
-
-    winner=${winner:-Training/winner.json}
-
-    if [ ! -f "$winner" ]; then
-        fail "$winner does not exist."
-        exit 2
-    fi
-
-    local python=Training/.venv/bin/python
-    [ -x "$python" ] || python=python3
-
-    step "Measuring $winner"
-
-    # The host library first: evaluate.py and the recorder both load it, and a stale one measures a
-    # different game than the sources describe.
-    do_host_build
-
-    local shipped_score=""
-    local gate=()
-
-    if [ -f Training/adopted-score.txt ]; then
-        shipped_score=$(cat Training/adopted-score.txt)
-        gate=(--at-least "$shipped_score")
-        echo "  the shipped weights measured $shipped_score; a winner below that is a regression"
-    else
-        echo "  no Training/adopted-score.txt yet, so there is nothing to regress against"
-    fi
-
-    if "$python" Training/evaluate.py --winner "$winner" "${gate[@]}"; then
-        echo ""
-    elif [ "$force" = yes ]; then
-        fail "It scores worse than what ships — adopting anyway, because --force."
-    else
-        fail "$winner scores worse than what ships, so it is not being adopted."
-        {
-            echo "  Train longer, or adopt it deliberately with:"
-            echo ""
-            echo "    ./dev.sh adopt-weights --force $winner"
-        } >&2
-        exit 1
-    fi
-
-    # Tracked, and the one the exporter reads: a campaign's own winner files are not in git.
-    if [ "$winner" != "Training/winner.json" ]; then
-        step "Copying $winner over Training/winner.json"
-        cp "$winner" Training/winner.json
-    fi
-
-    step "Exporting App/pacman_ai/ai_weights.[ch]"
-    "$python" Training/export_c.py
-
-    # Rebuilt *after* the export, because the recorder must run the new weights.
-    do_host_build
-
-    step "Re-recording the FR-039 state set"
-    ./build-host/pacman_ai_record > Test/Target/scripts/ott_ai_equivalence_states.c
-
-    step "Formatting what was generated"
-    ./format.sh Test/Target/scripts/ott_ai_equivalence_states.c App/pacman_ai
-
-    # What the *next* adoption has to beat. Written after the export, so it always describes the
-    # weights that are actually in the tree.
-    step "Recording what these weights scored"
-    "$python" Training/evaluate.py --winner Training/winner.json 2>/dev/null \
-        | awk '/^score:/ { print $2 }' > Training/adopted-score.txt
-    echo "  Training/adopted-score.txt now says $(cat Training/adopted-score.txt)"
-
-    done_message "Adopted. Five files changed — commit them together:"
-    echo "  Training/winner.json"
-    echo "  App/pacman_ai/ai_weights.c"
-    echo "  App/pacman_ai/ai_weights.h"
-    echo "  Test/Target/scripts/ott_ai_equivalence_states.c"
-    echo "  Training/adopted-score.txt"
-    echo ""
-    echo "Then, on the machine with the board: ./dev.sh suite"
-    echo "ott ai_equivalence is what proves the port agrees with the host about the new weights."
-}
-
 # --- Docker -----------------------------------------------------------------
 #
 # The image carries the toolchain; the tree stays on the host and is mounted. So an edit is an edit
@@ -369,8 +254,7 @@ build_docker_image() {
 
     step "Building the $DOCKER_IMAGE image"
 
-    # The context is Firmware/ because the image copies Training/requirements.txt out of it — one
-    # list of what training needs, and it is the repository's.
+    # The context is Firmware/, which the Dockerfile still needs for the toolchain layers.
     docker build -f docker/Dockerfile -t "$DOCKER_IMAGE" .
 }
 
@@ -432,8 +316,6 @@ require_docker() {
     exit 2
 }
 
-TRAIN_CONTAINER="micropac-train"
-TRAIN_PID_FILE="Training/campaign/campaign.pid"
 
 # The options both campaign commands take, parsed in one place because they have to mean the same
 # thing in both: an hour on this machine and a night on another are the same campaign.
@@ -463,240 +345,6 @@ parse_campaign_options() {
         esac
         shift
     done
-}
-
-# A run whose winner exists is measured rather than repeated — deliberate, and what makes a campaign
-# resumable after a reboot. It is also the thing that silently halves a night when the leftovers were
-# not meant to be kept, so it is said out loud either way.
-check_campaign_leftovers() {
-    local command=$1
-    local -a leftovers=()
-
-    if [ -d Training/campaign ]; then
-        mapfile -t leftovers < <(find Training/campaign -maxdepth 1 -name '*.json' -printf '%f\n' 2>/dev/null | sort)
-    fi
-
-    [ "${#leftovers[@]}" -gt 0 ] || return 0
-    [ "$CAMPAIGN_KEEP" != yes ] || return 0
-
-    if [ "$CAMPAIGN_FRESH" = yes ]; then
-        step "Throwing away ${#leftovers[@]} previous winner(s): ${leftovers[*]}"
-        # The snapshot of the game goes with them. A campaign keeps its own copy of
-        # libpacman_env.so so that building the tree while it runs is harmless, and a *resumed*
-        # campaign reusing it is the point; a fresh one reusing it would silently play whatever
-        # the tree held the last time somebody started a campaign.
-        rm -f Training/campaign/*.json Training/campaign/libpacman_env.so
-        return 0
-    fi
-
-    fail "Training/campaign already holds ${#leftovers[@]} winner(s): ${leftovers[*]}"
-    {
-        echo "  Those runs will be *measured, not trained* — which is what makes a campaign"
-        echo "  resumable, and what shortens a night when you did not mean it. Either keep"
-        echo "  them on purpose:"
-        echo ""
-        echo "    ./dev.sh $command --keep"
-        echo ""
-        echo "  ...or start over:"
-        echo ""
-        echo "    ./dev.sh $command --fresh"
-    } >&2
-    exit 2
-}
-
-# The campaign on this machine, no container involved: the one you start before lunch and read
-# afterwards. Detached for the same reason the container one is — an hour is longer than a terminal
-# stays open — and followed straight away, so the first thing seen is the campaign saying which runs
-# the budget could pay for.
-run_training() {
-    parse_campaign_options train "$@"
-
-    local python=Training/.venv/bin/python
-    [ -x "$python" ] || python=python3
-
-    if [ -f "$TRAIN_PID_FILE" ] && kill -0 "$(cat "$TRAIN_PID_FILE")" 2>/dev/null; then
-        fail "A campaign is already running (pid $(cat "$TRAIN_PID_FILE"))."
-        {
-            echo "  Follow it:  tail -f Training/campaign/campaign.log"
-            echo "  Stop it:    ./dev.sh train-stop"
-        } >&2
-        exit 2
-    fi
-
-    # This may well be the machine that has Docker and nothing else — that is what the container
-    # exists for. Asked here rather than found out from `cmake: command not found` halfway through
-    # the host build, or from a campaign that starts and whose every trainer dies on `import neat`.
-    local missing=""
-
-    if ! command -v cmake >/dev/null 2>&1; then
-        missing="cmake"
-    fi
-
-    if ! "$python" -c "import neat" >/dev/null 2>&1; then
-        missing="${missing:+$missing and }the trainer's Python (neat-python)"
-    fi
-
-    if [ -n "$missing" ]; then
-        fail "A campaign on this machine needs $missing — not found here."
-        {
-            echo "  The container has all of it and takes the same options:"
-            echo ""
-            echo "    ./dev.sh docker host                   # build-host, with the container's paths"
-            echo "    ./dev.sh docker-train --hours 1 --keep"
-            echo ""
-            echo "  Or set this machine up for it: cmake, and Training/requirements.txt installed"
-            echo "  into Training/.venv."
-        } >&2
-        exit 2
-    fi
-
-    check_campaign_leftovers train
-
-    # So that the campaign's snapshot of libpacman_env.so is taken from a current build rather than
-    # from whatever was last built here. Once it has that copy, building this tree again is an
-    # ordinary thing to do — which it was not before, see campaign.py's header.
-    do_host_build
-
-    mkdir -p Training/campaign
-
-    local -a hours_argument=()
-    # An `if` and not `[ ... ] && ...`: under `set -e` a false test as the last statement of a
-    # function ends the script, and this one is false whenever no budget was given.
-    if [ -n "$CAMPAIGN_HOURS" ]; then
-        hours_argument=(--hours "$CAMPAIGN_HOURS")
-    fi
-
-    step "Starting the campaign"
-
-    # `setsid` puts it in a session of its own. That is what makes closing this terminal harmless,
-    # and what lets `train-stop` end the trainer's worker pool along with the campaign rather than
-    # leaving an hour of CPU running with nobody reading its output.
-    setsid nohup "$python" -u Training/campaign.py "${hours_argument[@]}" \
-        > Training/campaign/campaign.log 2>&1 &
-
-    local pid=$!
-    echo "$pid" > "$TRAIN_PID_FILE"
-
-    echo ""
-    echo "  Follow it:  tail -f Training/campaign/campaign.log"
-    echo "  Stop it:    ./dev.sh train-stop"
-    echo "  Read it:    Training/campaign/summary.md, rewritten after every run"
-    echo ""
-
-    # Ends by itself when the campaign does, rather than leaving a tail behind on a finished run.
-    tail -f --pid "$pid" Training/campaign/campaign.log
-}
-
-stop_training() {
-    if [ ! -f "$TRAIN_PID_FILE" ]; then
-        fail "There is no campaign to stop."
-        exit 2
-    fi
-
-    local pid
-    pid=$(cat "$TRAIN_PID_FILE")
-
-    if ! kill -0 "$pid" 2>/dev/null; then
-        fail "The campaign (pid $pid) is not running any more."
-        rm -f "$TRAIN_PID_FILE"
-        exit 2
-    fi
-
-    step "Stopping the campaign (process group $pid)"
-
-    # The group, not the process. campaign.py's trainer is a child with a worker pool of its own, and
-    # killing the parent alone leaves the pool running and the campaign unable to collect it — the
-    # same trap the campaign's own header describes about `pkill -f train.py`.
-    kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid"
-    rm -f "$TRAIN_PID_FILE"
-
-    echo "Stopped. Nothing is lost — a trainer writes its winner on every improvement, and"
-    echo "'./dev.sh train' measures rather than repeats a run whose winner is on disk."
-}
-
-# The campaign, detached, so that closing the terminal does not end the night.
-#
-# Wrapped rather than written out in the README for two reasons a person hits in that order: a
-# container of this name left over from last time makes `docker run` refuse, and a winner file left
-# over from last time makes the campaign *skip* that run — which shortens the night without looking
-# like anything went wrong.
-run_training_in_docker() {
-    parse_campaign_options docker-train "$@"
-
-    require_docker
-    build_docker_image
-
-    # The trainer loads this through ctypes and dies on the first line without it. Checked here
-    # rather than found out by a container that exits four seconds after being started detached,
-    # which is a night lost to a missing file.
-    if [ ! -f "$HOST_BUILD_DIR/libpacman_env.so" ]; then
-        fail "$HOST_BUILD_DIR/libpacman_env.so does not exist, and the trainer loads it."
-        {
-            echo "  Build it first — in the container, so that its paths are the container's:"
-            echo ""
-            echo "    ./dev.sh docker host"
-        } >&2
-
-        exit 2
-    fi
-
-    # The container's, not this shell's: the library is loaded by a trainer running in there.
-    check_build_dir_configured_for "$HOST_BUILD_DIR" "$CONTAINER_WORKDIR"
-
-    if docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
-        step "Removing the previous $TRAIN_CONTAINER container"
-        docker rm -f "$TRAIN_CONTAINER" >/dev/null
-    fi
-
-    check_campaign_leftovers docker-train
-
-    local repository_root
-    repository_root=$(cd .. && pwd)
-
-    local uid=${SUDO_UID:-$(id -u)}
-    local gid=${SUDO_GID:-$(id -g)}
-
-    step "Starting the campaign in $TRAIN_CONTAINER"
-
-    local -a hours_argument=()
-    # An `if` and not `[ ... ] && ...`: under `set -e` a false test as the last statement of a
-    # function ends the script, and this one is false whenever no budget was given.
-    if [ -n "$CAMPAIGN_HOURS" ]; then
-        hours_argument=(--hours "$CAMPAIGN_HOURS")
-    fi
-
-    docker run -d --name "$TRAIN_CONTAINER" \
-        --user "$uid:$gid" \
-        --volume "$repository_root:/work" \
-        --workdir "$CONTAINER_WORKDIR" \
-        "$DOCKER_IMAGE" python3 Training/campaign.py "${hours_argument[@]}" >/dev/null
-
-    echo ""
-    echo "  Follow it:  ./dev.sh docker-train        (or docker logs -f $TRAIN_CONTAINER)"
-    echo "  Stop it:    ./dev.sh docker-train-stop"
-    echo "  Read it:    Training/campaign/summary.md, rewritten after every run"
-    echo ""
-
-    # Straight into the log, so the first thing seen is the campaign saying when it will be done.
-    docker logs -f "$TRAIN_CONTAINER"
-}
-
-stop_training_in_docker() {
-    require_docker
-
-    if ! docker container inspect "$TRAIN_CONTAINER" >/dev/null 2>&1; then
-        fail "There is no $TRAIN_CONTAINER container."
-        exit 2
-    fi
-
-    step "Stopping $TRAIN_CONTAINER"
-
-    # Thirty seconds rather than the default ten: nothing needs them, but a trainer mid-write of a
-    # winner file should be allowed to finish it.
-    docker stop -t 30 "$TRAIN_CONTAINER" >/dev/null
-
-    echo "Stopped. Nothing is lost — train.py writes its winner on every improvement, and"
-    echo "'./dev.sh docker-train' measures rather than repeats a run whose winner is on disk."
 }
 
 run_in_docker() {
@@ -767,12 +415,7 @@ case "$cmd" in
     test) do_test ;;
     check) do_check ;;
     format) ./format.sh "$@" ;;
-    adopt-weights) do_adopt_weights "$@" ;;
-    train) run_training "$@" ;;
-    train-stop) stop_training ;;
     docker) run_in_docker "$@" ;;
-    docker-train) run_training_in_docker "$@" ;;
-    docker-train-stop) stop_training_in_docker ;;
     docker-build) build_docker_image --force ;;
     pre-commit) do_pre_commit ;;
     install-hook) install_hook ;;
@@ -794,9 +437,7 @@ case "$cmd" in
     *)
         fail "Unknown command: $cmd"
         echo "Try: test | format | check | host | build | flash | install-hook |" >&2
-        echo "     train | train-stop |" >&2
-        echo "     docker | docker-build | docker-train | docker-train-stop |" >&2
-        echo "     adopt-weights |" >&2
+        echo "     docker | docker-build |" >&2
         echo "     all | suite | manual | display_id | display_test | joystick |" >&2
         echo "     joystick_dot | animation | user_button" >&2
         exit 2

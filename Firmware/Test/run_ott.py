@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "search_budget", "lookahead_cost", "ai_high_score"]
+AUTOMATIC = ["display_id", "rng", "high_score", "search_budget", "lookahead_cost", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
@@ -52,7 +52,7 @@ LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
 
 # An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
 # because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
-LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0, "lookahead_cost": 60.0}
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "lookahead_cost": 60.0}
 
 
 def detect_port() -> str:
@@ -330,20 +330,20 @@ def check_maze_selection(port: str, baud: str) -> bool:
 
 
 def check_the_ai_game(port: str, baud: str) -> bool:
-    """Pick the agent, start the Pac-Man AI game and switch its endless mode (VT-INT-027).
+    """Start the Pac-Man AI game and switch its endless mode (VT-INT-027).
 
-    The agent is chosen on the menu with left and right, so which one plays is settled before the
-    run rather than during it — the button in that game already means the endless mode. What a
-    script can falsify is that the choice moves, that it stays put where there is nothing to
-    choose, and that the run still starts as the agent's.
-
-    Two facts a script can settle in seconds. That the agent has Pac-Man from the first frame is
+    Two facts a script can settle in seconds. That the search has Pac-Man from the first frame is
     visible in the firmware's own report of the run — it names the game — and that the endless mode
     belongs to that game and switches is visible in what the shell says when the button is pressed.
 
-    What is *not* checked here is the restart itself: seeing it costs a whole run of an agent that
-    clears level 1, which is minutes, and the suite is run after every build. `test_shell.c` covers
-    the restart, and the board covers it whenever somebody watches the game.
+    **The agent choice is gone** (DEC-054): the trained network went, so there is one agent and
+    nothing to pick. Sideways is still accepted by `select` and does nothing, which is checked here
+    rather than assumed, because a harness that silently changed the selection would be worse than
+    one that cannot.
+
+    What is *not* checked here is the restart itself: seeing it costs a whole run of a search that
+    reaches level six, which is many minutes, and the suite is run after every build. `test_shell.c`
+    covers the restart, and the board covers it whenever somebody watches the game.
     """
     configure_tty(port, baud)
     fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
@@ -353,14 +353,11 @@ def check_the_ai_game(port: str, baud: str) -> bool:
 
         steps = [
             ("select down\r\n", "selected: pac-man ai"),
-            # Sideways picks the agent, and only here: it is dead on the two games a person plays,
-            # which the step after `select up` checks rather than assumes.
-            ("select\r\n", "agent: neat"),
-            ("select right\r\n", "agent: search"),
-            ("select left\r\n", "agent: neat"),
-            ("select right\r\n", "agent: search"),
+            # Sideways is accepted and moves nothing, on this game and on a person's.
+            ("select right\r\n", "selected: pac-man ai"),
+            ("select left\r\n", "selected: pac-man ai"),
             ("select up\r\n", "selected: normal maze"),
-            ("select right\r\n", "agent: search"),  # unchanged: there is nothing to pick here
+            ("select right\r\n", "selected: normal maze"),
             ("select down\r\n", "selected: pac-man ai"),
             ("start\r\n", "pac-man ai run 1"),
             ("button\r\n", "endless mode on"),
@@ -378,8 +375,7 @@ def check_the_ai_game(port: str, baud: str) -> bool:
                 print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-027] the AI game: the agent is chosen on the menu, plays it, "
-              "and the endless mode switches")
+        print("[VT-INT-027] the AI game: it starts as the search's, and the endless mode switches")
         return True
     finally:
         os.close(fd)
@@ -444,7 +440,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (display_id/ai_equivalence/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
+                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--manual", action="store_true",
                     help="run every test that needs a human at the board, in sequence")

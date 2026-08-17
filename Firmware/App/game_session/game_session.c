@@ -7,7 +7,6 @@
 #include "game.h"
 #include "game_view.h"
 #include "msg.h"
-#include "pacman_ai.h"
 #include "pacman_lookahead.h"
 #include "render.h"
 #include "sw_timer.h"
@@ -105,22 +104,7 @@ static void prv_service_ai(const msg_game_state_t* const in_state)
         return;
     }
 
-    /* The two machines are asked the same question about the same board and their answers go to
-     * the same door. What differs is when they are asked: a network answers in microseconds and is
-     * asked once a cell, a search answers better the longer it is left. */
-    if (g_player == GAME_SESSION_PLAYER_LOOKAHEAD)
-    {
-        prv_service_lookahead(in_state);
-
-        return;
-    }
-
-    if (!prv_is_new_cell(in_state))
-    {
-        return;
-    }
-
-    game_set_direction(&g_game, pacman_ai_decide(in_state, game_get_playfield(&g_game)));
+    prv_service_lookahead(in_state);
 }
 
 /* ==========================================================================
@@ -198,14 +182,11 @@ void game_session_set_direction(direction_e in_direction)
 
 bool game_session_set_player(game_session_player_e in_player)
 {
-    /* The network is the only one of the three that can be *unavailable*: its weights are
-     * generated and a generator can be wrong. The search has nothing to be wrong about — it reads
-     * the run it is given — and the joystick is always there. */
-    if ((in_player == GAME_SESSION_PLAYER_NETWORK) && !pacman_ai_is_available())
-    {
-        return false;
-    }
-
+    /* **Nothing can refuse any more, and the return value is kept anyway.** The trained network
+     * could be *unavailable* — its weights were generated and a generator can be wrong — which is
+     * what this reported. The search has nothing to be wrong about: it reads the run it is given.
+     * The `bool` stays because the caller's own logic is built on being told, and a signature that
+     * can only say `true` is cheaper to keep than a shell that has to be re-argued. */
     g_player = in_player;
 
     /* So that taking over acts at the next boundary rather than waiting for Pacman to leave the
@@ -219,7 +200,7 @@ bool game_session_set_player(game_session_player_e in_player)
 
 bool game_session_set_ai_enabled(bool in_is_enabled)
 {
-    return game_session_set_player(in_is_enabled ? GAME_SESSION_PLAYER_NETWORK : GAME_SESSION_PLAYER_HUMAN);
+    return game_session_set_player(in_is_enabled ? GAME_SESSION_PLAYER_LOOKAHEAD : GAME_SESSION_PLAYER_HUMAN);
 }
 
 game_session_player_e game_session_get_player(void)

@@ -19,7 +19,6 @@
  * behind the shell has to be named even where this file calls none of it directly. */
 #include "active_object.h"
 #include "agent.h"
-#include "ai_weights.h"
 #include "assert_probe.h"
 #include "circular_buffer.h"
 #include "crc.h"
@@ -41,9 +40,7 @@
 #include "msg.h"
 #include "msg_broker.h"
 #include "msg_queue.h"
-#include "neural_net.h"
 #include "pacman.h"
-#include "pacman_ai.h"
 #include "pacman_lookahead.h"
 #include "playfield.h"
 #include "render.h"
@@ -198,8 +195,29 @@ static void prv_select(shell_mode_e in_mode)
     TEST_ASSERT_EQUAL_UINT(in_mode, shell_get_selected_mode());
 }
 
+/* Make the search play badly, on purpose, for the whole of this file.
+ *
+ * **These tests are about the shell's flow, not about how well the search plays** — the lockout, the
+ * loop, which table a run reaches. With the weights the firmware ships, an AI run reaches level six
+ * and takes tens of millions of simulated ticks to finish; a test that played one to the end ran for
+ * twelve minutes before it was killed. Zero weights make every position worth the same, so the
+ * search falls back to the first way out of each cell and the run ends in the time a test may have.
+ *
+ * It is the shipped code either way, driven through its own public setter — not a stub, and not a
+ * second implementation of anything. */
+static void prv_make_the_search_hopeless(void)
+{
+    pacman_lookahead_weights_t hopeless = {0};
+
+    hopeless.death = 1;
+
+    pacman_lookahead_set_weights(&hopeless);
+}
+
 void setUp(void)
 {
+    prv_make_the_search_hopeless();
+
     g_now_ms = TEST_START_TICK;
     g_region_count = 0U;
     (void)memset(g_page, TEST_ERASED_BYTE, sizeof(g_page));
@@ -498,18 +516,6 @@ void test_the_ai_game_plays_itself_from_the_first_frame(void)
     TEST_ASSERT_TRUE(prv_is_playing_the_normal_maze());
 }
 
-/* A game that let the player take over would be the normal maze under another name — and the button
- * has to agree with that, because in this game it means something else entirely (the loop). */
-void test_the_ai_game_cannot_be_taken_over(void)
-{
-    prv_reach_the_menu();
-    prv_select(SHELL_MODE_AI);
-    shell_press_start();
-
-    TEST_ASSERT_FALSE(shell_toggle_ai());
-    TEST_ASSERT_TRUE(shell_is_ai_playing());
-}
-
 /* FR-041 and FR-034 together, and they pull in opposite directions: an agent's run is refused by a
  * player's table and belongs in the agent's own. Both halves in one test, because a lockout that
  * refused every table would pass the first assertion. */
@@ -608,135 +614,15 @@ void test_switching_the_loop_off_lets_the_run_finish(void)
 
 /* --- the AI takeover (FR-030/033/034) ------------------------------------- */
 
-/* The board button means start on the menu, so a toggle there must refuse and say so — otherwise
- * `app_main` would swallow the press and the menu would stop responding to the button. */
-void test_the_ai_cannot_be_toggled_outside_a_run(void)
-{
-    prv_reach_the_menu();
-
-    TEST_ASSERT_FALSE(shell_toggle_ai());
-    TEST_ASSERT_FALSE(shell_is_ai_playing());
-    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_MENU, shell_get_screen());
-}
-
-/* FR-040: the agent was evolved against the normal maze, so a random-maze run does not offer it.
- * Refused rather than allowed-but-poor, because the menu says "AI AVAILABLE" against one option
- * only and the button has to agree with the menu. */
-void test_the_ai_cannot_be_toggled_in_a_random_maze_run(void)
-{
-    prv_reach_the_menu();
-    prv_select(SHELL_MODE_RANDOM_MAZE);
-    shell_press_start();
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
-    TEST_ASSERT_FALSE(shell_toggle_ai());
-    TEST_ASSERT_FALSE(shell_is_ai_playing());
-    TEST_ASSERT_FALSE(shell_has_ai_played());
-}
-
 /* --- which agent the AI game uses ----------------------------------------- */
-
-/* The choice is the menu's, so it is made before the run and is a property of the run rather than
- * something that happens part-way through it. Left and right are the free axis: up and down move
- * between games and the button in that game already means the endless mode (FR-043). */
-void test_the_menu_picks_which_agent_the_ai_game_uses(void)
-{
-    prv_reach_the_menu();
-    shell_move_selection(DIRECTION_SOUTH);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_AI, shell_get_selected_mode());
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
-
-    shell_move_selection(DIRECTION_EAST);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_LOOKAHEAD, shell_get_selected_ai());
-
-    shell_move_selection(DIRECTION_WEST);
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
-}
-
-/* Sideways is dead on the two games a person plays. There is nothing to choose there, and a key
- * that silently changed something invisible would be worse than a key that does nothing. */
-void test_the_agent_cannot_be_picked_for_a_game_that_has_none(void)
-{
-    prv_reach_the_menu();
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_NORMAL_MAZE, shell_get_selected_mode());
-
-    shell_move_selection(DIRECTION_EAST);
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_MODE_NORMAL_MAZE, shell_get_selected_mode());
-    TEST_ASSERT_EQUAL_UINT8((uint8_t)GAME_SESSION_PLAYER_NETWORK, shell_get_selected_ai());
-}
-
-/* The one that matters: the choice has to reach the run. A menu that showed `SEARCH` and started a
- * network run would look exactly right and be exactly wrong. */
-void test_the_chosen_agent_is_the_one_that_plays(void)
-{
-    prv_reach_the_menu();
-    shell_move_selection(DIRECTION_SOUTH);
-    shell_move_selection(DIRECTION_EAST);
-
-    shell_press_start();
-
-    TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
-    TEST_ASSERT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
-    TEST_ASSERT_TRUE(shell_is_ai_playing());
-}
-
-void test_the_ai_takes_over_and_hands_back_during_a_run(void)
-{
-    prv_reach_the_menu();
-    shell_press_start();
-
-    TEST_ASSERT_FALSE(shell_is_ai_playing());
-
-    TEST_ASSERT_TRUE(shell_toggle_ai());
-    TEST_ASSERT_TRUE(shell_is_ai_playing());
-
-    TEST_ASSERT_TRUE(shell_toggle_ai());
-    TEST_ASSERT_FALSE(shell_is_ai_playing());
-}
-
-/* The look-ahead search is offered in the agent's own game and *not* here. The button in a game a
- * person plays means one thing, and a third state of it would be a way to arrive at the search by
- * accident while reaching for the player. */
-void test_the_button_never_reaches_the_search_in_the_normal_maze(void)
-{
-    prv_reach_the_menu();
-    shell_press_start();
-
-    for (uint8_t press = 0U; press < 6U; ++press)
-    {
-        (void)shell_toggle_ai();
-
-        TEST_ASSERT_NOT_EQUAL(GAME_SESSION_PLAYER_LOOKAHEAD, game_session_get_player());
-    }
-}
-
-/* FR-034 is "was on at some point", not "is on now". Handing control back before the last life must
- * not launder the score, which is exactly what a live flag would allow. */
-void test_the_lockout_survives_handing_control_back(void)
-{
-    prv_reach_the_menu();
-    shell_press_start();
-
-    TEST_ASSERT_FALSE(shell_has_ai_played());
-
-    (void)shell_toggle_ai();
-    (void)shell_toggle_ai();
-
-    TEST_ASSERT_FALSE(shell_is_ai_playing());
-    TEST_ASSERT_TRUE(shell_has_ai_played());
-}
 
 /* The two halves in one test on purpose: a lockout that simply broke high scores altogether would
  * pass the first assertion and fail the second. */
-void test_an_ai_run_is_kept_out_of_the_table_and_a_player_run_is_not(void)
+void test_an_ai_run_is_kept_out_of_a_persons_table_and_a_player_run_is_not(void)
 {
     prv_reach_the_menu();
+    prv_select(SHELL_MODE_AI);
     shell_press_start();
-
-    TEST_ASSERT_TRUE(shell_toggle_ai());
 
     prv_play_until_the_run_ends();
 
@@ -747,8 +633,9 @@ void test_an_ai_run_is_kept_out_of_the_table_and_a_player_run_is_not(void)
     TEST_ASSERT_NOT_EQUAL_UINT32(0U, game_session_get_score());
     TEST_ASSERT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE));
 
-    /* And now the same flow without the AI, which must reach the table. */
+    /* And now a person's game, which must reach that table. */
     shell_press_start();
+    prv_select(SHELL_MODE_NORMAL_MAZE);
     shell_press_start();
     prv_play_until_the_run_ends();
 
@@ -756,18 +643,20 @@ void test_an_ai_run_is_kept_out_of_the_table_and_a_player_run_is_not(void)
     TEST_ASSERT_NOT_EQUAL_UINT32(0U, high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE));
 }
 
-/* FR-033's second half: every new run begins under player control, whatever the last one did. */
+/* Every new run begins under player control, whatever the last one did — including the latch FR-034
+ * reads, which would otherwise keep a person's next run out of the table for ever. */
 void test_a_new_run_starts_under_player_control(void)
 {
     prv_reach_the_menu();
+    prv_select(SHELL_MODE_AI);
     shell_press_start();
-    (void)shell_toggle_ai();
 
     TEST_ASSERT_TRUE(shell_is_ai_playing());
 
     prv_play_until_the_run_ends();
 
     shell_press_start();
+    prv_select(SHELL_MODE_NORMAL_MAZE);
     shell_press_start();
 
     TEST_ASSERT_EQUAL_UINT(SHELL_SCREEN_GAME, shell_get_screen());
