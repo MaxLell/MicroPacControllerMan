@@ -302,8 +302,10 @@ silently working around a wart.
                 ^ start the run         ^ on to page 3       ^ start the run
   ```
   Up and down move within a page — the highlighted option *is* the choice, so there is no separate
-  commit — and the centre key leaves the page, either onward or into the run. **B1 steps back a
-  page**; on page 1 and the score screen it falls through to meaning start.
+  commit — and the centre key leaves the page, either onward or into the run. **Left or B1 steps back
+  a page**: the stick points the way the pages go, so both devices do the one thing and the rule lives
+  in `shell_press_back`. **Right is deliberately not forward** — confirming is the centre key's job,
+  and a nudged stick must not start a game. On page 1 and the score screen B1 falls through to start.
   - **This is the menu's third shape in three days.** Three fixed games (DEC-045), then two settable
     axes on one screen (DEC-055), then this. The axes were rejected on sight: a screen carrying every
     choice at once reads denser than a short list asked twice, and the endless row's *conditional*

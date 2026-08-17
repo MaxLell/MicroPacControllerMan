@@ -309,9 +309,12 @@ def check_maze_selection(port: str, baud: str) -> bool:
             ("button\r\n", "page: player"),
             ("start\r\n", "page: maze"),
             ("select\r\n", "selected: play random"),
-            # Sideways is accepted and moves nothing: a list has nothing sideways to be.
+            # Right moves nothing — confirming is the centre key's job.
             ("select right\r\n", "selected: play random"),
-            ("select left\r\n", "selected: play random"),
+            # Left is back, the same as the button, and what was chosen survives the trip.
+            ("select left\r\n", "page: player"),
+            ("start\r\n", "page: maze"),
+            ("select\r\n", "selected: play random"),
             # And the second confirm begins a person's run.
             ("start\r\n", "play random run 1"),
         ]

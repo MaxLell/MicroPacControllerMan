@@ -593,17 +593,38 @@ void test_all_four_combinations_are_reachable(void)
     }
 }
 
-/* Sideways is the one direction the menu has no meaning for, and a menu that jumped on it would
- * make a player who nudged the stick mid-reach play the wrong game. */
-void test_a_sideways_push_leaves_the_selection_alone(void)
+/* Left steps back a page — the same thing the board button does, because the stick already points the
+ * way the pages go. Right does nothing: confirming is the centre key's job, and a key that quietly
+ * took the highlighted option would make a nudged stick start a game. */
+void test_left_steps_back_and_right_does_nothing(void)
 {
     prv_reach_the_menu();
 
+    /* On the first page there is nowhere to go back to, so left is as inert as right. */
     shell_move_selection(DIRECTION_WEST);
     shell_move_selection(DIRECTION_EAST);
 
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
     TEST_ASSERT_EQUAL_UINT(0U, shell_get_selected_option());
-    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_PERSON, shell_get_selected_player());
+
+    prv_walk_to(SHELL_PLAYER_MACHINE, SHELL_MAZE_RANDOM, true);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+
+    /* Right stays put where there *is* something to leave, which is the half that matters. */
+    shell_move_selection(DIRECTION_EAST);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+
+    shell_move_selection(DIRECTION_WEST);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(SHELL_MAZE_RANDOM, shell_get_selected_maze());
+
+    shell_move_selection(DIRECTION_WEST);
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT(SHELL_PLAYER_MACHINE, shell_get_selected_player());
 }
 
 /* Steering during a run must not change what the run is. The maze is what the high-score table is

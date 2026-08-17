@@ -758,9 +758,21 @@ void shell_move_selection(direction_e in_direction)
         return;
     }
 
-    /* **Only up and down.** DEC-055's menu changed a row's value sideways; a page that is a list has
-     * nothing sideways to be, and a key that silently did something invisible would be worse than a
-     * key that does nothing. */
+    /* **Left is back**, which the owner asked for once the pages existed: the stick already points the
+     * way the pages go, so the key that means "the other direction" should mean the other direction.
+     * It does the same thing the board button does — one behaviour, two devices, and the rule lives in
+     * #shell_press_back rather than being written twice.
+     *
+     * Right is deliberately *not* forward. Confirming is what the centre key is for, and a page whose
+     * options are a list has nothing sideways to be; a key that quietly took the highlighted option
+     * would make a nudged stick start a game. */
+    if (in_direction == DIRECTION_WEST)
+    {
+        (void)shell_press_back();
+
+        return;
+    }
+
     if ((in_direction != DIRECTION_NORTH) && (in_direction != DIRECTION_SOUTH))
     {
         return;

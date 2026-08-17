@@ -130,11 +130,12 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on and `select up`/`down` move the cursor within the page that is up
- * (DEC-056). Sideways is accepted and does nothing: a page that is a list has nothing sideways to be.
+/* `select` shows what the menu is on, `select up`/`down` move the cursor within the page that is up,
+ * and `select left` steps back a page — the same thing `button` does, because the stick points the way
+ * the pages go (DEC-056). `select right` does nothing: confirming is the centre key's job.
  *
- * `start` takes the highlighted option — which advances a page or begins the run — and `button` steps
- * back, so the whole three-page walk is drivable from the console.
+ * `start` takes the highlighted option, which advances a page or begins the run, so the whole
+ * three-page walk is drivable from the console.
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -163,7 +164,7 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         }
         else
         {
-            cli_print("'select up', 'down', 'left' or 'right'");
+            cli_print("'select up' or 'down' to move, 'left' to go back");
 
             return CLI_FAIL_STATUS;
         }

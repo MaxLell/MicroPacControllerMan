@@ -18,10 +18,10 @@ rather than assuming.
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 108,536 B of 504 kB — 21.0 % |
+| flash | 108,560 B of 504 kB — 21.0 % |
 | RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
-| `pacman.hex` | sha256 `51f9289f22919ddc3771aaa3962a5723ab3c118b0e6929b6dab4fa77e214cbe4` |
-| `pacman.bin` | sha256 `ec0862e4164476125ffe4e318c99bbac1fb2accf4e77cdd8f128104f2356a2b4` |
+| `pacman.hex` | sha256 `960e494020fd0ec643f479b67cd669249f1f0dc81847e25f6d026ed5bd036a02` |
+| `pacman.bin` | sha256 `8b7fc504471a74363ec98ae920e82499438e3c3e1b1c87bf94f4fa1bbceba898` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
@@ -57,7 +57,7 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 **The menu asks one question a screen.** The options on a screen start at the same column — left
 aligned to each other, the block of them centred — so the cursor runs straight down. Up and down move
 the Pac-Man cursor, the stick's centre
-takes the highlighted one, and **B1 steps back**:
+takes the highlighted one, and **left or B1 steps back**:
 
 ```
 screen 1      screen 2 (after PLAY)   screen 2 (after AI)   screen 3 (AI only)
