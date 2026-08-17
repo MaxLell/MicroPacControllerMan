@@ -40,7 +40,7 @@
  */
 #define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
 #define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
-#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up|down|left|right' moves it"
+#define APP_MAIN_HELP_SELECT     "The menu; 'select up' and 'select down' move the cursor"
 #define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
 
 _Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
@@ -82,11 +82,14 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         return CLI_OK_STATUS;
     }
 
-    /* All three tables, each under the name of the game it belongs to (FR-041). Labelled rather than
-     * numbered, because "table 2" is a number only this file knows the meaning of. */
+    /* Both tables, each under the name of the maze it belongs to (FR-041). Labelled rather than
+     * numbered, because "table 1" is a number only this file knows the meaning of. The machine has no
+     * table since DEC-056, so there are two and they are the two mazes. */
+    static const char* const k_table_names[] = {"classic", "random"};
+
     for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
-        cli_print("%s:", shell_get_mode_name((shell_mode_e)table));
+        cli_print("%s:", k_table_names[table]);
 
         for (uint8_t place = 0U; place < HIGH_SCORE_COUNT; ++place)
         {
@@ -94,7 +97,7 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         }
     }
 
-    cli_print("'highscore reset' clears all three.");
+    cli_print("'highscore reset' clears both.");
 
     return CLI_OK_STATUS;
 }
@@ -113,21 +116,26 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
 
     shell_press_start();
 
-    /* Said out loud when nothing happened, because the one way pressing start can fail is worth a
-     * sentence: the Pac-Man AI game refuses to begin at all if the generated weight table cannot be
-     * evaluated, rather than starting a game that plays itself with nobody playing it. */
-    if ((shell_get_screen() == SHELL_SCREEN_MENU) && (shell_get_selected_mode() == SHELL_MODE_AI))
+    /* **What it did has to be said, because it no longer always starts a run.** Since DEC-056 the
+     * centre key takes the highlighted option, and on every page but the last of a path that means
+     * moving on. A harness driving the menu needs to know which — and when a run does begin, the
+     * periodic report names it, so there is nothing to add here. */
+    if (shell_get_screen() == SHELL_SCREEN_MENU)
     {
-        cli_print("the Pac-Man AI game could not start: the weight table cannot be evaluated");
+        static const char* const k_page_names[] = {"player", "maze", "endless"};
 
-        return CLI_FAIL_STATUS;
+        cli_print("page: %s", k_page_names[shell_get_menu_page()]);
     }
 
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on; `select up`/`down` moves between games and
- * `select left`/`right` picks which agent the AI game uses.
+/* `select` shows what the menu is on, `select up`/`down` move the cursor within the page that is up,
+ * and `select left` steps back a page — the same thing `button` does, because the stick points the way
+ * the pages go (DEC-056). `select right` does nothing: confirming is the centre key's job.
+ *
+ * `start` takes the highlighted option, which advances a page or begins the run, so the whole
+ * three-page walk is drivable from the console.
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -156,18 +164,19 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         }
         else
         {
-            cli_print("'select up', 'down', 'left' or 'right'");
+            cli_print("'select up' or 'down' to move, 'left' to go back");
 
             return CLI_FAIL_STATUS;
         }
     }
 
-    /* The agent's name goes with it, so a test can read back what left and right did rather than
-     * having to trust that they did anything. */
-    static const char* const k_ai_names[] = {"none", "neat", "search"};
+    /* The page, what is highlighted on it, and the choices made so far — so a harness can read back
+     * exactly what the pushes did rather than trusting that they did anything (VT-INT-026/027). */
+    static const char* const k_page_names[] = {"player", "maze", "endless"};
 
-    cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
-    cli_print("agent: %s", k_ai_names[shell_get_selected_ai()]);
+    cli_print("page: %s", k_page_names[shell_get_menu_page()]);
+    cli_print("selected: %s", shell_get_mode_name());
+    cli_print("endless: %s", shell_is_infinite() ? "on" : "off");
 
     return CLI_OK_STATUS;
 }
@@ -175,8 +184,8 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
 /* `button` presses the board button from the console.
  *
  * The counterpart to `select`, and a device rather than a decision for the same reason: it presses,
- * and the shell decides what pressing means on the screen that is up (FR-003/030/043). It is what
- * lets the endless mode be switched — and therefore checked — without a finger on B1. */
+ * and the shell decides what pressing means on the screen that is up (FR-003/043). It is what lets
+ * the endless mode be switched — and therefore checked — without a finger on B1. */
 static int prv_button_command(int in_argument_count, char* in_arguments[], void* in_context)
 {
     (void)in_argument_count;
@@ -184,6 +193,15 @@ static int prv_button_command(int in_argument_count, char* in_arguments[], void*
     (void)in_context;
 
     shell_press_user_button();
+
+    /* Same reason as `start`: on the menu the button is a step back, and which page it landed on is
+     * the whole of what a harness can check. */
+    if (shell_get_screen() == SHELL_SCREEN_MENU)
+    {
+        static const char* const k_page_names[] = {"player", "maze", "endless"};
+
+        cli_print("page: %s", k_page_names[shell_get_menu_page()]);
+    }
 
     return CLI_OK_STATUS;
 }
@@ -325,7 +343,7 @@ static void prv_report_progress(void)
 
     if (screen == SHELL_SCREEN_GAME)
     {
-        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(shell_get_selected_mode()),
+        cli_print("  %s run %lu: level %u - %u lives, %lu points", shell_get_mode_name(),
                   (unsigned long)shell_get_run_count(), (unsigned)level, (unsigned)lives,
                   (unsigned long)game_session_get_score());
     }

@@ -13,12 +13,12 @@ Requirements use the [EARS](https://alistairmavin.com/ears/) notation (Ubiquitou
 | FR-001 | Loading Screen | Upon power-on, the system shall display a loading screen containing the Pacman logo. *(timing — see NFR-005)* |
 | FR-002 | High Score Menu | After the loading screen completes, the system shall display a menu screen showing the games that can be started (FR-040) and the high scores of the selected one (FR-041), and nothing else. *(Amended by [DEC-045](11-Decisions-and-As-Built.md): it used to carry the title and the row of actors as well, which the loading screen has just shown. Amended by [DEC-046](11-Decisions-and-As-Built.md): the scores shown are the selected game's.)* |
 | FR-003 | Game Start | While the menu screen is displayed, when the user presses the Nucleo board user button or the joystick's centre key, the system shall start the selected game (FR-040). |
-| FR-040 | Game Selection | While the menu screen is displayed, the system shall offer a choice of three games — the arcade's own maze ("normal"), the same maze played by the AI alone ("Pac-Man AI", FR-042), and generated mazes ("random", FR-029) — shall move the choice with the joystick's up and down keys, shall mark the selected one, and shall play the selected one when the game starts. The choice shall not change while a game is in progress. *(Amended by [DEC-046](11-Decisions-and-As-Built.md): it offered two.)* |
-| FR-041 | High Scores per Game | The system shall keep a separate table of three high scores for each game of FR-040, shall show the selected game's table on the menu screen, and shall offer a finished run only to the table of the game it was played as. |
-| FR-042 | Autonomous AI Game | While the Pac-Man AI game is in progress, the system shall take Pacman's direction from the trained AI from the first frame to the end of the run, and shall provide no means for the user to take control. If the trained weights cannot be evaluated, then the system shall not start the game rather than start it under the player's control. |
+| FR-040 | Game Selection | While the menu screen is displayed, the system shall ask **who plays** — the player or the AI — and then **which maze** — the arcade's own layout ("classic") or a maze generated for each level ("random", FR-029) — as a list per question, each confirmed before the next is asked, and shall start the run the last confirmation completes. *(Amended twice at the owner's request. It was three fixed games; [DEC-055](11-Decisions-and-As-Built.md) made it two settable axes on one screen; [DEC-056](11-Decisions-and-As-Built.md) made it a page per question, because a screen carrying every choice at once was harder to read than a short list asked twice.)* |
+| FR-041 | High Scores per Game | The system shall keep a separate table of three high scores for **each maze**, shall show the table of the maze the menu is offering, and shall offer a finished run's score only to the table of the maze it was played on. *(Amended by [DEC-055](11-Decisions-and-As-Built.md) and then by [DEC-056](11-Decisions-and-As-Built.md), which took the AI's tables away at the owner's request: a run nobody played is not a score anybody set, so it is recorded nowhere — which is what FR-034 said before [DEC-046](11-Decisions-and-As-Built.md) gave the agent one. Three tables became four and then two; the stored layout version rose each time, so a page written before a change is discarded rather than misread.)* |
+| FR-042 | Autonomous AI Game | While a run the AI was selected for is in progress, the system shall take Pacman's direction from the AI from the first frame to the end of the run, and shall provide no way for the player to take over. *(Amended by [DEC-054](11-Decisions-and-As-Built.md) — the AI is the look-ahead search, not a trained network — and by [DEC-055](11-Decisions-and-As-Built.md), which made "the AI game" a *choice on the menu* rather than one of three fixed games, so it now applies to either maze.)* |
 | FR-044 | Varied Timings | While a game is in progress, the system shall vary the ghost house release counts and every ghost timing — the scatter/chase phase durations, the frightened window and the house idle limit — from run to run by a bounded random amount, bounded both by 2 seconds and by half the nominal value, so that no timing can reach zero or double. |
 | FR-045 | Random Source | On the target, every random value the firmware uses shall come from the MCU's hardware random number generator. The maze generator shall keep its own reproducible algorithm (FR-029) and take only its seed from that source. |
-| FR-043 | Endless Mode | While a Pac-Man AI game is in progress, when the user presses the Nucleo board user button, the system shall toggle an endless mode; while it is on, the system shall start a new run when one ends instead of returning to the menu screen, and shall indicate on the display that it is on. Starting a game from the menu screen shall leave the endless mode off. |
+| FR-043 | Endless Mode | While the menu screen is asking the AI's last question, the system shall ask whether to loop, defaulting to off; while the loop is on, the system shall start a further run when one ends instead of returning to the menu screen, and shall indicate the mode in the HUD. *(Amended by [DEC-055](11-Decisions-and-As-Built.md) from a board-button toggle during a run onto the menu, and by [DEC-056](11-Decisions-and-As-Built.md) onto a page of its own — the last page of the AI's path, which a person's path does not pass through. That is why it needs no rule about when it applies: it cannot be reached where it would not mean anything.)* |
 
 ### 2.1.2 Player Control & Rendering
 
@@ -107,29 +107,25 @@ See [03 Architecture](03-Architecture.md) for how these are realized.
 
 ### 2.1.11 Pacman AI
 
-A trained agent that can take over from the player. The **training happens on the host and only
-there**; the target evaluates fixed weights and never learns. The two halves are therefore held
-together by an equivalence requirement (FR-039) rather than by hope — the same trick that made
-the maze generator checkable ([DEC-029](11-Decisions-and-As-Built.md)).
+A machine that plays the game, offered as a game of its own. **It is a search, not a trained
+network** — it decides by cloning the run in progress and playing it forward through the game's own
+rules ([DEC-050](11-Decisions-and-As-Built.md)).
 
-Requirements about *how* the agent is built — what it observes, its architecture, the reward and
-the export format — belong in the design document, not here.
+**Most of this section used to be about training**, and went on 2026-08-17 with the trained network
+itself ([DEC-054](11-Decisions-and-As-Built.md)): what the agent observes (FR-035), how it is trained
+(FR-036), that the target only evaluates weights (FR-038), that host and target agree on an inference
+(FR-039), the training environment (FR-112, FR-113) and the model's footprint (NFR-006..008). A
+search has no weights, no training and nothing to port, so none of them had a subject any more. The
+mid-run takeover went with them (FR-030, FR-032, FR-033): who plays is chosen on the menu.
+
+Requirements about *how* the search works — its depth, its budget, what a leaf is worth — belong in
+the design document, not here.
 
 | Unique-ID | Name | Description |
 |---|---|---|
-| FR-030 | AI Takeover Toggle | While a **normal-maze** game (FR-040) is in progress, when the user presses the Nucleo board user button, the system shall toggle Pacman's control between the player and the trained AI. In a random-maze game the system shall refuse the takeover. *(Amended by [DEC-045](11-Decisions-and-As-Built.md): the AI is trained on the normal maze and is offered there only.)* |
-| FR-031 | AI Control Exclusivity | While AI control is active, the system shall take Pacman's direction from the AI and shall ignore the joystick's directional keys (FR-004). |
-| FR-032 | AI Takeover Indication | While AI control is active, the system shall indicate in the HUD that the AI has taken over. |
-| FR-033 | AI Control Persistence | While a run is in progress, the system shall preserve the AI control state across a level change (FR-021) and across the loss of a life (FR-024). Every new run shall begin under player control. |
-| FR-034 | AI Run Not Recorded | If AI control was active at any point during a run of a game a person plays (FR-040: normal maze, random maze), then the system shall not store that run's score in NVM (FR-008), however high the score. This shall not apply to the Pac-Man AI game, whose table is the AI's own (FR-041/FR-042). *(Amended by [DEC-046](11-Decisions-and-As-Built.md); before it there was one table and every AI-touched run was refused.)* |
-| FR-035 | Observation Bounded by the Display | The AI shall decide from no information beyond what the display shows the player: the maze, the remaining pellets, Pacman, the four ghosts and which of them are frightened, the score, the level and the remaining lives. |
-| FR-036 | The AI's Objective | The AI shall be trained to maximise the score a run reaches, across levels rather than within one, with two additions: eating a ghost shall be worth more to the training objective than the score it pays, and a training episode shall end when a life is lost. *(Amended by [DEC-047](11-Decisions-and-As-Built.md). The training objective is therefore no longer the score; FR-037 still measures the score. A flat penalty per life was considered and rejected: a run ends **because** its lives are gone, so the penalty would be a near-constant, and on a run cut short by the idle rule it would reward the idling.)* |
-| FR-037 | AI Play Strength | Over 20 full runs of the **normal maze** (FR-040), with every rule of the game in force, the AI shall reach a mean final score of at least 4,600 points, and more than a uniform-random policy over the same 20 runs. *(A mean again, because FR-044 makes a run a draw rather than a measurement: the same network on the same maze scores differently as the ghosts' timings move. 4,600 is about ten times the measured mean of a uniform-random policy — 424.5 points — and clearing level 1 alone is worth 2,600. Both figures tunable; amended by [DEC-045](11-Decisions-and-As-Built.md) onto the normal maze and by [DEC-047](11-Decisions-and-As-Built.md) back to a mean. See [M6 Pacman AI §13](../Design/M6-Pacman-AI.md))* |
-| FR-038 | Inference Only on the Target | The target shall evaluate the trained weights only. No training, weight update or exploration shall run on the target. |
-| FR-039 | Host / Target Inference Equivalence | Given the same game state and the same weights, the target shall choose the same direction as the host build, over a recorded set of states covering ordinary play, frightened mode, the tunnels and a life just lost. |
-| FR-112 | Training on the Shipped Game | The training environment shall be the firmware's own game modules built for the host — the same sources the target runs — and not a re-implementation of the game. |
-| FR-113 | Headless Parallel Training Sessions | The training harness shall advance multiple independent game sessions concurrently, with no rendering and no display. |
-| FR-114 | Reproducible Episodes | Given the same seeds and the same sequence of chosen directions, the training environment shall replay an identical batch of episodes. *(Amended by [DEC-047](11-Decisions-and-As-Built.md): the seed now also seeds the game's timing jitter (FR-044), and a batch stepped in lockstep interleaves the draws — so the guarantee is per batch. Training scores one episode per batch, where the two are the same thing.)* |
+| FR-031 | AI Control Exclusivity | While the AI is playing, the system shall take Pacman's direction from the AI and shall ignore the joystick's directional keys (FR-004). |
+| FR-034 | AI Run Not Recorded | If the AI played a run, then the system shall not store that run's score in any high-score table. *(Simplified by [DEC-056](11-Decisions-and-As-Built.md) back to what it said originally: the agent's own tables are gone, so there is no table an AI run may reach and no exception to state.)* |
+| FR-114 | Reproducible Episodes | Given the same seeds and the same sequence of chosen directions, the host build shall replay identical episodes. *(The reason changed with [DEC-054](11-Decisions-and-As-Built.md) and the requirement did not: it was written for the trainer, and what needs it now is `Training/fit_lookahead.py`, which fits the search's evaluation weights against fixed seeds, and the unit tests, which assert exact timings. A score that moved under a fixed policy would be measuring the generator.)* |
 
 ## 2.2 Non-Functional Requirements
 
@@ -139,7 +135,6 @@ the export format — belong in the design document, not here.
 |---|---|---|
 | NFR-001 | Loading Screen Duration | The loading screen shall be displayed for no more than 3 seconds before the menu is shown. *(default value — see [A-001](05-Risks-Assumptions-and-Dependencies.md#52-assumptions))* |
 | NFR-005 | Logo Display Delay | Upon power-on, the system shall wait 200 ms before displaying the Pacman logo of the loading screen (FR-001). |
-| NFR-006 | AI Inference Budget | While AI control is active, one inference shall complete within 2 ms, so that it fits inside the frame alongside the simulation and the drawing. *(default — the frame is 16 ms and about 8 ms of it is currently unused)* |
 
 ### 2.2.2 Persistence
 
@@ -166,8 +161,6 @@ the export format — belong in the design document, not here.
 
 | Unique-ID | Name | Description |
 |---|---|---|
-| NFR-007 | Model Footprint | The trained weights and every buffer inference needs shall fit the target's remaining memory: at most 300 kB of flash for the weights and at most 40 kB of RAM for the inference buffers. *(measured headroom when this was written: ~410 kB flash and ~82 kB RAM free; the limits leave the firmware room to keep growing)* |
-| NFR-008 | No Heap for Inference | Inference shall not allocate memory at runtime. The weights shall be `const` data in flash and every intermediate buffer shall be reserved statically. |
 
 ## 2.3 Constraints
 
@@ -189,4 +182,3 @@ the export format — belong in the design document, not here.
 | CON-101 | Language | The firmware and game logic shall be written in C. |
 | CON-102 | Test Framework | Unit tests shall run under Ceedling/Unity. |
 | CON-103 | Host View Library | The host build's View shall use SDL. |
-| CON-105 | Training Toolchain | The training harness may depend on third-party Python packages, unlike the OTT harness of NFR-104, which is standard-library only. The trained weights shall be exported as a C source file, so that neither the firmware build nor the unit tests depend on Python or on a machine-learning framework. |

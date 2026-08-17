@@ -9,7 +9,7 @@ STM32U545RE-Q Nucleo-64 firmware. Built with **CMake + arm-none-eabi-gcc** again
 > (FR-029/FR-040..043), each with its own high scores — RAM **71.6 %**
 > (187,584 of 256 kB), flash **21.6 %** (111,504 of the 504 kB left
 > after the high-score page), both builds warning-free, **449** host unit tests green. **Every
-> requirement in the spec has a passing test**, FR-037's play strength included, though
+> requirement in the spec has a passing test** — the play-strength one was withdrawn rather than met ([DEC-053](../Docu/PrePlanning/11-Decisions-and-As-Built.md)), though
 > [M6 §14](../Docu/Design/M6-Pacman-AI.md) records how narrow that margin is; the two timing budgets
 > that used to sit here as unmet are **withdrawn** rather than satisfied
 > ([DEC-036](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). The known edges are recorded in
@@ -130,13 +130,11 @@ build artefact belongs to whoever ran the command: `dev.sh docker` passes the ho
 through. The repository *root* is mounted at `/work` and the working directory is `/work/Firmware`,
 because `.git` lives a level above the firmware and `install-hook` needs it.
 
-The trainer's Python is in the image, at `/opt/venv` and first on `PATH`. So inside the container
-there is no `Training/.venv` to create and the commands are plain `python3`:
-
-```
-python3 Training/train.py
-python3 Training/evaluate.py
-```
+A Python virtual environment is in the image, at `/opt/venv` and first on `PATH`. Nothing in the
+repository needs it any more — the trainer it was built for went with the trained network
+([DEC-054](../Docu/PrePlanning/11-Decisions-and-As-Built.md)) and `Training/fit_lookahead.py` is
+standard library only — so it is inert and harmless, and the image is left as it is rather than
+rebuilt for its own sake.
 
 ### One build directory per path
 
@@ -202,75 +200,36 @@ need no display at all.
 > fails, the likely places are the two the author could not exercise: the `gem install` and the
 > `pip install`, both of which want a network at build time.
 
-## Training overnight, and stopping it
+## Fitting the search's evaluation weights
 
-`Training/campaign.py` runs the configured runs one after another and writes
-`Training/campaign/summary.md` after each. It says at the start when it expects to be finished. The
-only thing to edit for a longer or shorter night is each run's `hours`; the campaign's ceiling is
-derived from them.
-
-Detached, so it survives the terminal:
-
-```
-./dev.sh docker-train           # start it, then follow the log
-./dev.sh docker-train --fresh   # ...after throwing away previous winners
-./dev.sh docker-train-stop      # stop it
-```
-
-That is a wrapper for one `docker run -d`, and it exists for the two things a person hits in this
-order. A container of that name left over from last time makes `docker run` refuse outright — plain
-enough. A **winner file** left over from last time makes the campaign *skip* that run, which is what
-makes a campaign resumable after a reboot and also what quietly halves a night when the leftovers
-were not meant to be kept. So it stops and says which files it found, and takes `--fresh` or `--keep`
-rather than guessing.
-
-Stopping loses nothing: `train.py` writes its winner on every improvement rather than at the end.
-
-Outside a container the order matters, and there is a trap in it:
+**There is no training any more** ([DEC-054](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). NEAT,
+the evolution strategy, the overnight campaign runner, the shared-library environment, the weight
+export and the equivalence recorder were deleted with the trained network. What replaced all of it is
+one script that fits **six numbers**: the weights `pacman_lookahead`'s evaluation balances score,
+danger, prey, food and escape routes with.
 
 ```
-pkill -f "[c]ampaign.py" && sleep 2 && pkill -f "[t]rain.py --out"
+cmake --build build-host -j --target pacman_lookahead_fitness
+FIT_HOURS=1.5 python3 Training/fit_lookahead.py
 ```
 
-The campaign first. `pkill -f train.py` on its own matches the pool workers as well as the parent,
-kills them, and leaves the parent waiting in `pool.map` for results that will never arrive.
+It is a (1+9) evolution strategy: hold the best weights found, draw nine mutations, keep the best if
+it beats them, shrink the steps when a generation brings nothing. Each candidate plays sixteen whole
+games through the **shipped loop** — `Training/fit_lookahead.c` calls `pacman_lookahead_restart`,
+`_think` and `_get_direction` in the order `game_session` calls them — so what is fitted is the
+player that ships and not a lookalike. One process per candidate, because the module is not
+reentrant.
 
-**More cores do not finish sooner.** The budget is wall-clock: `train.py --max-seconds` stops between
-generations, so a bigger machine spends the same night doing more generations. That is deliberate — a
-generation is not a fixed amount of work, since a better agent lives longer and its episodes take
-longer.
+The fitness is **deterministic**: the seeds are fixed, so the same weights always score the same and
+there is no measurement noise to average out. What there is instead is the risk of fitting sixteen
+draws rather than the game, which is why it fits on seeds **2000..** and why **1000..1019 is never
+trained against** — that set is what a result gets validated on afterwards.
 
-## After training: taking a winner into the firmware
-
-Training produces `Training/winner.json` (or a file per run under `Training/campaign/`, which is not
-in git). Getting one of those into the firmware is four files and one **order that matters**, so it
-is a command rather than a recipe:
-
-```
-./dev.sh adopt-weights                        # Training/winner.json
-./dev.sh adopt-weights Training/campaign/normal-seed1.json
-./dev.sh adopt-weights --force <file>         # one that does not meet FR-037
-```
-
-It measures the winner first and **refuses to adopt one that fails VT-UNIT-010**, because training
-produces a winner every time including a bad one, and the thing that must not happen quietly is a
-worse agent replacing a better one. Then it exports `App/pacman_ai/ai_weights.[ch]`, rebuilds the
-host library and **re-records the FR-039 state set** — in that order. Exporting weights changes what
-the target computes, so a state set recorded against the old ones is a recording of a different
-network; `ott ai_equivalence` refuses to run on a digest mismatch, which is the safety net, and this
-is what keeps you off it.
-
-Commit the four files together:
-
-```
-Training/winner.json
-App/pacman_ai/ai_weights.c
-App/pacman_ai/ai_weights.h
-Test/Target/scripts/ott_ai_equivalence_states.c
-```
-
-Then, on the machine with the board, `./dev.sh suite`. `ott ai_equivalence` is what proves the port
-agrees with the host about the *new* weights, and it is the only thing that can.
+It writes `Training/lookahead_weights.json` after every improvement, so a run is useful whenever it
+is stopped, and it **touches nothing in the firmware**. Adopting a result means copying the numbers
+into `pacman_lookahead.c`'s defaults deliberately, and then measuring on the board: a leaf scan that
+has to fit inside a frame is a constraint the fit knows nothing about, and it has already cost a
+third of one fit's gain ([M6 §17.3](../Docu/Design/M6-Pacman-AI.md)).
 
 ## On-Target Tests (OTT)
 
@@ -356,13 +315,10 @@ source of truth in
 | `Services/msg/` | Topic IDs, payload types and the message envelope (03 §3.3). Header-only. |
 | `Services/msg_queue/` | A `msg_t`-typed skin over `circular_buffer`. |
 | `Services/msg_broker/` | The publish/subscribe bus between modules (FR-103/108/110). Instance-based; output queues, not callbacks. |
-| `Services/neural_net/` | The feed-forward evaluator the trained agent runs on: an arbitrary NEAT topology held entirely in `const` data, no allocation, no state between calls. `float` only, a fixed accumulation order and ReLU only — all three for FR-039, because the host would otherwise promote to `double` and two libm implementations need not agree about `tanh`. `neural_net_is_well_formed` checks the table rather than trusting it. |
-| `App/pacman_ai/` | The instance: 23 features in Pacman's own frame, four relative actions, and the one trained network the firmware carries (`ai_weights.c`, **generated** — see below). `pacman_ai_decide` is the whole decision in one call, which is what the target and the host both go through. |
-| `Training/` | Host-only, and not firmware ([DEC-040](../Docu/PrePlanning/11-Decisions-and-As-Built.md)): the game as a shared library, the NEAT loop, the play-strength measurement, the weight exporter and the FR-039 state recorder. Nothing in the target build refers to it. |
+| `Training/` | Host-only, and not firmware: `fit_lookahead.c` plays whole games with a given set of the search's evaluation weights, and `fit_lookahead.py` searches over them. Everything else here was the trained network's and went with it ([DEC-054](../Docu/PrePlanning/11-Decisions-and-As-Built.md)). |
 | `Test/Host/` | Host unit tests (Ceedling + CMock). Cover everything above the BSP. |
 | `Test/Target/` | The OTT core, the scenario registry, the one shared frame buffer (`ott_framebuffer`), and one module per scenario. |
 | `Test/run_ott.py` | Host harness that drives an OTT and reports PASS/FAIL. |
-| `App/pacman_ai/ai_weights.[ch]`, `Test/Target/scripts/ott_ai_equivalence_states.c` | **Generated, do not edit.** The trained weights come from `Training/export_c.py`; the recorded FR-039 states come from `./build-host/pacman_ai_record`. The second belongs to the first — the recording carries the weight table's digest and `ott ai_equivalence` refuses to run against a different one, so re-exporting means re-recording. |
 | `ThirdParty/EmbeddedCli/` | Vendored [EmbeddedCli](https://github.com/MaxLell/EmbeddedCli) plus the `custom_assert.h` / `test_support.h` shims. Carries the memory-safety fixes from its PR #2. |
 | `ThirdParty/STM32_U545RE_HAL/` | The STM32CubeMX export (not our code): HAL + CMSIS, startup, linker script, and the clock/peripheral init in `Core/`. The `.noinit` block in the linker script is ours and must be re-added after every regeneration. |
 | `dev.sh` | The umbrella command: builds, tests, formats, flashes, runs the OTTs, and installs the commit hook. Not a second implementation of any of them — it calls `format.sh`, `ceedling` and `Test/run_ott.py`, so each job has one definition however it is reached. |
@@ -484,7 +440,9 @@ measurements are in [M2 Board Bring-Up](../Docu/Design/M2-Board-Bring-Up.md).
 - **M5 — Random Mazes.** A maze generated per level (FR-029), its appearance derived from
   its walls as geometry. See
   [the Random Mazes design doc](../Docu/Design/M4-Random-Mazes.md).
-- **M6 — Pacman AI.** An agent evolved on the host with NEAT and shipped as `const` weights, and
-  the menu that now asks which of the two mazes to play (FR-040) — the AI is offered in the
-  arcade's own one, which is what it was trained on. See
-  [the Pacman AI design doc](../Docu/Design/M6-Pacman-AI.md).
+- **M6 — Pacman AI.** A machine that plays, and the menu that asks which game to play (FR-040). It
+  was an agent evolved on the host with NEAT; that was **deleted on 2026-08-17**
+  ([DEC-054](../Docu/PrePlanning/11-Decisions-and-As-Built.md)) and what plays now is
+  `App/pacman_lookahead`, a search that clones the run and plays it forward. See
+  [the Pacman AI design doc](../Docu/Design/M6-Pacman-AI.md) — §15–§17 for the search, §1–§14 as the
+  history of the network.

@@ -14,19 +14,18 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that made the look-ahead player think across frames (DEC-052), on `feat/m6-lookahead` |
+| built from | the commit that made the menu a page per question (DEC-056), on `feat/lookahead-evaluation` |
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 120,040 B of 504 kB — 23.3 % |
-| RAM | 235,736 B of 256 kB — 89.9 %, plus 12,008 B of SRAM4 — 73.3 % |
-| weight table | `arcade-danger`, digest `41cc70f5ce88b97e` — **3,531 against FR-037's 4,600** |
-| `pacman.hex` | sha256 `2aa9a944400a690625fbd7c4bf1094163c00f2b13cf08528d6e85638c2df0dd4` |
-| `pacman.bin` | sha256 `b2d0a569e087752cb8eb656ae33ae5882786a428003607e1ef57f2cfc61c67e8` |
+| flash | 108,560 B of 504 kB — 21.0 % |
+| RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
+| `pacman.hex` | sha256 `960e494020fd0ec643f479b67cd669249f1f0dc81847e25f6d026ed5bd036a02` |
+| `pacman.bin` | sha256 `8b7fc504471a74363ec98ae920e82499438e3c3e1b1c87bf94f4fa1bbceba898` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost`. The host side is green too: 485 unit tests, both builds.
+`lookahead_cost` — eleven tests. The host side is green too: 448 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -55,37 +54,37 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-**The two agents live in the `PAC-MAN AI` game and are chosen on the menu.**
-
-1. Push the stick **down** once, to `PAC-MAN AI`. The line under it reads `AGENT NEAT`.
-2. Push **left or right** to change it to `AGENT SEARCH`, and back.
-3. Press start.
-
-The agent has Pac-Man from the first frame and keeps him. While it plays, the HUD **names it**, in
-the gap between `1UP` and `LEVEL`:
+**The menu asks one question a screen.** The options on a screen start at the same column — left
+aligned to each other, the block of them centred — so the cursor runs straight down. Up and down move
+the Pac-Man cursor, the stick's centre
+takes the highlighted one, and **left or B1 steps back**:
 
 ```
-   1UP   3531        NEAT        LEVEL 1
-   1UP  11652        SEARCH      LEVEL 5
+screen 1      screen 2 (after PLAY)   screen 2 (after AI)   screen 3 (AI only)
+- PLAY        - CLASSIC               - CLASSIC             - ENDLESS OFF
+- AI          - RANDOM                - RANDOM              - ENDLESS ON
+              ^ starts the run        ^ goes to screen 3    ^ starts the run
 ```
 
-so there is nothing to remember. **B1 in that game still means the endless mode** (`LOOP` on the
-lives row), unchanged.
+`HIGH SCORES` and the three numbers under them appear on the maze screen and nowhere else: that is the
+only screen where a table has been chosen. The endless mode is the AI's last question and defaults to
+off — a run of yours never reaches that
+screen, because there is nothing to loop. While the AI plays, the HUD says `AI` in the gap between
+`1UP` and `LEVEL`, and `LOOP` on the lives row when the loop is on.
 
-Expect `SEARCH` to look **much** better. It averages **11,652** against `NEAT`'s **3,531**, and it
-is the only thing in this firmware that clears the 4,600 the requirement asks for — though it does
-not *satisfy* that requirement, which wants trained weights and not a search. It is also *slower to
-decide*, but you will not see that either: since DEC-052 it thinks a slice at a time across the ten
-frames a cell lasts, and a slice is under 3 ms of the 13 a frame has spare.
+**Two high-score tables, one per maze**, both for runs *you* play. The AI is recorded nowhere at all:
+a run nobody played is not a score anybody set. **The scores stored by an older image are gone** the
+first time this one boots — the table's shape changed, and the version check discards a page it cannot
+read rather than misreading it.
 
-**It still dithers a little** — about one decision in nine walks back the way it came, down from one
-in five. What is left is a real limit rather than a bug: nothing in its evaluation pulls toward food
-it cannot already see, so a stretch of maze with no pellet and no ghost in reach leaves every
-direction worth exactly the same. [M6 §16.5](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
+Expect it to average **21,870** and reach **level 5.9** on `CLASSIC`, and **19,744** at level 5.0 on
+`RANDOM` — which is the more interesting number, because its evaluation weights were fitted on the
+arcade's layout and it keeps 90 % of them on mazes it has never seen. For scale, a cleared level 1 is
+2,600 points and the trained network it replaced managed 3,531 at level 1. It hunts ghosts rather than
+hoovering pellets, because a four-ghost sweep is 3,000 points where a whole level of pellets is 2,440.
 
-`NORMAL MAZE` is the game you play, and there **B1 hands Pac-Man to the trained network and takes
-him back**, exactly as before. The search is deliberately not offered there. Any run you touch B1
-in stays out of that game's high-score table (FR-034).
+**It still dithers a little** — about one decision in twenty walks back the way it came, down from one
+in five before its leaves could see. [M6 §17](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
 
 ## The console, if you want the numbers
 
@@ -103,8 +102,8 @@ ott lookahead_cost
 ```
 
 The board reboots into the test, plays two thousand *frames* of a real run and prints what one
-frame's slice of thinking cost — expect a mean near 2.9 ms and a worst near 11 ms of the 13 a frame
-has spare, ten frames and about 1,400 simulated ticks to a decision, and 2.97 of the 3 junctions
+frame's slice of thinking cost — expect a mean near 4.5 ms and a worst near 11 ms of the 13 a frame
+has spare, ten frames and about 1,800 simulated ticks to a decision, and 2.8 of the 3 junctions
 reached. It measures frames rather than decisions because since DEC-052 a decision is deliberately
 larger than a frame, so the slice is the thing that has to fit. `reset` returns it to the game. `help` lists the rest; `ott pacman` starts a run with no
 menu in front of it.

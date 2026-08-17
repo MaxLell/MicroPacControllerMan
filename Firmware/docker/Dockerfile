@@ -11,7 +11,7 @@
 # behind an ST account and cannot be fetched unattended, so the image cannot own it. Mount the host's
 # install and point `PROGRAMMER` at it — see the Docker section of `Firmware/README.md`. Everything
 # that does *not* touch the board — both builds, the unit tests, the formatter, the host game, the
-# whole AI training — is self-contained here.
+# whole toolchain — is self-contained here.
 #
 # The packages, and why each is here:
 #
@@ -27,7 +27,7 @@
 #   clang-format                 format.sh, against the vendored .clang-format
 #   ruby ruby-dev                ceedling is a gem; ruby-dev is for native extensions in its deps
 #   libsdl2-dev                  the host application's window (CON-103 / FR-104)
-#   python3 python3-venv         run_ott.py, and the trainer below
+#   python3                      run_ott.py and Training/fit_lookahead.py, both stdlib only
 #   openocd gdb-multiarch        the debug server. It cannot flash this part — see openocd.cfg
 #   psmisc                       fuser, which run_ott.py uses to say the serial port is already open
 #   git ca-certificates          a mounted repository is still a repository
@@ -57,7 +57,6 @@ RUN apt-get update \
         openocd \
         psmisc \
         python3 \
-        python3-venv \
         ruby \
         ruby-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -67,19 +66,10 @@ RUN apt-get update \
 # 1.1.1 is the version the suite has been run against throughout.
 RUN gem install --no-document ceedling -v 1.1.1
 
-# The trainer's Python, in a virtual environment on PATH rather than installed over the system's.
-# Ubuntu 24.04 refuses the latter (PEP 668) and it is right to: `--break-system-packages` would put
-# neat-python where apt believes it owns the directory. With the venv first on PATH, `python3` inside
-# the container *is* this environment, so nothing in `Training/` needs to know it is in a container
-# and `Training/.venv` is not used here at all.
-#
-# The requirements file is copied rather than the package being named here, so there is one list of
-# what training needs and it is the one in the repository.
-COPY Training/requirements.txt /tmp/requirements.txt
-RUN python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt
-ENV PATH="/opt/venv/bin:${PATH}"
+# The trainer's virtual environment is gone with the trainer (DEC-054). `Training/fit_lookahead.py`
+# and `Test/run_ott.py` are both standard library only, so the system python3 is all the repository
+# needs and there is nothing to pip install — which also means the image no longer needs a network
+# at build time for anything but apt.
 
 # Ruby and Python both want somewhere to write a cache, and the container runs as *the host's* user
 # id (see `dev.sh docker`) — which has no home directory in here. `/tmp` is writable for anybody,

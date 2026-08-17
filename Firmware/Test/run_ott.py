@@ -37,7 +37,7 @@ BANNER = "MicroPacControllerMan booted"
 # unattended; MANUAL ones render or print something only a person can assess and end on a
 # USER-button press. `dev.sh` asks for a suite or a name and does not keep its own copy of
 # this list, so adding a scenario means editing one place.
-AUTOMATIC = ["display_id", "rng", "high_score", "ai_equivalence", "ai_frame_cost", "search_budget", "lookahead_cost", "ai_high_score"]
+AUTOMATIC = ["display_id", "rng", "high_score", "search_budget", "lookahead_cost", "ai_high_score"]
 MANUAL = ["display_test", "joystick", "joystick_dot", "animation", "user_button", "pacman", "pacman_ai"]
 
 INTERACTIVE = set(MANUAL)
@@ -52,7 +52,7 @@ LONG_TIMEOUT_S = {"pacman": 620.0, "pacman_ai": 620.0}
 
 # An automatic test that is nevertheless slow: `ai_high_score` plays two runs to game over,
 # because FR-034 is about what a *finished* run does to NVM. The scenario allows 240 s per run.
-LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "ai_frame_cost": 30.0, "lookahead_cost": 60.0}
+LONG_AUTOMATIC_TIMEOUT_S = {"ai_high_score": 520.0, "lookahead_cost": 60.0}
 
 
 def detect_port() -> str:
@@ -283,15 +283,13 @@ MAZE_SELECTION_TIMEOUT_S = 8.0
 
 
 def check_maze_selection(port: str, baud: str) -> bool:
-    """Walk the menu with `select` and start the game it was left on (FR-040, VT-INT-026).
+    """Walk the menu's pages with `select`, `start` and `button`, and start what was chosen
+    (FR-040, VT-INT-026).
 
-    The cursor next to the selected option is pixels and only an operator can judge it; what the
-    firmware *does* with the selection is the part that can be falsified without anyone at the
-    board, and it is the part a mistake would show up in — a menu that showed the cursor moving and
-    started the other game would look right and be wrong.
-
-    `select` is a device on the console and not a decision: it pushes the stick, exactly as `start`
-    presses the button, and the shell decides what pushing means.
+    The menu is a list and a confirm, three pages deep (DEC-056): who plays, which maze, and — for the
+    machine only — whether it loops. What a script can falsify is that up and down move within a page,
+    that `start` takes the highlighted option and advances, that `button` steps back without undoing
+    what was chosen on the way in, and that the run started is the one the pages were left on.
     """
     configure_tty(port, baud)
     fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
@@ -300,15 +298,25 @@ def check_maze_selection(port: str, baud: str) -> bool:
         write_command(fd, "reset\r\n")
 
         steps = [
-            ("select\r\n", "selected: normal maze"),
-            ("select down\r\n", "selected: pac-man ai"),
-            ("select down\r\n", "selected: random maze"),
-            ("select down\r\n", "selected: random maze"),  # the end of the list, and it stays there
-            ("select up\r\n", "selected: pac-man ai"),
-            ("select up\r\n", "selected: normal maze"),
-            ("select down\r\n", "selected: pac-man ai"),
-            ("select down\r\n", "selected: random maze"),
-            ("start\r\n", "random maze run 1: level 1"),
+            ("select\r\n", "page: player"),
+            ("select\r\n", "selected: play classic"),
+            # On to the maze page, and the other maze.
+            ("start\r\n", "page: maze"),
+            ("select down\r\n", "selected: play random"),
+            ("select up\r\n", "selected: play classic"),
+            ("select down\r\n", "selected: play random"),
+            # Back a page, and the maze that was chosen survives the trip.
+            ("button\r\n", "page: player"),
+            ("start\r\n", "page: maze"),
+            ("select\r\n", "selected: play random"),
+            # Right moves nothing — confirming is the centre key's job.
+            ("select right\r\n", "selected: play random"),
+            # Left is back, the same as the button, and what was chosen survives the trip.
+            ("select left\r\n", "page: player"),
+            ("start\r\n", "page: maze"),
+            ("select\r\n", "selected: play random"),
+            # And the second confirm begins a person's run.
+            ("start\r\n", "play random run 1"),
         ]
 
         if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
@@ -319,31 +327,26 @@ def check_maze_selection(port: str, baud: str) -> bool:
             write_command(fd, command)
 
             if read_until(fd, [expected], MAZE_SELECTION_TIMEOUT_S)[0] is None:
-                print(f"[VT-INT-026] maze selection: '{command.strip()}' did not report "
-                      f"'{expected}'")
+                print(f"[VT-INT-026] maze selection: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-026] maze selection: both options offered, and the chosen one is played")
+        print("[VT-INT-026] maze selection: the pages walk forwards and back, and the chosen run starts")
         return True
     finally:
         os.close(fd)
 
 
 def check_the_ai_game(port: str, baud: str) -> bool:
-    """Pick the agent, start the Pac-Man AI game and switch its endless mode (VT-INT-027).
+    """Walk the machine's path, which has one page more than a person's (VT-INT-027).
 
-    The agent is chosen on the menu with left and right, so which one plays is settled before the
-    run rather than during it — the button in that game already means the endless mode. What a
-    script can falsify is that the choice moves, that it stays put where there is nothing to
-    choose, and that the run still starts as the agent's.
+    Two facts a script can settle in seconds. That the machine's path reaches an endless page where a
+    person's does not — the page a person never sees is why the endless mode needs no rule of its own
+    about when it applies — and that the search has Pac-Man from the first frame, which is visible in
+    the firmware's own report of the run.
 
-    Two facts a script can settle in seconds. That the agent has Pac-Man from the first frame is
-    visible in the firmware's own report of the run — it names the game — and that the endless mode
-    belongs to that game and switches is visible in what the shell says when the button is pressed.
-
-    What is *not* checked here is the restart itself: seeing it costs a whole run of an agent that
-    clears level 1, which is minutes, and the suite is run after every build. `test_shell.c` covers
-    the restart, and the board covers it whenever somebody watches the game.
+    What is *not* checked here is the restart itself: seeing it costs a whole run of a search that
+    reaches level six, which is many minutes, and the suite is run after every build. `test_shell.c`
+    covers the restart.
     """
     configure_tty(port, baud)
     fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
@@ -352,19 +355,22 @@ def check_the_ai_game(port: str, baud: str) -> bool:
         write_command(fd, "reset\r\n")
 
         steps = [
-            ("select down\r\n", "selected: pac-man ai"),
-            # Sideways picks the agent, and only here: it is dead on the two games a person plays,
-            # which the step after `select up` checks rather than assumes.
-            ("select\r\n", "agent: neat"),
-            ("select right\r\n", "agent: search"),
-            ("select left\r\n", "agent: neat"),
-            ("select right\r\n", "agent: search"),
-            ("select up\r\n", "selected: normal maze"),
-            ("select right\r\n", "agent: search"),  # unchanged: there is nothing to pick here
-            ("select down\r\n", "selected: pac-man ai"),
-            ("start\r\n", "pac-man ai run 1"),
-            ("button\r\n", "endless mode on"),
-            ("button\r\n", "endless mode off"),
+            # A person's path is two pages: the second confirm would start a run, so it is not pressed.
+            ("start\r\n", "page: maze"),
+            ("button\r\n", "page: player"),
+            # The machine's is three, and the third is the endless page.
+            ("select down\r\n", "selected: ai classic"),
+            ("start\r\n", "page: maze"),
+            ("start\r\n", "page: endless"),
+            ("select\r\n", "endless: off"),
+            ("select down\r\n", "endless: on"),
+            ("select up\r\n", "endless: off"),
+            ("select down\r\n", "endless: on"),
+            # Back out and in again: the loop survives, because a page reopens on what it was told.
+            ("button\r\n", "page: maze"),
+            ("start\r\n", "page: endless"),
+            ("select\r\n", "endless: on"),
+            ("start\r\n", "ai classic run 1"),
         ]
 
         if read_until(fd, ["menu screen"], MAZE_SELECTION_TIMEOUT_S)[0] is None:
@@ -378,8 +384,8 @@ def check_the_ai_game(port: str, baud: str) -> bool:
                 print(f"[VT-INT-027] the AI game: '{command.strip()}' did not report '{expected}'")
                 return False
 
-        print("[VT-INT-027] the AI game: the agent is chosen on the menu, plays it, "
-              "and the endless mode switches")
+        print("[VT-INT-027] the AI game: the machine's path has the endless page a person's has not, "
+              "and the run starts as the search's")
         return True
     finally:
         os.close(fd)
@@ -444,7 +450,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("test", nargs="?", default=None,
-                    help="test name (display_id/ai_equivalence/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
+                    help="test name (display_id/display_test/joystick/joystick_dot/animation/user_button/pacman/pacman_ai); omit to run the suite")
     ap.add_argument("--suite", action="store_true", help="run the automatic regression suite")
     ap.add_argument("--manual", action="store_true",
                     help="run every test that needs a human at the board, in sequence")

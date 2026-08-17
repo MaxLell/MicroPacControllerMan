@@ -6,13 +6,11 @@
 #include <stdio.h>
 
 #include "Cli.h"
-#include "ai_weights.h"
 #include "game.h"
 #include "game_session.h"
 #include "joystick.h"
 #include "msg.h"
 #include "ott.h"
-#include "pacman_ai.h"
 #include "st7789.h"
 #include "sw_timer.h"
 #include "systick_bsp.h"
@@ -138,8 +136,7 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
 
     (void)in_parameter;
 
-    cli_print("Pac-Man AI: the trained agent playing on the board (FR-030..034).");
-    cli_print("weights %s", AI_WEIGHTS_DIGEST);
+    cli_print("Pac-Man AI: the look-ahead search playing on the board.");
 
     game_session_init();
 
@@ -150,35 +147,23 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
         return false;
     }
 
-    if (!pacman_ai_is_available())
-    {
-        (void)snprintf(out_reason, in_reason_size, "the weight table cannot be evaluated on this build");
-
-        return false;
-    }
-
     /* The normal maze, because that is the only maze the game offers the AI in (FR-040) and the one
      * it was evolved against. No seed is printed: there is nothing to reproduce, since every run of
      * this test plays the same maze — which is also what makes "it is still playing after a level
      * turns over" a comparison an operator can make between two runs. */
     game_session_start_on_normal_maze();
 
-    if (!game_session_set_ai_enabled(true))
-    {
-        (void)snprintf(out_reason, in_reason_size, "the session refused to hand Pac-Man to the AI");
-
-        return false;
-    }
+    /* Nothing can refuse: the search has no weight table to be wrong (DEC-054). */
+    (void)game_session_set_ai_enabled(true);
 
     prv_measure_frame_cost();
 
     cli_print("The AI has Pac-Man. Watch for, and confirm:");
     cli_print("  - the HUD shows AI between the score and the level (FR-032)");
     cli_print("  - the stick does nothing at all while it plays (FR-031)");
-    cli_print("  - it is still playing after a level turns over and after a life is lost (FR-033)");
-    cli_print("  - B1 hands Pac-Man back, and the AI in the HUD goes away; B1 again takes over");
-    cli_print("B1 = hand over / take back. CENTER on the stick = pass this test.");
-    cli_print("Note the button roles are swapped here: every other manual test confirms with B1.");
+    cli_print("  - it is still playing after a level turns over and after a life is lost");
+    cli_print("  - it hunts ghosts rather than only eating pellets, and reaches level 5 or 6");
+    cli_print("CENTER on the stick = pass this test. B1 does nothing here since DEC-054.");
     cli_print("Times out after %u s to fail.", OTT_PACMAN_AI_TIMEOUT_MS / OTT_PACMAN_AI_MS_PER_SECOND);
 
     sw_timer_create(&g_timeout_timer);
@@ -191,11 +176,6 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
         ott_poll();
         sw_timer_process();
         prv_poll_stick();
-
-        if (user_button_take_press())
-        {
-            (void)game_session_set_ai_enabled(!game_session_is_ai_enabled());
-        }
 
         if (game_session_service())
         {

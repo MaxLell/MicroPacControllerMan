@@ -329,7 +329,7 @@ as it was written.
 `prv_walk_to_next_decision` sets a direction and lets the game steer. When that direction runs into
 a wall — a corridor that bends, a branch chosen a moment too early — Pacman stops, and the walk has
 no way to notice except to wait out `PACMAN_LOOKAHEAD_MAX_CELL_TICKS`, **32 ticks**, and give up.
-Measured over FR-037's twenty draws: **17.8 % of every tick the search simulates is spent on a
+Measured over the twenty draws 1000..1019: **17.8 % of every tick the search simulates is spent on a
 Pacman who is already stuck**, and 13 % of all legs end that way.
 
 He is stuck the instant neither his queued turn nor his facing is open, which is exactly the
