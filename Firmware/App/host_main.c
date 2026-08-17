@@ -229,24 +229,6 @@ static void prv_handle_key(SDL_Keycode in_key, bool in_is_repeat)
             shell_press_start();
             break;
 
-        case SDLK_i:
-            /* The board button's third meaning (FR-043), on a key of its own for the same reason K
-             * has one: a keyboard can afford one key per meaning where a board with one button
-             * cannot. Only the Pac-Man AI game has a loop to switch. */
-            if (!in_is_repeat)
-            {
-                if (shell_toggle_infinite())
-                {
-                    (void)printf("endless mode %s\n", shell_is_infinite() ? "on" : "off");
-                }
-                else
-                {
-                    (void)printf("the endless mode belongs to the Pac-Man AI game — pick it on the "
-                                 "menu and start a run\n");
-                }
-            }
-            break;
-
         case SDLK_ESCAPE:
         case SDLK_q: g_is_running = false; break;
 
@@ -334,8 +316,8 @@ int main(int in_argument_count, char** in_arguments)
         return EXIT_FAILURE;
     }
 
-    (void)printf("%s — arrows or WASD pick the game and steer, space starts it, "
-                 "I loops the Pac-Man AI game for ever, escape quits.\n",
+    (void)printf("%s — arrows or WASD move the menu and steer, space starts a run, escape quits.\n"
+                 "On the menu: up/down pick a row, left/right change it.\n",
                  WINDOW_TITLE);
 
     shell_init();

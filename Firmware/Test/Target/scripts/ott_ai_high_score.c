@@ -105,21 +105,16 @@ static bool prv_play_one_run(bool in_is_ai, uint32_t* const out_score, char* out
         pacman_lookahead_set_weights(&hopeless);
     }
 
-    /* The AI's own game, or the one above it that a person plays. Selected before start, which is
-     * now the only place who-plays is decided. */
-    if (in_is_ai)
+    /* Who plays, on the menu's top row, which since DEC-055 is the only place it is decided. The
+     * maze row is left where it is: both halves of this test play the arcade's layout. */
+    while (shell_get_selected_row() != SHELL_ROW_PLAYER)
     {
-        while (shell_get_selected_mode() != SHELL_MODE_AI)
-        {
-            shell_move_selection(DIRECTION_SOUTH);
-        }
+        shell_move_selection(DIRECTION_NORTH);
     }
-    else
+
+    if ((shell_get_selected_player() == SHELL_PLAYER_MACHINE) != in_is_ai)
     {
-        while (shell_get_selected_mode() != SHELL_MODE_NORMAL_MAZE)
-        {
-            shell_move_selection(DIRECTION_NORTH);
-        }
+        shell_move_selection(DIRECTION_EAST);
     }
 
     shell_press_start();
@@ -221,8 +216,8 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
          * the agent's table (FR-041) and must stay out of the person's (FR-034). Before DEC-054 the
          * AI played a normal-maze run the player had handed over, which belonged in no table at all
          * — the same requirement, a different run. */
-        const uint32_t persons_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE);
-        const uint32_t agents_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_AI);
+        const uint32_t persons_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC);
+        const uint32_t agents_table_after_ai = high_score_get_best((uint8_t)SHELL_MODE_AI_CLASSIC);
 
         cli_print("  the AI's run scored %lu; its own table holds %lu, the person's %lu", (unsigned long)ai_score,
                   (unsigned long)agents_table_after_ai, (unsigned long)persons_table_after_ai);
@@ -255,13 +250,13 @@ bool ott_ai_high_score_run(const uint8_t* in_parameter, char* out_reason, size_t
             if (prv_play_one_run(false, &player_score, out_reason, in_reason_size))
             {
                 cli_print("  the player's run scored %lu, the table holds %lu", (unsigned long)player_score,
-                          (unsigned long)high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE));
+                          (unsigned long)high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC));
 
                 if (player_score == 0U)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run scored nothing");
                 }
-                else if (high_score_get_best((uint8_t)SHELL_MODE_NORMAL_MAZE) != player_score)
+                else if (high_score_get_best((uint8_t)SHELL_MODE_PLAY_CLASSIC) != player_score)
                 {
                     (void)snprintf(out_reason, in_reason_size, "the player's run of %lu did not reach the table",
                                    (unsigned long)player_score);

@@ -15,9 +15,16 @@
  * without any of that mattering.
  *
  * usage: fit_lookahead <first_seed> <runs> <point> <death> <threat> <prey> <food> <escape>
+ *
+ * `FIT_MAZE=generated` plays a maze generated per level (FR-029) instead of the arcade's own layout.
+ * The weights are fitted on the arcade's, because that is the maze the AI has always been offered in;
+ * the switch exists to answer the other question — whether a search whose evaluation is fitted on one
+ * layout still plays a layout it has never seen. It should, because nothing in the search or the scan
+ * knows a particular maze, but "should" is not "does".
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "game.h"
 #include "pacman_lookahead.h"
@@ -46,6 +53,9 @@ int main(int argc, char** argv)
 
     pacman_lookahead_set_weights(&w);
 
+    const char* const maze = getenv("FIT_MAZE");
+    const bool is_generated = (maze != NULL) && (strcmp(maze, "generated") == 0);
+
     double total = 0.0;
     unsigned long levels = 0;
 
@@ -53,7 +63,16 @@ int main(int argc, char** argv)
     {
         rng_bsp_seed(first + run);
         game_init(&g);
-        game_start_on_normal_maze(&g);
+
+        if (is_generated)
+        {
+            /* The seed doubles as the maze's: one number, so a run is reproducible whole. */
+            game_start(&g, first + run);
+        }
+        else
+        {
+            game_start_on_normal_maze(&g);
+        }
 
         cell_t last = game_get_pacman_cell(&g);
         bool first_cell = true;
@@ -81,6 +100,6 @@ int main(int argc, char** argv)
         levels += game_get_level(&g);
     }
 
-    printf("%.1f %.2f\n", total / runs, (double)levels / runs);
+    printf("%.1f %.2f %s\n", total / runs, (double)levels / runs, is_generated ? "generated" : "normal");
     return 0;
 }

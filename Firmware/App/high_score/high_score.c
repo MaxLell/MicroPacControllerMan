@@ -25,7 +25,7 @@
  * Version 2 is three tables where version 1 was one (FR-041). A board flashed over an older one
  * therefore starts with empty tables rather than showing version 1's three scores as the normal
  * maze's — which they might not be, since that build had only one game. */
-#define LAYOUT_VERSION (2U)
+#define LAYOUT_VERSION (3U)
 
 /* The record as it sits in flash. The CRC is deliberately first and covers everything
  * after it, so the field being checked never covers itself. */

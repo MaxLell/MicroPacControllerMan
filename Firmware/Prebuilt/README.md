@@ -14,18 +14,18 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that deleted the trained network (DEC-054), on `feat/lookahead-evaluation` |
+| built from | the commit that made the menu two axes (DEC-055), on `feat/lookahead-evaluation` |
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 108,092 B of 504 kB — 20.9 % |
-| RAM | 230,888 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
-| `pacman.hex` | sha256 `fde101b8b5ea7904d1b35d13f3e31fb3c2d48818747c7e043ed34d01ae0717f4` |
-| `pacman.bin` | sha256 `3ad2a32fd2be6c5c7b4574087fc9a68194126270c19ac43a7b4402bbe73396a4` |
+| flash | 108,544 B of 504 kB — 21.0 % |
+| RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
+| `pacman.hex` | sha256 `d38cc59417b25af7e6ee205955c42a18eb4ab4f843b213b2736049b043abc3b3` |
+| `pacman.bin` | sha256 `22fc569e625e3de8c0ba4bea28e899bc88c7e6d994a35cacffe98a04941c7070` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost` — eleven tests now, two fewer because `ai_equivalence` and `ai_frame_cost` went with the trained network. The host side is green too: 446 unit tests, both builds.
+`lookahead_cost` — eleven tests. The host side is green too: 445 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -54,31 +54,39 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-**The machine lives in the `PAC-MAN AI` game.** Push the stick **down** once, to `PAC-MAN AI`, and
-press start.
-
-There is only one machine now: the trained network was deleted on 2026-08-17
-([DEC-054](../../Docu/PrePlanning/11-Decisions-and-As-Built.md)), so there is nothing to choose and
-sideways on the menu does nothing. It has Pac-Man from the first frame and keeps him. While it plays
-the HUD says so, in the gap between `1UP` and `LEVEL`:
+**The menu is two rows and a start row.** Up and down move the Pac-Man cursor between them; left and
+right change the row it is on:
 
 ```
-   1UP  21870        AI          LEVEL 6
+        - PLAY -              or  - AI PLAYS -
+        - CLASSIC -           or  - RANDOM -
+        - ENDLESS OFF -       or  - ENDLESS ON -      (only while the AI plays)
+              START
 ```
 
-**B1 in that game means the endless mode** (`LOOP` on the lives row). In the two games a person
-plays, B1 now does nothing at all — handing Pac-Man over mid-run went with the network.
+So there are four combinations, and each keeps its own high-score table. **The endless row is only
+there while the AI plays** — a run of yours has nothing to loop — and moving the top row back to
+`PLAY` takes the row away, puts the cursor on `START` and switches the loop off with it.
 
-Expect it to average **21,870** and reach **level 5.9** — for scale, a cleared level 1 is 2,600
-points and the trained network it replaced managed 3,531 at level 1. It hunts ghosts rather than
-hoovering pellets, because a four-ghost sweep is 3,000 points where a whole level of pellets is
-2,440, and that is what fitting its evaluation weights against whole games decided for it.
+Press start from any row. While the AI plays, the HUD says `AI` in the gap between `1UP` and
+`LEVEL`, and `LOOP` on the lives row when the endless mode is on.
 
-**It still dithers a little** — about one decision in twenty walks back the way it came, down from
-one in five before its leaves could see. [M6 §17](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
+Expect it to average **21,870** and reach **level 5.9** on `CLASSIC`, and **19,744** at level 5.0 on
+`RANDOM` — which is the more interesting number, because its evaluation weights were fitted on the
+arcade's layout and it keeps 90 % of them on mazes it has never seen. For scale, a cleared level 1 is
+2,600 points and the trained network it replaced managed 3,531 at level 1. It hunts ghosts rather than
+hoovering pellets, because a four-ghost sweep is 3,000 points where a whole level of pellets is 2,440.
 
-`NORMAL MAZE` and `RANDOM MAZE` are the games you play, and the machine is not offered in either.
-The AI's own runs go into its own high-score table and stay out of a person's (FR-034/FR-041).
+**It still dithers a little** — about one decision in twenty walks back the way it came, down from one
+in five before its leaves could see. [M6 §17](../../Docu/Design/M6-Pacman-AI.md) has the numbers.
+
+**B1 means start and nothing else.** Handing Pac-Man over mid-run and toggling the loop both used to
+live on it; the first went with the trained network and the second onto the menu. A machine's run goes
+into a machine's table and stays out of yours (FR-034/FR-041).
+
+**The scores stored by an older image are gone** the first time this one boots: four tables instead of
+three is a new layout, and the version check discards a page it cannot read rather than misreading
+it.
 
 ## The console, if you want the numbers
 

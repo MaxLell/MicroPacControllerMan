@@ -40,7 +40,7 @@
  */
 #define APP_MAIN_HELP_HIGH_SCORE "Show the three best scores; 'highscore reset' clears them"
 #define APP_MAIN_HELP_START      "Press start: begins a run from the menu"
-#define APP_MAIN_HELP_SELECT     "The menu's selection; 'select up' and 'select down' move it"
+#define APP_MAIN_HELP_SELECT     "The menu; 'select up|down' picks a row, 'left|right' changes it"
 #define APP_MAIN_HELP_BUTTON     "Press the board button: start, hand over to the AI, or loop"
 
 _Static_assert(sizeof(APP_MAIN_HELP_HIGH_SCORE) <= CLI_MAX_HELPER_STRING_LENGTH, "'highscore' help is truncated");
@@ -82,8 +82,8 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         return CLI_OK_STATUS;
     }
 
-    /* All three tables, each under the name of the game it belongs to (FR-041). Labelled rather than
-     * numbered, because "table 2" is a number only this file knows the meaning of. */
+    /* All four tables, each under the name of the combination it belongs to (FR-041). Labelled
+     * rather than numbered, because "table 2" is a number only this file knows the meaning of. */
     for (uint8_t table = 0U; table < HIGH_SCORE_TABLE_COUNT; ++table)
     {
         cli_print("%s:", shell_get_mode_name((shell_mode_e)table));
@@ -94,7 +94,7 @@ static int prv_high_score_command(int in_argument_count, char* in_arguments[], v
         }
     }
 
-    cli_print("'highscore reset' clears all three.");
+    cli_print("'highscore reset' clears all four.");
 
     return CLI_OK_STATUS;
 }
@@ -120,11 +120,8 @@ static int prv_start_command(int in_argument_count, char* in_arguments[], void* 
     return CLI_OK_STATUS;
 }
 
-/* `select` shows what the menu is on and `select up`/`down` moves between games.
- *
- * Sideways is accepted and does nothing since DEC-054 took the agent choice away with the trained
- * network. It stays accepted rather than becoming an error, because the two-axis menu that replaces
- * this one will want it and a harness should not have to learn the difference twice.
+/* `select` shows what the menu is on; `select up`/`down` move the cursor between the menu's rows and
+ * `select left`/`right` change the value of the row it is on (DEC-055).
  *
  * A *device* on the console rather than a decision, exactly like `start`: it pushes, and the shell
  * decides what pushing means. That is what lets the whole flow — pick a game, play it, see the
@@ -159,7 +156,13 @@ static int prv_select_command(int in_argument_count, char* in_arguments[], void*
         }
     }
 
+    /* All three axes plus the cursor, so a harness can read back exactly what the pushes did rather
+     * than trusting that they did anything (VT-INT-026/027). */
+    static const char* const k_row_names[] = {"player", "maze", "endless", "start"};
+
     cli_print("selected: %s", shell_get_mode_name(shell_get_selected_mode()));
+    cli_print("row: %s", k_row_names[shell_get_selected_row()]);
+    cli_print("endless: %s", shell_is_infinite() ? "on" : "off");
 
     return CLI_OK_STATUS;
 }

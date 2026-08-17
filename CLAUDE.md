@@ -94,7 +94,7 @@ silently working around a wart.
   that now spends milliseconds inside a frame drops most of a command line; the console
   samples it from the 1 ms tick into a ring buffer instead (RF-016 for the interrupt).
 - **The game sits inside a shell** (DEC-026): loading screen, menu, the run, the score screen, back
-  to the menu (FR-001/002/003/023) — and since DEC-045/046 the menu is where one of three games is
+  to the menu (FR-001/002/003/023) — and since DEC-055 the menu is where who plays and which maze is
   chosen. The title is set in the tile ROM's own font, plus **one glyph that was drawn and not
   decoded**: the hyphen of `PAC-MAN`, because the ROM extract is letters, digits and a space.
   `start` on the console presses the start key, so the whole flow is walkable from `run_ott.py`
@@ -189,7 +189,7 @@ silently working around a wart.
     search. §1–§14 are the trained agent and are history — kept because a fortnight of measured
     negative results is the most useful part of this milestone.
 
-- **The machine that plays is the look-ahead search: 21,870 at Ø level 5.9 (DEC-050..054).** `App/pacman_lookahead`
+- **The machine that plays is the look-ahead search: 21,870 at Ø level 5.9 on the classic maze, 19,744 at 5.0 on generated ones (DEC-050..055).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -200,8 +200,8 @@ silently working around a wart.
   draws and requires none.
   - **It is not FR-038's agent and does not replace it** — that asks for trained weights on the
     target. This is the reference M6 §2 kept in reserve; since DEC-051 it is *offered* as one of the
-    two agents the `PAC-MAN AI` game can be played by, which is not the same as shipping it as the
-    agent FR-038 asks for.
+    two agents the AI's game could be played by. It is now the *only* machine, and FR-038 — which
+    asked for trained weights on the target — was deleted with the network (DEC-054).
   - **What it settles, and the correction that had to be made to it** (M6 §15.4/§15.5): the 7,076
     this line used to claim is real but belongs to a **5,000-tick** search, measured before the
     board cut the allowance to 500 and left standing afterwards. **What ships scores 3,132** over
@@ -293,28 +293,40 @@ silently working around a wart.
     the 12 kB in **SRAM4**. Until something calls the module the linker drops it whole.
     See [M6 §15](Docu/Design/M6-Pacman-AI.md) and [§16](Docu/Design/M6-Pacman-AI.md).
 
-- **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
-  and the high scores of the selected one, and nothing else: the title and the row of actors are the
-  loading screen's, which has just shown them. The joystick's up/down keys move a **Pac-Man cursor**
-  (an *actor*, so a move costs the cursor's rectangle plus three score rows instead of a blanked
-  screen) and start plays what is selected.
-  - `NORMAL MAZE` — the arcade's own layout at every level, the game of the `Pacman_running` tag,
-    drawn by today's geometry renderer rather than that tag's ROM tiles. A person plays it and B1
-    does nothing: **handing Pac-Man over mid-run went with the trained network** (DEC-054).
-  - `PAC-MAN AI` — the same maze, the look-ahead search from the first frame, and no way to take
-    over (FR-042). The HUD says `AI` in two glyphs; DEC-051's six-glyph agent name went with the
-    choice it existed for. **B1 here toggles the endless mode** (FR-043) — a finished run starts the
-    next instead of returning to the menu, and the HUD says `LOOP`. Nothing can refuse to start any
-    more; the weight table that could be broken is gone.
-  - `RANDOM MAZE` — the generated mazes of FR-029, and no AI at all.
-  - **Three high-score tables, one per game** (FR-041), in the same flash page at layout version 2.
-    FR-034's lockout: an AI-touched run of a *person's* game reaches no table, and the agent's own
-    game files into its own.
-  - **The button has one owner.** `shell_press_user_button` decides what B1 means from the screen
-    and the game; `app_main` only reports the press. `select` and `button` on the console push the
-    stick and the button the way `start` presses start, which is what makes VT-INT-026/027
-    unattended. `select left`/`right` are still accepted and do nothing — kept for the two-axis menu
-    that replaces this one, so a harness need not learn the difference twice.
+- **The menu is two axes plus a start row (DEC-055, FR-040..043).** The owner drew it: who plays over
+  which maze over `START`, each row changed with left and right, the cursor moved with up and down.
+  ```
+          - PLAY -            /  - AI PLAYS -
+          - CLASSIC -         /  - RANDOM -
+          - ENDLESS OFF -     /  - ENDLESS ON -     (only while the AI plays)
+                START
+  ```
+  - **Four combinations, four high-score tables** (FR-041), layout version **3** — so the scores
+    stored before the change are discarded rather than misread. `shell_mode_e` is the four and is
+    *derived* from the two axes, so they cannot disagree. FR-034's lockout: an AI-touched run of a
+    *person's* combination reaches no table; the machine's own two file into their own.
+  - **Three fixed games conflated two questions.** "The AI" implied the arcade's maze and a generated
+    maze could not be played by the machine at all — so the combination worth having was the one that
+    did not exist. **AI × random was measured before it was offered: 19,744 at Ø level 5.00**, against
+    21,870 and 5.90 on the layout the weights were fitted on. **90 % on mazes it has never seen**,
+    which is the answer §17 raised and could not settle, and the sharpest contrast with the network
+    that had memorised one game.
+  - **The endless mode is a menu row now, not the board button** (FR-043) — chosen before the run
+    like everything else about it, and only offered while the AI plays because a person's run has
+    nothing to loop. The cursor steps *over* a row that is not offered, and when the player row moves
+    back to a person the cursor lands on `START` and the loop is switched off with it.
+  - **B1 means start and nothing else.** Both of its in-run meanings are gone — the handover in
+    DEC-054, the loop here. `select up|down|left|right` and `button` on the console push the stick and
+    the button the way `start` presses start, which is what keeps VT-INT-026/027 unattended; both
+    were rewritten to walk the axes.
+  - **The hyphens are the arrows.** The font is the 1980 tile ROM's — letters, digits, a space and the
+    one hyphen DEC-026 drew by hand — so there is no `<` or `>`, and the owner asked for the ROM's own
+    font rather than new art. `- CLASSIC -` says "this row has other values" with what exists.
+  - **Two things the work turned up.** Starting a run must no longer clear the loop (it did, because
+    the loop used to be armed *during* a run) — caught by a test that counted one run where it wanted
+    two. And a cursor move must not redraw the rows: every row's text can change now, so the first
+    version redrew all four on any selection change and the test that holds a menu move to one
+    rectangle rather than a screen caught it at 64 regions against a bound of 43.
 
 - **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
   timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened

@@ -50,11 +50,7 @@
 #define MENU_FIRST_SCORE_Y  (80)
 #define MENU_SCORE_PITCH    (16)
 #define MENU_FIRST_OPTION_Y (176)
-#define MENU_OPTION_PITCH   (40)
-
-/* An option's note sits one row under it, which is what makes it read as a note about that
- * option rather than as a third choice. */
-#define MENU_NOTE_OFFSET_Y  (16)
+#define MENU_OPTION_PITCH   (34)
 
 /* Pacman marks the selection, one sprite's width plus a gap to the left of the label, and raised
  * so his 16 px sit centred on an 8 px row of text. */
@@ -71,28 +67,26 @@ static const sprite_set_palette_e g_title_palettes[TITLE_ACTOR_COUNT] = {
     SPRITE_SET_PALETTE_INKY,   SPRITE_SET_PALETTE_CLYDE,
 };
 
-/* What the menu offers, in the order it lists them (FR-040), and each entry is also the index of
- * that game's high-score table (FR-041).
+/*! \brief What each row of the menu says, per value.
  *
- * The words are upper case because that is the font, and a note goes *under* a label rather than in
- * brackets after it — the font has one piece of punctuation, the hyphen drawn for the title.
+ * **Hyphens rather than arrows**, and not for want of trying: the font is the 1980 tile ROM's, which
+ * is letters, digits, a space and the one hyphen that had to be drawn by hand (DEC-026). There is no
+ * `<` or `>` to have, and the owner asked for the ROM's own font rather than new art, so the hyphens
+ * do the arrows' job — they say "this row has other values" without inventing a glyph. DEC-051 hit
+ * the same wall from the other side and reached for the word `AGENT` instead.
  *
- * The labels are not all the same length any more, and that is why the cursor is placed from the
- * label rather than at a column of its own: `PAC-MAN AI` is one character shorter than the two
- * mazes, so a fixed column would leave it hanging. */
-static const struct
-{
-    const char* label;
-    const char* note; /*!< A second line under the label, or `NULL` */
-    const char* name; /*!< For a caller reporting on the console    */
-} g_menu_options[SHELL_MODE_COUNT] = {
-    {"NORMAL MAZE", NULL, "normal maze"},
-    /* No note on either: `AI ON DEMAND` went with the mid-run handover and the agent's name went
-     * with the trained network, both in DEC-054, and `PLAYS ITSELF` is what the AI label already
-     * says. */
-    {"PAC-MAN AI", NULL, "pac-man ai"},
-    {"RANDOM MAZE", NULL, "random maze"},
-};
+ * `START` has no values and no hyphens: there is nothing to move it to. The words are upper case
+ * because that is the font.
+ *
+ * The rows are not all the same length, which is why the cursor is placed from the label rather than
+ * at a column of its own — a fixed column would leave the short ones hanging. */
+static const char* const g_row_player_labels[SHELL_PLAYER_COUNT] = {"- PLAY -", "- AI PLAYS -"};
+static const char* const g_row_maze_labels[SHELL_MAZE_COUNT] = {"- CLASSIC -", "- RANDOM -"};
+static const char* const g_row_endless_labels[] = {"- ENDLESS OFF -", "- ENDLESS ON -"};
+static const char* const g_row_start_label = "START";
+
+/*! \brief What each combination is called, for a caller reporting on the console. */
+static const char* const g_mode_names[SHELL_MODE_COUNT] = {"play classic", "play random", "ai classic", "ai random"};
 
 /* The games and their tables are the same set counted twice, so let the build say so rather than a
  * comment. */
@@ -107,7 +101,9 @@ static bool g_was_last_score_a_high_score;
 
 /* Which game the menu is offering, and — because the selection can only be moved on the menu —
  * which game the run in progress is. Also the index of the high-score table that game keeps. */
-static shell_mode_e g_selected_mode;
+static shell_player_e g_selected_player;
+static shell_maze_e g_selected_maze;
+static shell_row_e g_selected_row;
 
 /*! \brief Which machine the agent's own game hands Pac-Man to (FR-042).
  *
@@ -131,6 +127,14 @@ static uint32_t g_run_count;
  * one. The scores are in it because each game keeps its own table (FR-041), so moving the selection
  * changes which three numbers are true. */
 static bool g_is_selection_drawn;
+
+/*! \brief Whether the row labels on the panel are the current ones.
+ *
+ * Separate from #g_is_selection_drawn because the two have different costs and different causes.
+ * Moving the cursor changes neither a row's text nor the scores, so it may redraw the cursor alone —
+ * which is what keeps a move to the cost of one rectangle. Changing a row's *value* changes that
+ * row's text, and on the player and maze rows the three scores with it. */
+static bool g_are_rows_drawn;
 
 /* Whether the AI played at any point in the run that is in progress (FR-034).
  *
@@ -275,17 +279,30 @@ static void prv_draw_loading(void)
     prv_flush(&list);
 }
 
-static int16_t prv_get_option_y(shell_mode_e in_mode)
+/* What a row says right now. */
+static const char* prv_get_row_label(shell_row_e in_row)
 {
-    return (int16_t)(MENU_FIRST_OPTION_Y + ((int16_t)in_mode * MENU_OPTION_PITCH));
+    switch (in_row)
+    {
+        case SHELL_ROW_PLAYER: return g_row_player_labels[g_selected_player];
+        case SHELL_ROW_MAZE: return g_row_maze_labels[g_selected_maze];
+        case SHELL_ROW_ENDLESS: return g_row_endless_labels[g_is_infinite ? 1U : 0U];
+        default: return g_row_start_label;
+    }
 }
 
-/* Where the cursor stands for an option: to the left of that option's label, which is centred, so
- * the cursor follows the label rather than being placed at a column of its own. That matters now
- * that the labels are not all the same length. */
-static int16_t prv_get_cursor_x(shell_mode_e in_mode)
+static int16_t prv_get_row_y(shell_row_e in_row)
 {
-    const int16_t label_x = prv_get_centred_x((uint8_t)strlen(g_menu_options[in_mode].label));
+    return (int16_t)(MENU_FIRST_OPTION_Y + ((int16_t)in_row * MENU_OPTION_PITCH));
+}
+
+/* Where the cursor stands for a row: to the left of that row's label, which is centred, so the
+ * cursor follows the label rather than being placed at a column of its own. That matters more than
+ * ever now — a row's own label changes width when its value changes, so `- PLAY -` and
+ * `- AI PLAYS -` do not start at the same column. */
+static int16_t prv_get_cursor_x(shell_row_e in_row)
+{
+    const int16_t label_x = prv_get_centred_x((uint8_t)strlen(prv_get_row_label(in_row)));
 
     return (int16_t)(label_x - ACTOR_SIZE - MENU_CURSOR_GAP);
 }
@@ -302,7 +319,7 @@ static void prv_draw_scores(msg_display_list_t* inout_list)
 
         prv_draw_number(inout_list, x, y, (uint32_t)(place + 1U), PLACE_DIGITS);
         prv_draw_number(inout_list, (int16_t)(x + ((PLACE_DIGITS + 2U) * GLYPH_SIZE)), y,
-                        high_score_get((uint8_t)g_selected_mode, place), SCORE_DIGITS);
+                        high_score_get((uint8_t)shell_get_selected_mode(), place), SCORE_DIGITS);
     }
 }
 
@@ -313,15 +330,36 @@ static void prv_draw_scores(msg_display_list_t* inout_list)
  * actors of the *previous* list — so a background list drawn after it would wipe it. The scores
  * before it are the reason this is not simply "move the cursor": each game keeps its own table, so
  * the three numbers above the list are part of the selection. */
+static void prv_draw_rows(msg_display_list_t* inout_list)
+{
+    for (uint8_t row = 0U; row < (uint8_t)SHELL_ROW_COUNT; ++row)
+    {
+        /* A row that is not offered is blanked rather than skipped, or the endless row would stay on
+         * the panel after the player row moved back to a person — the same reason a spent life is
+         * drawn as a blank. The label is padded to the widest either value can be, for the same
+         * reason: `- ENDLESS ON -` is shorter than `- ENDLESS OFF -` and would leave a tail. */
+        const bool is_offered = shell_is_row_offered((shell_row_e)row);
+
+        prv_draw_centred_text(inout_list, prv_get_row_y((shell_row_e)row),
+                              is_offered ? prv_get_row_label((shell_row_e)row) : "               ");
+    }
+}
+
 static void prv_draw_selection(void)
 {
     msg_display_list_t list = {0};
 
-    prv_draw_scores(&list);
-    prv_flush(&list);
+    if (!g_are_rows_drawn)
+    {
+        prv_draw_scores(&list);
+        prv_draw_rows(&list);
+        prv_flush(&list);
 
-    prv_add_cursor(&list, prv_get_cursor_x(g_selected_mode),
-                   (int16_t)(prv_get_option_y(g_selected_mode) - MENU_CURSOR_RISE));
+        g_are_rows_drawn = true;
+    }
+
+    prv_add_cursor(&list, prv_get_cursor_x(g_selected_row),
+                   (int16_t)(prv_get_row_y(g_selected_row) - MENU_CURSOR_RISE));
     prv_flush(&list);
 
     g_is_selection_drawn = true;
@@ -335,19 +373,12 @@ static void prv_draw_menu(void)
 
     prv_draw_centred_text(&list, MENU_HEADING_Y, "HIGH SCORES");
 
-    for (uint8_t option = 0U; option < (uint8_t)SHELL_MODE_COUNT; ++option)
-    {
-        const int16_t y = prv_get_option_y((shell_mode_e)option);
-
-        prv_draw_centred_text(&list, y, g_menu_options[option].label);
-
-        if (g_menu_options[option].note != NULL)
-        {
-            prv_draw_centred_text(&list, (int16_t)(y + MENU_NOTE_OFFSET_Y), g_menu_options[option].note);
-        }
-    }
-
     prv_flush(&list);
+
+    /* The rows themselves come from #prv_draw_selection, because every one of them can change
+     * without the menu being redrawn — left and right move their values. */
+    g_are_rows_drawn = false;
+
     prv_draw_selection();
 }
 
@@ -395,14 +426,15 @@ static void prv_finish_run(void)
      * handed back before the end. The sticky flag rather than the live one, because handing back
      * just before the last life would otherwise launder the score.
      *
-     * The Pac-Man AI game is the exception, and not one: its table is the agent's table (FR-041), so
-     * an AI run entering it launders nothing. Refusing every score there would leave one of the
-     * three tables permanently empty. */
-    const bool is_the_agents_own_game = (g_selected_mode == SHELL_MODE_AI);
-    const bool is_locked_out = g_has_ai_played && !is_the_agents_own_game;
+     * The machine's own games are the exception, and not one: their tables are the machine's
+     * (FR-041), so a machine run entering one launders nothing. Refusing every score there would
+     * leave two of the four tables permanently empty. */
+    const bool is_the_machines_own_game = (g_selected_player == SHELL_PLAYER_MACHINE);
+    const bool is_locked_out = g_has_ai_played && !is_the_machines_own_game;
 
     g_last_score = game_session_get_score();
-    g_was_last_score_a_high_score = is_locked_out ? false : high_score_offer((uint8_t)g_selected_mode, g_last_score);
+    g_was_last_score_a_high_score =
+        is_locked_out ? false : high_score_offer((uint8_t)shell_get_selected_mode(), g_last_score);
 
     prv_enter(SHELL_SCREEN_SCORE, SHELL_SCORE_MS);
 }
@@ -421,7 +453,7 @@ static bool prv_start_run(void)
      * panel and gives the field handover a clean buffer to draw into. */
     game_session_init();
 
-    if (g_selected_mode == SHELL_MODE_RANDOM_MAZE)
+    if (g_selected_maze == SHELL_MAZE_RANDOM)
     {
         /* The run's mazes are seeded from the random source (FR-029/FR-045), which on the board is
          * the MCU's own RNG peripheral. It used to be the tick at the moment start was pressed —
@@ -433,14 +465,12 @@ static bool prv_start_run(void)
     }
     else
     {
-        /* Both of the other two games are the arcade's own maze: it is the one the agent was
-         * trained on, so it is the one it is offered in and the only one it can play alone. */
         game_session_start_on_normal_maze();
     }
 
     g_has_ai_played = false;
 
-    if (g_selected_mode == SHELL_MODE_AI)
+    if (g_selected_player == SHELL_PLAYER_MACHINE)
     {
         /* The search has Pac-Man from the first frame and keeps him (FR-042). It cannot refuse —
          * there is nothing about it to be unavailable, unlike the trained table this used to have to
@@ -498,7 +528,9 @@ void shell_init(void)
     /* The normal maze, because it is the one a first-time player should meet: it is the arcade's
      * layout, and it is the only one that offers the AI. Only #shell_init sets it — coming back
      * from a run leaves the menu on whatever was last played. */
-    g_selected_mode = SHELL_MODE_NORMAL_MAZE;
+    g_selected_player = SHELL_PLAYER_PERSON;
+    g_selected_maze = SHELL_MAZE_CLASSIC;
+    g_selected_row = SHELL_ROW_PLAYER;
     g_is_selection_drawn = false;
     g_is_infinite = false;
     g_run_count = 0U;
@@ -565,7 +597,7 @@ bool shell_service(void)
                  * and that game would not have started if the table were unusable. Checked anyway,
                  * because "cannot happen" and "is not checked" is how a loop turns into a board
                  * sitting on a score screen for ever. */
-                if (g_is_infinite && (g_selected_mode == SHELL_MODE_AI) && prv_start_run())
+                if (g_is_infinite && (g_selected_player == SHELL_PLAYER_MACHINE) && prv_start_run())
                 {
                     ++g_run_count;
                 }
@@ -590,9 +622,11 @@ void shell_press_start(void)
 {
     if (g_screen == SHELL_SCREEN_MENU)
     {
-        /* A game begun by hand is one game: the loop is something the player switches on during a
-         * run, so starting from the menu leaves it off (FR-043). */
-        g_is_infinite = false;
+        /* **The loop is not cleared here any more.** It used to be, because it was switched on
+         * *during* a run and a stale flag would have looped a game begun by hand (FR-043). Since
+         * DEC-055 it is a row on the menu that the player has just looked at, so clearing it would
+         * throw away what they asked for. It is cleared when the player row moves back to a person,
+         * which is the only way it can become meaningless. */
         g_run_count = 1U;
 
         if (!prv_start_run())
@@ -627,35 +661,80 @@ void shell_move_selection(direction_e in_direction)
         return;
     }
 
-    /* Sideways does nothing yet. Up and down move between games; the agent choice that used to
-     * live here went with the trained network (DEC-054), and the axis is kept free for the two-axis
-     * menu that replaces this one. */
+    /* **Sideways changes the row's value; up and down change the row.** Two axes on two axes, which
+     * is the whole of DEC-055's menu: who plays, which maze, whether it loops, and start. */
     if ((in_direction == DIRECTION_WEST) || (in_direction == DIRECTION_EAST))
     {
+        switch (g_selected_row)
+        {
+            case SHELL_ROW_PLAYER:
+                g_selected_player =
+                    (g_selected_player == SHELL_PLAYER_PERSON) ? SHELL_PLAYER_MACHINE : SHELL_PLAYER_PERSON;
+
+                /* The endless row only exists while the machine plays, so moving off the machine can
+             * pull the ground out from under the cursor. It never does, because the cursor is on the
+             * player row to have done this — but the loop itself has to go, or a person's run would
+             * inherit a loop nobody can see or switch off. */
+                if (g_selected_player == SHELL_PLAYER_PERSON)
+                {
+                    g_is_infinite = false;
+
+                    game_session_set_infinite(false);
+                }
+                break;
+
+            case SHELL_ROW_MAZE:
+                g_selected_maze = (g_selected_maze == SHELL_MAZE_CLASSIC) ? SHELL_MAZE_RANDOM : SHELL_MAZE_CLASSIC;
+                break;
+
+            case SHELL_ROW_ENDLESS:
+                g_is_infinite = !g_is_infinite;
+
+                game_session_set_infinite(g_is_infinite);
+                break;
+
+            default:
+                /* `START` has nothing to change. */
+                return;
+        }
+
+        g_are_rows_drawn = false;
+        g_is_selection_drawn = false;
+
         return;
     }
 
-    shell_mode_e moved = g_selected_mode;
+    shell_row_e moved = g_selected_row;
 
-    /* Stops at the ends rather than wrapping: a player pushing up at the top of the list expects
-     * nothing to happen, and with three entries wrapping would make the middle one reachable two
-     * ways and the ends confusing. */
-    if ((in_direction == DIRECTION_NORTH) && (g_selected_mode > 0))
+    /* Stops at the ends rather than wrapping: a player pushing up at the top expects nothing to
+     * happen, and wrapping would make the ends confusing. Rows that are not offered are stepped
+     * *over*, so the endless row is simply not there while a person plays rather than being a row
+     * the cursor can sit on and a value nobody can use. */
+    while (true)
     {
-        moved = (shell_mode_e)(g_selected_mode - 1);
-    }
-    else if ((in_direction == DIRECTION_SOUTH) && (g_selected_mode < (SHELL_MODE_COUNT - 1)))
-    {
-        moved = (shell_mode_e)(g_selected_mode + 1);
-    }
-    else
-    {
-        /* Already at the end of the list. */
+        if ((in_direction == DIRECTION_NORTH) && (moved > 0))
+        {
+            moved = (shell_row_e)(moved - 1);
+        }
+        else if ((in_direction == DIRECTION_SOUTH) && (moved < (SHELL_ROW_COUNT - 1)))
+        {
+            moved = (shell_row_e)(moved + 1);
+        }
+        else
+        {
+            /* Already at the end, so nothing moves. */
+            return;
+        }
+
+        if (shell_is_row_offered(moved))
+        {
+            break;
+        }
     }
 
-    if (moved != g_selected_mode)
+    if (moved != g_selected_row)
     {
-        g_selected_mode = moved;
+        g_selected_row = moved;
 
         /* Redrawn by #shell_service and not here, because a caller that blits the frame buffer into
          * a window does it when the service call says something reached the panel. */
@@ -663,32 +742,48 @@ void shell_move_selection(direction_e in_direction)
     }
 }
 
+bool shell_is_row_offered(shell_row_e in_row)
+{
+    /* A person's run has nothing to loop, so the row is not offered — which is different from being
+     * offered and refusing, and is why the cursor steps over it rather than landing on it. */
+    return (in_row != SHELL_ROW_ENDLESS) || (g_selected_player == SHELL_PLAYER_MACHINE);
+}
+
 shell_mode_e shell_get_selected_mode(void)
 {
-    return g_selected_mode;
+    /* Player-major, which is the order the four are declared in and the order the flash page holds
+     * them in. Derived rather than stored, so the two axes and the table cannot disagree. */
+    return (shell_mode_e)(((uint8_t)g_selected_player * (uint8_t)SHELL_MAZE_COUNT) + (uint8_t)g_selected_maze);
+}
+
+shell_player_e shell_get_selected_player(void)
+{
+    return g_selected_player;
+}
+
+shell_maze_e shell_get_selected_maze(void)
+{
+    return g_selected_maze;
+}
+
+shell_row_e shell_get_selected_row(void)
+{
+    return g_selected_row;
 }
 
 const char* shell_get_mode_name(shell_mode_e in_mode)
 {
     ASSERT(in_mode < SHELL_MODE_COUNT);
 
-    return g_menu_options[in_mode].name;
+    return g_mode_names[in_mode];
 }
 
 void shell_press_user_button(void)
 {
-    /* The button means one thing per screen and per game, and the table in the header is this
-     * function. It is a chain of "did that mean anything" rather than a switch, because the toggle
-     * already knows the whole of when it applies — a switch here would be a second copy of that
-     * condition, and the copy is what drifts.
-     *
-     * **Handing Pac-Man over mid-run is gone** (DEC-054): the owner asked for it to go with the
-     * trained network, so in a person's game the button now does nothing at all. */
-    if (shell_toggle_infinite())
-    {
-        return;
-    }
-
+    /* **One meaning left.** Handing Pac-Man over mid-run went in DEC-054 and the endless mode moved
+     * onto the menu in DEC-055, so the board button is start and nothing else. `shell_press_start`
+     * already knows that a run in progress has no start to press, so there is no screen test here —
+     * a second copy of that condition is what would drift. */
     shell_press_start();
 }
 
@@ -700,23 +795,6 @@ bool shell_is_ai_playing(void)
 bool shell_has_ai_played(void)
 {
     return g_has_ai_played;
-}
-
-bool shell_toggle_infinite(void)
-{
-    /* Only during a Pac-Man AI run (FR-043). Not on the menu, where the button means start and where
-     * arming a loop would be arming something the player cannot see the effect of; and not in a game
-     * a person is playing, where a restart would replay a run they had not asked to replay. */
-    if ((g_screen != SHELL_SCREEN_GAME) || (g_selected_mode != SHELL_MODE_AI))
-    {
-        return false;
-    }
-
-    g_is_infinite = !g_is_infinite;
-
-    game_session_set_infinite(g_is_infinite);
-
-    return true;
 }
 
 bool shell_is_infinite(void)
