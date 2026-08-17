@@ -18,10 +18,10 @@ rather than assuming.
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 108,488 B of 504 kB — 21.0 % |
+| flash | 108,536 B of 504 kB — 21.0 % |
 | RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
-| `pacman.hex` | sha256 `2b4106346abadc78b1a0c674656ec9a31f84944e3bcb19e8e2d47a1928af9e92` |
-| `pacman.bin` | sha256 `c5d980d5bdce04193f4ae3f4bc1d758c3c7839a2c94ef5a4c246da7d90d888ce` |
+| `pacman.hex` | sha256 `51f9289f22919ddc3771aaa3962a5723ab3c118b0e6929b6dab4fa77e214cbe4` |
+| `pacman.bin` | sha256 `ec0862e4164476125ffe4e318c99bbac1fb2accf4e77cdd8f128104f2356a2b4` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
@@ -54,7 +54,9 @@ written to `0x08000000` explicitly; it is here only for a tool that insists on r
 
 ## What to press
 
-**The menu asks one question a screen.** Up and down move the Pac-Man cursor, the stick's centre
+**The menu asks one question a screen.** The options on a screen start at the same column — left
+aligned to each other, the block of them centred — so the cursor runs straight down. Up and down move
+the Pac-Man cursor, the stick's centre
 takes the highlighted one, and **B1 steps back**:
 
 ```
@@ -64,7 +66,9 @@ screen 1      screen 2 (after PLAY)   screen 2 (after AI)   screen 3 (AI only)
               ^ starts the run        ^ goes to screen 3    ^ starts the run
 ```
 
-The endless mode is the AI's last question and defaults to off — a run of yours never reaches that
+`HIGH SCORES` and the three numbers under them appear on the maze screen and nowhere else: that is the
+only screen where a table has been chosen. The endless mode is the AI's last question and defaults to
+off — a run of yours never reaches that
 screen, because there is nothing to loop. While the AI plays, the HUD says `AI` in the gap between
 `1UP` and `LEVEL`, and `LOOP` on the lives row when the loop is on.
 

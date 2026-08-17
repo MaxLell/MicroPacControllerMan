@@ -298,15 +298,35 @@ static int16_t prv_get_option_y(uint8_t in_option)
     return (int16_t)(MENU_FIRST_OPTION_Y + ((int16_t)in_option * MENU_OPTION_PITCH));
 }
 
-/* Where the cursor stands for an option: to the left of that option's label, which is centred, so the
- * cursor follows the label rather than sitting at a column of its own. The labels are not all the
- * same length — `AI` against `PLAY`, `ENDLESS ON` against `ENDLESS OFF` — so a fixed column would
- * leave the short ones hanging. */
-static int16_t prv_get_cursor_x(uint8_t in_option)
+/* Where a page's options start.
+ *
+ * **Left-aligned to each other, and the block of them centred**, which is what the owner asked for:
+ * `PLAY` and `AI` begin at the same column rather than each being centred on its own and so starting
+ * at different ones. The block's width is the page's longest option, so the page as a whole still
+ * sits in the middle of the panel.
+ *
+ * Per page rather than per option, which is the whole point — and it is also what lets the cursor
+ * stand at a fixed column while it moves up and down. */
+static int16_t prv_get_page_x(void)
 {
-    const int16_t label_x = prv_get_centred_x((uint8_t)strlen(prv_get_option_label(in_option)));
+    uint8_t widest = 0U;
 
-    return (int16_t)(label_x - ACTOR_SIZE - MENU_CURSOR_GAP);
+    for (uint8_t option = 0U; option < SHELL_MENU_OPTIONS; ++option)
+    {
+        const uint8_t length = (uint8_t)strlen(prv_get_option_label(option));
+
+        if (length > widest)
+        {
+            widest = length;
+        }
+    }
+
+    return prv_get_centred_x(widest);
+}
+
+static int16_t prv_get_cursor_x(void)
+{
+    return (int16_t)(prv_get_page_x() - ACTOR_SIZE - MENU_CURSOR_GAP);
 }
 
 /* Whether the page that is up shows a high-score table.
@@ -348,14 +368,33 @@ static void prv_draw_scores(msg_display_list_t* inout_list)
     }
 }
 
+/* `HIGH SCORES` and the three numbers under it, or blanks where there is no table.
+ *
+ * The heading goes with the numbers rather than standing above the whole menu, because it is a label
+ * *for them*: on the first page nothing has been chosen yet and on the endless page the question is
+ * not about a maze, so a heading there would be announcing an empty space. The owner asked for it to
+ * go from the first page, and the rule that follows from the reason covers the third as well. */
+static void prv_draw_heading(msg_display_list_t* inout_list)
+{
+    prv_draw_centred_text(inout_list, MENU_HEADING_Y, "           ");
+
+    if (prv_does_page_show_scores())
+    {
+        prv_draw_centred_text(inout_list, MENU_HEADING_Y, "HIGH SCORES");
+    }
+}
+
 static void prv_draw_options(msg_display_list_t* inout_list)
 {
+    const int16_t x = prv_get_page_x();
+
     for (uint8_t option = 0U; option < SHELL_MENU_OPTIONS; ++option)
     {
-        /* Padded to the widest label any page has, so a shorter one cannot leave the tail of a longer
-         * one behind when a page changes under the same rows. */
-        prv_draw_centred_text(inout_list, prv_get_option_y(option), "           ");
-        prv_draw_centred_text(inout_list, prv_get_option_y(option), prv_get_option_label(option));
+        /* Blanked wider than any page's block and centred, so whatever the previous page left is
+         * covered wherever it stood — a page's block moves when its longest option is a different
+         * length, and a shorter one would otherwise leave the tail of a longer one behind. */
+        prv_draw_centred_text(inout_list, prv_get_option_y(option), "             ");
+        prv_draw_text(inout_list, x, prv_get_option_y(option), prv_get_option_label(option));
     }
 }
 
@@ -369,6 +408,12 @@ static void prv_draw_selection(void)
 
     if (!g_are_rows_drawn)
     {
+        /* The heading goes with the options and not with the scores, although it is a label for them:
+         * whether there *is* a table depends on the page and on who is playing, which is exactly what
+         * changes when the options do. Moving the cursor within a page changes which table is shown
+         * and never whether one is, so redrawing the heading there would be a region a frame did not
+         * need — and the test that holds a menu move to one rectangle caught it at 45 against 44. */
+        prv_draw_heading(&list);
         prv_draw_options(&list);
         prv_flush(&list);
 
@@ -380,8 +425,7 @@ static void prv_draw_selection(void)
     prv_draw_scores(&list);
     prv_flush(&list);
 
-    prv_add_cursor(&list, prv_get_cursor_x(g_selected_option),
-                   (int16_t)(prv_get_option_y(g_selected_option) - MENU_CURSOR_RISE));
+    prv_add_cursor(&list, prv_get_cursor_x(), (int16_t)(prv_get_option_y(g_selected_option) - MENU_CURSOR_RISE));
     prv_flush(&list);
 
     g_is_selection_drawn = true;
@@ -408,14 +452,11 @@ static void prv_open_page(shell_menu_page_e in_page)
 
 static void prv_draw_menu(void)
 {
-    msg_display_list_t list = {0};
-
     render_init();
 
-    prv_draw_centred_text(&list, MENU_HEADING_Y, "HIGH SCORES");
-
-    prv_flush(&list);
-
+    /* Nothing of the menu is drawn here any more: every part of it can change without the screen
+     * being re-entered — the options with the page, the heading and the scores with what is
+     * highlighted — so #prv_draw_selection owns all of it and this only clears the panel. */
     g_are_rows_drawn = false;
 
     prv_draw_selection();
