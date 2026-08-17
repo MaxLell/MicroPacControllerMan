@@ -231,6 +231,29 @@ SECTIONS
     __noinit_end__ = .;
   } >RAM
 
+  /* =========================================================================
+   * MicroPacControllerMan — SRAM4, which is a separate 16 kB at 0x28000000.
+   * NON-GENERATED: re-add this block after any STM32CubeMX code generation, as
+   * CubeMX overwrites this linker script.
+   *
+   * The part's main RAM is 256 kB and the frame buffer plus the look-ahead
+   * search fill it; SRAM4 is a second bank on its own bus that nothing else
+   * uses, and a `game_t` is 15 kB of its 16. Marked NOLOAD because what goes in
+   * here is a scratch copy written before it is read, so there is nothing to
+   * initialise and no reason to spend flash on zeroes. Without this block the
+   * section becomes an orphan and the linker puts it in RAM, which is the
+   * failure it was added to notice: main RAM went to 94.5 % and SRAM4 stayed
+   * empty.
+   * ========================================================================= */
+  .sram4 (NOLOAD) : ALIGN(4)
+  {
+    __sram4_start__ = .;
+    *(.sram4)
+    *(.sram4*)
+    . = ALIGN(4);
+    __sram4_end__ = .;
+  } >SRAM4
+
   /* User_heap_stack section, used to check that there is enough "RAM" Ram type memory left */
   ._user_heap_stack (NOLOAD) :
   {

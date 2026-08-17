@@ -235,7 +235,7 @@ silently working around a wart.
     answer is not an FR-037 verdict.
     See [M6 Pacman AI](Docu/Design/M6-Pacman-AI.md).
 
-- **A look-ahead player is in the game, and as shipped it scores 3,132 (DEC-050/051).** `App/pacman_lookahead`
+- **A look-ahead player is in the game, and since DEC-052 it scores 11,652 (DEC-050/051/052).** `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -264,12 +264,39 @@ silently working around a wart.
     lose fidelity. The only lever that works is **more simulated ticks of the real game**, and the
     frames to spend them in exist — 51.5 per junction-to-junction leg, worst 18, against the one
     frame a decision uses today.
-  - **A sixth of the budget is spent watching a wall (RF-019).** A leg whose direction runs into a
-    wall has no way to notice except to wait out the 32-tick backstop, so **17.8 % of every
-    simulated tick is a Pacman who is already stuck** — he is stuck the instant neither his queued
-    turn nor his facing is open, which is `pacman_advance`'s own condition. Ending the leg there is
-    worth **+41 % of score at an unchanged frame cost** (3,132 → 4,432), and **9,553** together
-    with three times the budget. Written down, not done: which lever to pull is the owner's call.
+  - **Both levers §15.5 named are built (DEC-052, M6 §16), and the player scores 11,652** over a
+    hundred draws against 3,123 before them — 11,947 over FR-037's own twenty, against 4,600 asked
+    for. Neither costs a millisecond of frame time that was not already there.
+    - **A stranded Pacman is noticed at once (RF-019, done).** A leg sets one direction and lets it
+      ride, so a bend stranded him and the walk could only wait out the 32-tick backstop: **17.8 %
+      of every simulated tick**. `pacman_is_stuck` is the rule, written as the negation of
+      `pacman_advance` so the two cannot drift. Worth +25 % over a hundred draws. It is not a
+      fidelity trade — the played game asks again on every cell and always hands him an open way,
+      so the stalled Pacman the backstop simulated does not occur.
+    - **A decision thinks across the frames of its cell, a slice at a time.** A decision belongs to
+      a cell, a cell lasts 10.6 frames, and the search used to work in the first and idle through
+      nine. The recursion is an explicit stack now, so it can be put down between any two branches:
+      `pacman_lookahead_restart` on a new cell, `pacman_lookahead_think(350)` a frame,
+      `pacman_lookahead_get_direction` every frame. **Staleness is unchanged** — a decision was
+      always rooted at the cell's first frame and always took effect at its last, because
+      `pacman_set_intent` queues.
+    - **The root copy lives in SRAM4**, the 16 kB bank three documents called "exactly big enough
+      for one clone" while nothing used it. Main RAM is unchanged at 89.9 %. It needed a `.sram4`
+      section in the linker script (NON-GENERATED, beside `.noinit`) — without one the section
+      becomes an orphan, lands in RAM, and main RAM goes to 94.5 % while SRAM4 reports empty.
+    - **On the board:** what must fit a frame is now a **slice at 2.9 ms mean / 11 ms worst** of 13,
+      where a whole decision was 11.2 / 13. Junctions reached **1.63 → 2.97 of 3**; a decision
+      spends ~1,400 ticks over 10 frames instead of 500 in one. Whole automatic suite passes.
+    - **A refactor is checked by sameness, not by a mean.** The rewrite was verified by diffing the
+      two versions' decisions over a run, which found a real bug the scores would only have argued
+      about: the recursion's entry test was being re-asked on the way *out* of a level, so a level
+      that spent the last of the budget on its children had its finished answer thrown away. What
+      holds it now is a test that slices of 1, 7, 64 and 350 ticks all answer what one shot answers.
+    - **The dithering is better and not gone**: 18.7 % → 11.5 % of decisions, longest streak 56 →
+      50. The cause §15.5 named first is untouched — nothing in the evaluation pulls toward food it
+      cannot already see. Breaking ties by carrying straight on measured 3,573 against 3,123 and is
+      deliberately **not** built, because it changes what the player decides rather than how much it
+      may think.
   - **DEC-049's arithmetic was six times too kind** and the board said so: a simulated cell costs
     **250 us**, not the 40 the four greedy ghost steps suggested, because a cell is seven
     `game_tick` calls of Pacman, four ghosts, the timers and the bus. A frame's spare 13 ms buys
@@ -279,12 +306,13 @@ silently working around a wart.
     still took 19 ms of a 13 ms allowance. And the search **deepens iteratively**: depth-first at a
     tight budget spends everything on the first branch, and the player that produced scored *worse*
     than one walking in a straight line.
-  - Ceiling 3 junctions, budget 500 ticks, **two junctions actually reached**; **9.7 ms mean, 11 ms
-    worst** of 13, verified by `ott lookahead_cost`. **RAM is the ceiling**: a level of depth is a
-    15 kB `game_t`, and calling the module takes the target from 71.6 % to **89.9 %**. Until
-    something calls it the linker drops it whole. SRAM4's 16 kB is still entirely unused and holds
-    exactly one clone.
-    See [M6 §15](Docu/Design/M6-Pacman-AI.md).
+  - Ceiling 3 junctions, **2.97 of them actually reached**; a decision spends ~1,400 ticks across the
+    10 frames its cell lasts, in slices of 350 that measure **2.9 ms mean, 11 ms worst** of 13 —
+    verified by `ott lookahead_cost`, which measures a *frame* now rather than a decision. **RAM is
+    the ceiling of the depth constant, not of the search**: a level of depth is a 12 kB `game_t` on
+    this part, three of them plus the frame buffer put main RAM at **89.9 %**, and the root copy is
+    the 12 kB in **SRAM4**. Until something calls the module the linker drops it whole.
+    See [M6 §15](Docu/Design/M6-Pacman-AI.md) and [§16](Docu/Design/M6-Pacman-AI.md).
 
 - **The player picks one of three games (DEC-045/046, FR-040..043).** The menu carries the options
   and the high scores of the selected one, and nothing else: the title and the row of actors are the

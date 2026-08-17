@@ -983,8 +983,14 @@ leg there instead of 32 ticks later:
 | **stall recognised at once** | **4,432** | 1.89 | 1.0 % |
 | stall recognised at once, **and three times the budget** | **9,553** | 2.79 | 0.8 % |
 
-**+41 % of score for the same frame**, and the decision costs what it did — host mean 331 us against
-359 us, worst *lower*, because the tick budget still binds and the extra legs are clones at 2 %.
+Those are FR-037's own twenty draws, which is the right set to *accept* against and the wrong one to
+*compare* on — §14 says so about training and it is just as true here. Over a hundred draws the
+same change is **3,123 → 3,889, +25 %**. Both numbers are honest and they are answers to different
+questions; the twenty-draw one is quoted first because it is the one FR-037 asks for, and the
+hundred-draw one is the size of the effect.
+
+The decision costs what it did — host mean 331 us against 359 us, worst *lower*, because the tick
+budget still binds and the extra legs are clones at 2 %.
 
 It reads like a trade — the leaf is now priced 32 ticks earlier, and ghosts move in 32 ticks — and
 it is not one, because **the stall is an artefact of the leg and not a thing that happens**. In the
@@ -1016,3 +1022,119 @@ the search has to become resumable across frames instead of a single recursive c
 be searching from the state Pacman is *predicted* to arrive at, which drifts from the state he
 actually arrives at because FR-044's jitter is drawn by the played game and the clone may not draw
 (§15.1).
+
+## 16 Thinking across frames
+
+§15.5 measured two levers on the same problem and this section is both of them built, on the
+owner's instruction: **stop wasting the ticks a decision already has** (RF-019), and **stop
+confining a decision to one frame**. The first is worth a quarter, the second nearly quadruples the
+player, and neither costs a millisecond of frame time it did not already have.
+
+| over 100 draws (seeds 1000..1099) | mean score | over FR-037's own twenty |
+|---|---|---|
+| the search as §15.4 corrected it | 3,123 | 3,132 |
+| **+ a stranded Pacman noticed at once** | 3,889 | 4,432 |
+| **+ thinking across the frames of a cell** | **11,652** | **11,947** |
+| FR-037 asks for | 4,600 | 4,600 |
+
+### 16.1 A stranded Pacman, noticed (RF-019)
+
+The leg walk sets a direction and lets the game steer, so a corridor that bends strands Pacman, and
+the only way it could notice was to wait out the 32-tick backstop — 17.8 % of every tick simulated.
+He is stuck the instant neither his queued turn nor his facing is open, which is exactly the two
+tests `pacman_advance` makes. That is now `pacman_is_stuck`, written as the negation of the function
+it predicts so the two cannot drift, and the walk asks it.
+
+It reads like a trade — the leaf is priced 32 ticks earlier, and ghosts move in 32 ticks — and it is
+not one, because **the stall is an artefact of the leg and not a thing that happens**. The played
+game asks the agent again on every cell and hands him a direction that is open at the moment of
+asking, so he never stands still; only the search stands him still, by setting one direction and
+letting it ride for a whole leg. Those ticks were simulating a Pacman who does not occur, and
+walking ghosts towards him.
+
+### 16.2 A decision is bigger than a frame, and always was
+
+**The mistake was thinking of a decision as a thing that happens in a frame.** A decision belongs to
+a *cell*; a cell lasts 10.6 frames; the search did all of its work in the first of them and idled
+through the other nine. Nothing about the game required that — it was the shape of a recursive
+function, which is a thing that either runs to the end or does not run.
+
+So the recursion became an explicit stack. `pacman_lookahead_level_t` holds what a call frame held —
+which branch is next, the best value so far, which branch produced it — and the position each level
+stands on is where it always was, `g_root` for level 0 and `g_clone[n - 1]` below that. The walk can
+now be put down between any two branches and picked up in the next frame:
+
+```
+restart(game, depth, 4000 ticks)   once, when Pacman reaches a new cell
+think(350 ticks)                   once a frame
+get_direction()                    every frame, into game_set_direction
+```
+
+**Staleness does not enter into it, which is the part worth being clear about.** A decision has
+always been rooted at the board as Pacman entered the cell and has always taken effect as he leaves
+it — `pacman_set_intent` queues, and he adopts the queue when his step falls due. Thinking for nine
+more frames changes how *deep* the answer is and not how old the board it was worked out on is. The
+root has to be *copied* now, because the live game ticks between slices and branch one would
+otherwise be tried on a board the others never saw; the copy is the same board the recursion used.
+
+That copy is 12 kB and it went into **SRAM4** — the 16 kB bank beside the main 256 that three design
+documents have described as "exactly big enough for one clone" while nothing used it. Main RAM is
+unchanged at 89.9 %. The linker script needed a `.sram4` section for it, marked NON-GENERATED beside
+`.noinit`; without one the section becomes an orphan, the linker quietly puts it in RAM, and main
+RAM goes to 94.5 % while SRAM4 reports empty — which is how the mistake was caught.
+
+### 16.3 What it cost to get the refactor right
+
+**A behaviour-preserving rewrite has to be shown to be one**, and this one was not at the first
+attempt. The recursion asked *on the way in* — is this a leaf, is the budget gone, is the run over?
+— once per call. A loop returns to a level every time one of its children finishes, so the same
+question was being asked on the way *out*, and a level that had spent the last of the budget on its
+children was recorded as a truncation. Its perfectly finished answer was then thrown away, which
+cost the depth-3 deepening on exactly the decisions where the budget ran out as the search
+completed. `is_entered` is that bug; the comment on it is the reason it exists.
+
+It was found by diffing the decisions of the two versions over a run — identical for 28 decisions,
+different at the 29th — rather than by comparing scores, which differed by 22 % and would have been
+argued about, because neighbouring budgets differ by that much anyway. **A refactor is checked by
+sameness, not by a mean.** What holds it now is
+`test_a_search_paid_for_in_slices_answers_what_one_paid_for_at_once_does`: the same position,
+decided at slices of 1, 7, 64 and 350 ticks and in one go, has to give one answer. A slice of one
+tick puts the search down between two ticks of a single leg, which is the hardest place to resume
+from.
+
+`pacman_lookahead_decide` is now that same machine called with the whole budget as one slice, so
+there is one search in the module and the one-shot entry point is a way of calling it — the argument
+DEC-042 makes about the network that trains being the network that ships, one level down.
+
+### 16.4 What the board says
+
+`ott lookahead_cost` measures **frames now, not decisions**, because a decision is deliberately
+larger than a frame and it is the slice that has to fit. It drives the three calls `game_session`
+makes, in that order, for two thousand frames of a real run.
+
+| | before | after |
+|---|---|---|
+| what has to fit a frame | a whole decision, 11.2 ms mean / **13 ms worst** of 13 | a slice, **2.9 ms mean / 11 ms worst** |
+| junctions reached | 1.63 | **2.97 of 3** |
+| ticks a decision spends | 500 | **~1,400** |
+| frames a decision spends | 1 | 10 |
+| main RAM | 89.91 % | 89.93 % |
+| SRAM4 | 0 % | 73.3 % |
+
+The whole automatic suite passes on the board, `ai_equivalence` included — the trained network's
+path is untouched, and it had to be seen to be.
+
+### 16.5 The dithering is better and is not gone
+
+It was the symptom the owner reported and it is worth saying plainly what happened to it. Measured
+with one metric across both, the share of decisions that walk back to the cell of two decisions ago
+falls from **18.7 % to 11.5 %**. The long ones barely move: 67 streaks of eleven or more become 60,
+and the longest run of back-and-forth in twenty games goes from 56 to 50.
+
+So a deeper horizon buys a great deal of score and only some of the composure. What is left is
+§15.5's first cause, untouched: **nothing in the evaluation pulls toward food it cannot already
+see**, so a position with no pellet and no ghost inside the horizon still leaves every branch worth
+the same and the tie-break flipping one cell later. Breaking ties by carrying straight on measured
+3,573 against 3,123 on the one-shot search and cut the dithering with it; it is not built, because
+it changes what the player *decides* rather than how much it gets to think, and that is a separate
+decision to take.

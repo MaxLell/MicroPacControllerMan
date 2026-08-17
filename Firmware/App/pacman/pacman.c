@@ -69,6 +69,18 @@ bool pacman_advance(pacman_t* inout_pacman, const playfield_t* in_playfield)
     return false;
 }
 
+bool pacman_is_stuck(const pacman_t* in_pacman, const playfield_t* in_playfield)
+{
+    ASSERT(in_pacman != NULL);
+    ASSERT(in_playfield != NULL);
+
+    /* The two tests #pacman_advance makes, in its order, asked without moving him. Written as the
+     * negation of that function rather than as a rule of its own, so a change to what he may do
+     * cannot leave this saying something else. */
+    return !pacman_may_step(in_pacman, in_playfield, in_pacman->queued_direction)
+           && !pacman_may_step(in_pacman, in_playfield, agent_get_direction(&in_pacman->agent));
+}
+
 cell_t pacman_get_cell(const pacman_t* in_pacman)
 {
     ASSERT(in_pacman != NULL);

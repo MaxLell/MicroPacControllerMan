@@ -103,6 +103,69 @@ typedef struct
  * pacman_lookahead - public API
  * ========================================================================= */
 
+/*! \brief What one frame may spend on thinking.
+ *
+ * A frame is 20 ms and drawing plus deciding measured 7, so 13 are spare and a tick costs 22 us on
+ * this part. Three hundred and fifty is **7.7 ms**, which leaves the margin that
+ * #PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET spends: a whole 500-tick decision measured 11.2 ms mean
+ * and 13 ms worst on the board, which passed `ott lookahead_cost` with nothing to spare.
+ *
+ * A slice is checked *between* legs and never inside one, so a frame can overrun it by up to one
+ * leg — about thirty ticks, two thirds of a millisecond. That is the price of being able to pause
+ * with no half-finished state, and it is paid out of the margin above.
+ */
+#define PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS   (350U)
+
+/*! \brief What a whole decision may spend when it is allowed to think across frames.
+ *
+ * Four thousand. The score curve saturates at about five thousand, where the depth ceiling is
+ * reached on every decision ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)), and a cell lasts
+ * 10.6 frames on average — 3,700 ticks at the slice above — so a larger number would describe a
+ * cell that does not occur. It is a backstop against a search that never converges, not a target.
+ */
+#define PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET (4000U)
+
+/*! \brief Begin a search, rooted here, thrown away by the next call.
+ *
+ * The first of the three calls that let a decision be worked out **across frames instead of inside
+ * one** ([M6 §15.6](../../../Docu/Design/M6-Pacman-AI.md)). The run is copied, so the caller may
+ * tick the real game as much as it likes while the answer is being worked out; every branch,
+ * slice and deepening is measured against the copy taken here.
+ *
+ * Call it when Pacman reaches a new cell, then #pacman_lookahead_think once a frame, and read
+ * #pacman_lookahead_get_direction whenever an answer is wanted. There is an answer from the first
+ * slice onwards, and it only gets deeper.
+ *
+ * \param[in]       in_game: the run to decide for, must not be `NULL`
+ * \param[in]       in_depth: junctions to look ahead, 1..#PACMAN_LOOKAHEAD_MAX_DEPTH
+ * \param[in]       in_tick_budget: simulated ticks the whole decision may spend, must not be `0`
+ */
+void pacman_lookahead_restart(const game_t* in_game, uint8_t in_depth, uint16_t in_tick_budget);
+
+/*! \brief Spend a slice of thinking on the search begun by #pacman_lookahead_restart.
+ *
+ * \param[in]       in_slice_ticks: simulated ticks this call may spend, must not be `0`
+ * \return          `true` while a further slice would still change the answer
+ */
+bool pacman_lookahead_think(uint16_t in_slice_ticks);
+
+/*! \brief The best answer the search has reached so far.
+ *
+ * The deepest deepening that was allowed to *finish*, which is what makes a half-thought answer
+ * safe to use: a truncated look compares one branch that was studied against three that were not,
+ * and is never what comes back here while a complete one exists. Before any deepening finishes it
+ * is the first way out of the cell, which is a legal move and honestly all the search yet knows.
+ *
+ * \return          The absolute direction to hand to `game_set_direction`
+ */
+direction_e pacman_lookahead_get_direction(void);
+
+/*! \brief What the search in progress has done so far.
+ *
+ * \param[out]      out_report: filled in, must not be `NULL`
+ */
+void pacman_lookahead_get_report(pacman_lookahead_report_t* out_report);
+
 /*! \brief Which way to go, worked out by playing this run forward.
  *
  * The direction is absolute and meant for `game_set_direction`, so this drops into the same slot

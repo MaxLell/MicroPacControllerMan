@@ -281,6 +281,154 @@ void test_it_does_not_walk_into_a_ghost_it_can_see_coming(void)
     TEST_ASSERT_NOT_EQUAL(deadly, pacman_lookahead_decide(&g_game));
 }
 
+/* --- it does not spend the budget watching a wall (RF-019) ---------------- */
+
+/* A leg sets one direction and lets the game steer, so a corridor that bends strands Pacman — and
+ * the walk used to have no way of noticing except to wait out
+ * #PACMAN_LOOKAHEAD_MAX_CELL_TICKS. Over FR-037's twenty runs that was **17.8 % of every tick the
+ * search simulated** ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)).
+ *
+ * Stated as work per tick, because that is what was being wasted and what a regression would take
+ * back. Measured in this fixture: the same budget walks **43** cells of future where waiting the
+ * backstop out walked **35**. Forty is between the two with room on both sides — and both numbers
+ * are the same search over the same maze, so what separates them is only the waiting.
+ */
+void test_a_leg_ends_the_moment_pacman_is_stuck(void)
+{
+    pacman_lookahead_report_t report;
+
+    game_start_on_normal_maze(&g_game);
+
+    (void)pacman_lookahead_decide_within(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET,
+                                         &report);
+
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT16_MESSAGE(40U, report.simulated_cells,
+                                                "the budget is going on a Pacman who has already stopped moving");
+}
+
+/* --- thinking across frames (M6 §15.6) ------------------------------------ */
+
+/* The property the whole anytime interface stands or falls on: **being interrupted must not change
+ * the answer.** A search paid for in slices is only worth having if a slice boundary is invisible
+ * to it — otherwise the player's behaviour would depend on how the frames happened to fall, and
+ * every measurement taken with one slice size would be about a different player.
+ *
+ * Stated against the one-shot call, which is the same search run without ever being asked to stop.
+ */
+void test_a_search_paid_for_in_slices_answers_what_one_paid_for_at_once_does(void)
+{
+    static const uint16_t k_slices[] = {1U, 7U, 64U, 350U};
+    uint16_t index;
+
+    game_start_on_normal_maze(&g_game);
+
+    /* Far enough in that the position is a real one: ghosts out, pellets gone in places, a search
+     * with something to choose between. */
+    for (uint16_t step = 0U; step < 300U; ++step)
+    {
+        game_set_direction(&g_game, DIRECTION_WEST);
+        game_tick(&g_game, 16U);
+    }
+
+    const direction_e at_once =
+        pacman_lookahead_decide_within(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET, NULL);
+
+    for (index = 0U; index < (uint16_t)(sizeof(k_slices) / sizeof(k_slices[0])); ++index)
+    {
+        pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET);
+
+        /* A slice of one tick cuts the search between two ticks of a single leg, which is the
+         * hardest place for it to be put down and picked up again. */
+        while (pacman_lookahead_think(k_slices[index]))
+        {
+            /* until there is nothing left that would change the answer */
+        }
+
+        TEST_ASSERT_EQUAL_MESSAGE(at_once, pacman_lookahead_get_direction(),
+                                  "a slice boundary changed what the search decided");
+    }
+}
+
+/* Given the frames a cell really lasts, the search reaches the depth it could never afford inside
+ * one — which is the entire point of paying for it in slices. */
+void test_thinking_across_frames_reaches_deeper_than_thinking_in_one(void)
+{
+    pacman_lookahead_report_t in_one_frame;
+    pacman_lookahead_report_t across_frames;
+    uint8_t frame;
+
+    game_start_on_normal_maze(&g_game);
+
+    (void)pacman_lookahead_decide_within(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_DEFAULT_TICK_BUDGET,
+                                         &in_one_frame);
+
+    pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
+
+    /* Ten, because a cell lasts 10.6 frames at level-1 speed and the shortest measured is far more
+     * than one. */
+    for (frame = 0U; frame < 10U; ++frame)
+    {
+        (void)pacman_lookahead_think(PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS);
+    }
+
+    pacman_lookahead_get_report(&across_frames);
+
+    TEST_ASSERT_GREATER_THAN_UINT8_MESSAGE(in_one_frame.reached_depth, across_frames.reached_depth,
+                                           "ten frames of thinking bought no more look-ahead than one");
+    TEST_ASSERT_NOT_EQUAL(DIRECTION_NONE, pacman_lookahead_get_direction());
+}
+
+/* There has to be a legal answer from the very first slice, because the caller sets a direction
+ * every frame and a cell can be over in one. */
+void test_the_first_slice_already_answers(void)
+{
+    game_start_on_normal_maze(&g_game);
+
+    pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
+
+    const direction_e chosen = pacman_lookahead_get_direction();
+
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(DIRECTION_NONE, chosen, "a search that has not thought yet still owes a move");
+    TEST_ASSERT_TRUE(pacman_may_step(&g_game.pacman, game_get_playfield(&g_game), chosen));
+}
+
+void test_a_run_that_is_not_running_is_not_thought_about(void)
+{
+    /* Never started. Restarting on it must not leave `think` with work to do, and the answer to
+     * "which way" is still that there is no way. */
+    pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
+
+    TEST_ASSERT_FALSE(pacman_lookahead_think(PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS));
+    TEST_ASSERT_EQUAL(DIRECTION_NONE, pacman_lookahead_get_direction());
+}
+
+/* The same promise #test_a_search_draws_no_random_numbers makes, made again for the interface that
+ * is actually in the game — and it is the sharper case, because this one holds the root for as long
+ * as a cell lasts while the played game ticks underneath it. */
+void test_thinking_across_frames_draws_no_random_numbers(void)
+{
+    uint16_t step;
+
+    game_start_on_normal_maze(&g_game);
+
+    for (step = 0U; step < 200U; ++step)
+    {
+        game_set_direction(&g_game, DIRECTION_WEST);
+        game_tick(&g_game, 16U);
+    }
+
+    pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
+
+    const uint32_t drawn_before = g_draw_count;
+
+    for (step = 0U; step < 10U; ++step)
+    {
+        (void)pacman_lookahead_think(PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS);
+    }
+
+    TEST_ASSERT_EQUAL_UINT32(drawn_before, g_draw_count);
+}
+
 /* --- it stops when the budget is gone ------------------------------------- */
 
 void test_the_report_says_what_the_search_spent(void)
@@ -376,4 +524,12 @@ void test_deciding_about_nothing_asserts(void)
     ASSERT_PROBE_EXPECT(pacman_lookahead_decide_within(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH + 1U, 8U, NULL),
                         "in_depth <= PACMAN_LOOKAHEAD_MAX_DEPTH");
     ASSERT_PROBE_EXPECT(pacman_lookahead_decide_within(&g_game, 1U, 0U, NULL), "in_tick_budget > 0U");
+
+    ASSERT_PROBE_EXPECT(pacman_lookahead_restart(NULL, 1U, 8U), "in_game != NULL");
+    ASSERT_PROBE_EXPECT(pacman_lookahead_restart(&g_game, 0U, 8U), "in_depth > 0U");
+    ASSERT_PROBE_EXPECT(pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH + 1U, 8U),
+                        "in_depth <= PACMAN_LOOKAHEAD_MAX_DEPTH");
+    ASSERT_PROBE_EXPECT(pacman_lookahead_restart(&g_game, 1U, 0U), "in_tick_budget > 0U");
+    ASSERT_PROBE_EXPECT((void)pacman_lookahead_think(0U), "in_slice_ticks > 0U");
+    ASSERT_PROBE_EXPECT(pacman_lookahead_get_report(NULL), "out_report != NULL");
 }

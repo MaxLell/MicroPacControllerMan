@@ -317,10 +317,14 @@ Anyone who does pick this up should start with `perf record` on a single-worker 
 another microbenchmark; this entry exists because the first microbenchmark was measured against the
 unoptimised library and overstated the state message by a factor of five.
 
-### RF-019
+### RF-019 — done, 2026-08-17
 
-**The look-ahead search spends a sixth of its budget watching a wall, and it is not deferred
-because it is small — it is waiting on a decision the owner has not taken yet.**
+**The look-ahead search spent a sixth of its budget watching a wall.** Built on the owner's
+instruction together with the other lever named below, and measured on the board:
+[M6 §16](Design/M6-Pacman-AI.md). `pacman_is_stuck` is the rule, written as the negation of
+`pacman_advance` so the two cannot drift; the leg walk asks it instead of waiting out the backstop.
+Worth **+25 % of score over a hundred draws** at an unchanged frame cost. What follows is the entry
+as it was written.
 
 `prv_walk_to_next_decision` sets a direction and lets the game steer. When that direction runs into
 a wall — a corridor that bends, a branch chosen a moment too early — Pacman stops, and the walk has
@@ -340,3 +344,8 @@ frame, and the two are worth **9,553** together. Which of them to build, and whe
 at all, is [DEC-051](PrePlanning/11-Decisions-and-As-Built.md)'s question to reopen rather than
 this file's to answer. Anything picked up here needs `ott lookahead_cost` re-run on the board: the
 argument that the frame cost is unchanged is a host measurement.
+
+**Both were built. The estimate of the pair was low**: together they are worth 11,652 over a hundred
+draws, not 9,553, because the second lever buys more ticks than the three-times-the-budget row that
+figure came from. The board was re-run and `ott lookahead_cost` now measures a *frame* rather than
+a decision, which is the thing that has to fit once a decision spans ten of them.

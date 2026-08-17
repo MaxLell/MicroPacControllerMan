@@ -78,6 +78,24 @@ bool pacman_advance(pacman_t* inout_pacman, const playfield_t* in_playfield);
  */
 bool pacman_may_step(const pacman_t* in_pacman, const playfield_t* in_playfield, direction_e in_direction);
 
+/*! \brief Whether Pacman will stay where he is until somebody gives him a new intent.
+ *
+ * True when neither the queued turn nor the way he faces is open — which is exactly the case
+ * #pacman_advance returns `false` on, and nothing that happens to the *rest* of the game changes
+ * it. A ghost walking past does not unstick him; only a new intent does.
+ *
+ * Public for the same reason #pacman_may_step is, and for a sharper one. A look-ahead search
+ * drives a leg by setting one direction and letting the game steer, so it is the one caller that
+ * can strand him — and without this it cannot tell "he has stopped for good" from "his step is not
+ * due yet" except by waiting, which cost it a sixth of its budget
+ * ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md), RF-019).
+ *
+ * \param[in]       in_pacman: instance, must not be `NULL`
+ * \param[in]       in_playfield: the maze, must not be `NULL`
+ * \return          `true` when no further move will happen on its own
+ */
+bool pacman_is_stuck(const pacman_t* in_pacman, const playfield_t* in_playfield);
+
 /*! \brief The cell Pacman occupies. */
 cell_t pacman_get_cell(const pacman_t* in_pacman);
 

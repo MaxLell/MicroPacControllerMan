@@ -53,6 +53,47 @@ static void prv_on_frame_due(void)
     sw_timer_start(&g_frame_timer, GAME_SESSION_FRAME_PERIOD_MS, prv_on_frame_due);
 }
 
+/* Whether Pacman has reached a cell the agent has not answered for yet. */
+static bool prv_is_new_cell(const msg_game_state_t* const in_state)
+{
+    const bool is_new = !g_has_ai_decided || (in_state->pacman.column != g_ai_decided_column)
+                        || (in_state->pacman.row != g_ai_decided_row);
+
+    if (is_new)
+    {
+        g_has_ai_decided = true;
+        g_ai_decided_column = in_state->pacman.column;
+        g_ai_decided_row = in_state->pacman.row;
+    }
+
+    return is_new;
+}
+
+/* The search thinks for as long as the cell lasts, a slice a frame.
+ *
+ * **A decision belongs to a cell, and a cell is about ten frames long.** The search used to do all
+ * of its thinking in the first of them and idle through the rest, which bought 1.63 junctions of
+ * look-ahead where the same code reaches three given the time
+ * ([M6 §15.6](../../../Docu/Design/M6-Pacman-AI.md)). It is rooted where it always was — the board
+ * as Pacman entered the cell — and it takes effect where it always did, because `pacman_set_intent`
+ * queues and he adopts the queue when his step falls due. What changed is only how deep the answer
+ * is by the time he steps.
+ *
+ * The direction is handed over on **every** frame rather than only when it changes. It costs
+ * nothing — the game stores an intent — and it is what makes a deeper answer arriving four frames
+ * in replace a shallower one that was already on the queue. */
+static void prv_service_lookahead(const msg_game_state_t* const in_state)
+{
+    if (prv_is_new_cell(in_state))
+    {
+        pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
+    }
+
+    (void)pacman_lookahead_think(PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS);
+
+    game_set_direction(&g_game, pacman_lookahead_get_direction());
+}
+
 /* Let the agent choose, if it is playing and Pacman has reached a cell it has not answered for.
  *
  * Asking `game` for the direction rather than going through #game_session_set_direction on
@@ -64,26 +105,22 @@ static void prv_service_ai(const msg_game_state_t* const in_state)
         return;
     }
 
-    const bool is_new_cell = !g_has_ai_decided || (in_state->pacman.column != g_ai_decided_column)
-                             || (in_state->pacman.row != g_ai_decided_row);
+    /* The two machines are asked the same question about the same board and their answers go to
+     * the same door. What differs is when they are asked: a network answers in microseconds and is
+     * asked once a cell, a search answers better the longer it is left. */
+    if (g_player == GAME_SESSION_PLAYER_LOOKAHEAD)
+    {
+        prv_service_lookahead(in_state);
 
-    if (!is_new_cell)
+        return;
+    }
+
+    if (!prv_is_new_cell(in_state))
     {
         return;
     }
 
-    g_has_ai_decided = true;
-    g_ai_decided_column = in_state->pacman.column;
-    g_ai_decided_row = in_state->pacman.row;
-
-    /* The two machines are asked the same question at the same moment and their answers go to the
-     * same door. That is what makes swapping between them mid-run a comparison rather than two
-     * different experiments. */
-    const direction_e chosen = (g_player == GAME_SESSION_PLAYER_LOOKAHEAD)
-                                   ? pacman_lookahead_decide(&g_game)
-                                   : pacman_ai_decide(in_state, game_get_playfield(&g_game));
-
-    game_set_direction(&g_game, chosen);
+    game_set_direction(&g_game, pacman_ai_decide(in_state, game_get_playfield(&g_game)));
 }
 
 /* ==========================================================================
