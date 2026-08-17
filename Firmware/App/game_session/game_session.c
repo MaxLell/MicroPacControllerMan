@@ -83,12 +83,17 @@ static bool prv_is_new_cell(const msg_game_state_t* const in_state)
  * in replace a shallower one that was already on the queue. */
 static void prv_service_lookahead(const msg_game_state_t* const in_state)
 {
-    if (prv_is_new_cell(in_state))
+    const bool is_new_cell = prv_is_new_cell(in_state);
+
+    if (is_new_cell)
     {
         pacman_lookahead_restart(&g_game, PACMAN_LOOKAHEAD_MAX_DEPTH, PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET);
     }
 
-    (void)pacman_lookahead_think(PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS);
+    /* The first frame of a decision thinks less, because it has already spent milliseconds this frame
+     * on the root copy and the food field — see #PACMAN_LOOKAHEAD_RESTART_SLICE_TICKS. */
+    (void)pacman_lookahead_think(is_new_cell ? PACMAN_LOOKAHEAD_RESTART_SLICE_TICKS
+                                             : PACMAN_LOOKAHEAD_FRAME_SLICE_TICKS);
 
     game_set_direction(&g_game, pacman_lookahead_get_direction());
 }

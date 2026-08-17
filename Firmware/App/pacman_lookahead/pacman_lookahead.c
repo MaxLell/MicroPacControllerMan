@@ -163,11 +163,38 @@ typedef struct
 {
     uint8_t ghost_distance;
     uint8_t prey_distance;
-    uint8_t food_distance;
     uint8_t escape_count;
 } pacman_lookahead_scan_t;
 
 #define PACMAN_LOOKAHEAD_CELL_COUNT ((uint16_t)(PLAYFIELD_WIDTH * PLAYFIELD_HEIGHT))
+
+/*! \brief Every cell's maze distance to the nearest uneaten pellet, capped.
+ *
+ * Built once when a search begins and read at every leaf, which is what makes it affordable where the
+ * leaf scan has to be capped: **pellets do not move.** They only disappear, so a field taken at the
+ * root is right about everything except the handful the branch itself has eaten — and those the branch
+ * was already paid for in score.
+ *
+ * It is what the leaf scan could not do. The scan is bounded to
+ * #PACMAN_LOOKAHEAD_SCAN_CELLS because it runs forty-five times a decision; the last pellets of a
+ * level are further away than that, so a leaf standing among cleared corridors saw nothing at all and
+ * every branch was worth the same. That is the wandering the owner noticed and §18 measured.
+ */
+static uint8_t g_food_distance[PACMAN_LOOKAHEAD_CELL_COUNT];
+
+/*! \brief The pellet count the field was built at, so it is rebuilt only when it is wrong.
+ *
+ * **The expensive case and the case that needs no rebuild are the same case**, which is what makes
+ * this more than a micro-optimisation. A full maze stops the frontier after a cell or two, because
+ * every cell is next to a pellet; an almost-empty one lets it expand across all 868, and on the board
+ * that took the worst frame to 14 ms of the 13 it has. But an almost-empty maze is one where nothing
+ * is being eaten — that is the wandering §18 measured — so the field from the last pellet eaten is
+ * still exactly right, and there is nothing to rebuild.
+ *
+ * The count is the whole of the test: pellets only ever disappear, so a count that has not changed
+ * means the same pellets are in the same places. A level change raises it, which differs and so
+ * rebuilds. */
+static uint16_t g_food_field_pellets = 0xFFFFU;
 
 /*! \brief The breadth-first scan's own memory, stamped rather than cleared.
  *
@@ -208,11 +235,9 @@ static void prv_scan_around(const game_t* const in_game, pacman_lookahead_scan_t
 
     bool is_looking_for_killer = true;
     bool is_looking_for_prey = false;
-    bool is_looking_for_food = true;
 
     out_scan->ghost_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
     out_scan->prey_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
-    out_scan->food_distance = (uint8_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
     out_scan->escape_count = 0U;
 
     for (index = 0U; index < GHOST_COUNT; ++index)
@@ -281,18 +306,15 @@ static void prv_scan_around(const game_t* const in_game, pacman_lookahead_scan_t
             }
         }
 
-        if (is_looking_for_food && (playfield_get_pellet(playfield, cell) != PLAYFIELD_PELLET_NONE))
-        {
-            out_scan->food_distance = depth;
-            is_looking_for_food = false;
-        }
-
         /* **Everything it came for is known, so it stops.** Because the walk is breadth-first the
          * first of a kind it meets is the nearest one, and there is nothing a wider sweep could
          * revise. That is what makes the scan affordable at forty-five leaves a decision: the board
          * measured a full-radius sweep at 23 ms of a frame that has 13, and the usual exit is a
-         * handful of cells. */
-        if (!is_looking_for_killer && !is_looking_for_prey && !is_looking_for_food)
+         * handful of cells.
+         *
+         * **Food is no longer one of the things it looks for**, which made it cheaper again: the food
+         * field does that once a decision instead, without a cap. */
+        if (!is_looking_for_killer && !is_looking_for_prey)
         {
             break;
         }
@@ -314,6 +336,94 @@ static void prv_scan_around(const game_t* const in_game, pacman_lookahead_scan_t
 
             g_scan_mark[next_index] = g_scan_stamp;
             g_scan_depth[next_index] = (uint8_t)(depth + 1U);
+            g_scan_queue[tail] = next_index;
+            ++tail;
+        }
+    }
+}
+
+/* Fill #g_food_distance from a position: one breadth-first walk outward from **every** remaining
+ * pellet at once.
+ *
+ * Multi-source, which is what makes one walk answer for every cell: seed the queue with each pellet at
+ * distance zero and the frontier arrives at each cell by its shortest route from the *nearest* of
+ * them. Asking per cell, or per leaf, would be hundreds of walks over the same maze.
+ *
+ * Uncapped in radius and bounded only by the maze, because that is the point — the cells this has to
+ * reach are the far ones, and the whole field is 868 cells against a decision's ~2,000 simulated
+ * ticks. Cells with no pellet reachable read #PACMAN_LOOKAHEAD_FOOD_HORIZON, which is what "nothing
+ * left that way" already meant. */
+static void prv_build_food_field(const game_t* const in_game)
+{
+    const playfield_t* const playfield = game_get_playfield(in_game);
+    const uint16_t pellets = playfield_get_remaining_pellet_count(playfield);
+    uint16_t head = 0U;
+    uint16_t tail = 0U;
+    int16_t x;
+    int16_t y;
+    uint8_t index;
+
+    if (pellets == g_food_field_pellets)
+    {
+        return;
+    }
+
+    g_food_field_pellets = pellets;
+
+    for (uint16_t cell = 0U; cell < PACMAN_LOOKAHEAD_CELL_COUNT; ++cell)
+    {
+        g_food_distance[cell] = (uint8_t)PACMAN_LOOKAHEAD_FOOD_HORIZON;
+    }
+
+    for (y = 0; y < PLAYFIELD_HEIGHT; ++y)
+    {
+        for (x = 0; x < PLAYFIELD_WIDTH; ++x)
+        {
+            cell_t cell;
+
+            cell.x = x;
+            cell.y = y;
+
+            if (playfield_get_pellet(playfield, cell) == PLAYFIELD_PELLET_NONE)
+            {
+                continue;
+            }
+
+            g_food_distance[prv_cell_index(cell)] = 0U;
+            g_scan_queue[tail] = prv_cell_index(cell);
+            ++tail;
+        }
+    }
+
+    while (head < tail)
+    {
+        const uint16_t here = g_scan_queue[head];
+        const uint8_t depth = g_food_distance[here];
+        cell_t cell;
+
+        ++head;
+
+        cell.x = (int16_t)(here % PLAYFIELD_WIDTH);
+        cell.y = (int16_t)(here / PLAYFIELD_WIDTH);
+
+        if (depth >= (uint8_t)(PACMAN_LOOKAHEAD_FOOD_HORIZON - 1U))
+        {
+            continue;
+        }
+
+        for (index = 0U; index < PACMAN_LOOKAHEAD_BRANCH_COUNT_VALUE; ++index)
+        {
+            const cell_t next = playfield_wrap_cell(playfield_step(cell, g_branch_order[index]));
+            const uint16_t next_index = prv_cell_index(next);
+
+            /* Already at or below this depth, so the frontier has been here by a shorter route — or it
+             * is a wall, which no route passes through. The tunnel wraps, because Pacman does. */
+            if (!playfield_is_walkable(playfield, next) || (g_food_distance[next_index] <= (uint8_t)(depth + 1U)))
+            {
+                continue;
+            }
+
+            g_food_distance[next_index] = (uint8_t)(depth + 1U);
             g_scan_queue[tail] = next_index;
             ++tail;
         }
@@ -343,6 +453,7 @@ static int32_t prv_evaluate(const game_t* const in_leaf, const game_t* const in_
     const int32_t points = (int32_t)game_get_score(in_leaf) - (int32_t)game_get_score(in_root);
     const int32_t lives_lost = (int32_t)game_get_lives(in_root) - (int32_t)game_get_lives(in_leaf);
     const int32_t radius = (int32_t)PACMAN_LOOKAHEAD_SCAN_RADIUS;
+    const int32_t food_horizon = (int32_t)PACMAN_LOOKAHEAD_FOOD_HORIZON;
 
     pacman_lookahead_scan_t scan;
 
@@ -351,7 +462,7 @@ static int32_t prv_evaluate(const game_t* const in_leaf, const game_t* const in_
     return (points * g_weights.point) - (lives_lost * g_weights.death)
            + ((int32_t)scan.ghost_distance * g_weights.threat)
            + ((radius - (int32_t)scan.prey_distance) * g_weights.prey)
-           + ((radius - (int32_t)scan.food_distance) * g_weights.food)
+           + ((food_horizon - (int32_t)g_food_distance[prv_cell_index(game_get_pacman_cell(in_leaf))]) * g_weights.food)
            + ((int32_t)scan.escape_count * g_weights.escape);
 }
 
@@ -671,6 +782,12 @@ void pacman_lookahead_restart(const game_t* in_game, uint8_t in_depth, uint16_t 
     g_is_search_finished = (game_get_state(in_game) != GAME_STATE_RUNNING);
 
     game_clone(&g_root, in_game);
+
+    /* Once, here, rather than at every leaf: pellets do not move, so the field a leaf reads is the
+     * root's and is right about everything but the handful the branch itself ate — which the branch
+     * was already paid for in score. It shares the scan's queue, which is idle at this moment and
+     * large enough for the whole maze. */
+    prv_build_food_field(in_game);
 
     /* The root is a simulation too — it is the board every clone is copied from, and a root that
      * drew would spend the played game's numbers before any branch was tried. */

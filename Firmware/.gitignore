@@ -29,8 +29,12 @@ __pycache__/
 # What a training run leaves behind. `winner.json` is kept, because it is what the firmware's
 # weights were generated from; a checkpoint is a pickled population, only useful to resume the run
 # that wrote it, and a log is a log.
-Training/checkpoint-neat-*
-Training/train.log
+# What a weight fit leaves behind: its log, its stdout, and the winner it is still improving.
+# The fit's *result* is adopted by hand into pacman_lookahead.c's defaults, so none of this is a
+# build input and none of it belongs in the history — a run in progress rewrites all three.
+Training/fit_lookahead.log
+Training/fit_stdout.txt
+Training/lookahead_weights.json
 
 # What `campaign.py` leaves behind: one log and one winner per run — a working area, not a record,
 # since the winner that gets adopted is exported over `winner.json`.
@@ -39,5 +43,3 @@ Training/train.log
 # what M6 §14 quotes, and a campaign that ran on another machine can otherwise only be reported by
 # retyping its numbers. Written as `directory/*` with an exception rather than `directory/`, because
 # git does not descend into an excluded directory and the negation would never be reached.
-Training/campaign/*
-!Training/campaign/summary.md
