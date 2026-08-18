@@ -30,8 +30,8 @@ from concurrent.futures import ProcessPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BINARY = os.path.join(HERE, os.pardir, "build-host", "pacman_lookahead_fitness")
-OUT = os.path.join(HERE, "lookahead_weights.json")
-LOG = os.path.join(HERE, "fit_lookahead.log")
+OUT = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + "_weights.json")
+LOG = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + ".log")
 
 NAMES = ["point", "death", "threat", "prey", "food", "escape"]
 START = [2, 70791, 13, 53, 2, 10]   # what the firmware ships; a fit starts from it, not from nothing
@@ -76,7 +76,7 @@ def mutate(weights, steps, rng):
 
 
 def main():
-    rng = random.Random(20260817)
+    rng = random.Random(int(os.environ.get("FIT_SEED", "20260817")))
     best = list(START)
     steps = list(STEP)
 
@@ -95,9 +95,9 @@ def main():
     say(f"incumbent (the hand-picked defaults): {best_score:.0f}, level {best_levels:.2f}")
 
     generation = 0
-    # All of them: the driver itself does nothing but wait, so leaving a core for it wastes a quarter
-    # of a four-core machine.
-    workers = max(1, os.cpu_count() or 2)
+    # `FIT_WORKERS` so two independent runs can share a four-core machine — the driver itself does
+    # nothing but wait, so the cores are the only thing worth dividing.
+    workers = int(os.environ.get("FIT_WORKERS", str(max(1, os.cpu_count() or 2))))
 
     while time.time() - started < BUDGET_S:
         generation += 1

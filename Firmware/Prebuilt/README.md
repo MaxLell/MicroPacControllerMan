@@ -14,8 +14,8 @@ rather than assuming.
 
 | | |
 |---|---|
-| built from | the commit that made the menu a page per question (DEC-056), on `feat/lookahead-evaluation` |
-| built on | 2026-08-17 |
+| built from | the commit that spread the food field across frames, on `feat/lookahead-food-field` |
+| built on | 2026-08-18 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
 | flash | 109,068 B of 504 kB — 21.1 % |
@@ -24,8 +24,8 @@ rather than assuming.
 | `pacman.bin` | sha256 `9b4a9bddc4c23eea23e847152362ba0534e677e962cf16c203ada0411aa2ff12` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
-and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
-`lookahead_cost` — eleven tests. The host side is green too: 448 unit tests, both builds.
+and the whole automatic suite passed — eleven tests, `high_score` and `lookahead_cost` among them.
+The host side is green too: 448 unit tests, both builds.
 
 The `.elf` is **not** here. It is 2.3 MB, almost all of it debug information, and nothing flashes
 from it that the two files here cannot flash — it is worth having only with a debugger attached, and
@@ -105,9 +105,8 @@ ott lookahead_cost
 ```
 
 The board reboots into the test, plays two thousand *frames* of a real run and prints what one
-frame's slice of thinking cost — expect a mean near 4.5 ms and a worst near 11 ms of the 13 a frame
-has spare, ten frames and about 1,800 simulated ticks to a decision, and 2.8 of the 3 junctions
-reached. It measures frames rather than decisions because since DEC-052 a decision is deliberately
+frame's slice of thinking cost — expect a mean near 5 ms and a worst near 12 ms of the 13 a frame has
+spare, ten frames and about 1,900 simulated ticks to a decision, and 2.8 of the 3 junctions reached. It measures frames rather than decisions because since DEC-052 a decision is deliberately
 larger than a frame, so the slice is the thing that has to fit. `reset` returns it to the game. `help` lists the rest; `ott pacman` starts a run with no
 menu in front of it.
 

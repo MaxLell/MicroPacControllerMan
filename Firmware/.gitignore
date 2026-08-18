@@ -32,9 +32,9 @@ __pycache__/
 # What a weight fit leaves behind: its log, its stdout, and the winner it is still improving.
 # The fit's *result* is adopted by hand into pacman_lookahead.c's defaults, so none of this is a
 # build input and none of it belongs in the history — a run in progress rewrites all three.
-Training/fit_lookahead.log
-Training/fit_stdout.txt
-Training/lookahead_weights.json
+Training/*.log
+Training/*_stdout.txt
+Training/*_weights.json
 
 # What `campaign.py` leaves behind: one log and one winner per run — a working area, not a record,
 # since the winner that gets adopted is exported over `winner.json`.
