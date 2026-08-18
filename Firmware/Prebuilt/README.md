@@ -18,10 +18,10 @@ rather than assuming.
 | built on | 2026-08-17 |
 | target | STM32U545RE-Q Nucleo-64, TrustZone off |
 | toolchain | gcc-arm-none-eabi 13.2.1, CMake 3.28, `cmake -B build` (Debug) |
-| flash | 108,560 B of 504 kB — 21.0 % |
-| RAM | 230,920 B of 256 kB — 88.1 %, plus 12,008 B of SRAM4 — 73.3 % |
-| `pacman.hex` | sha256 `960e494020fd0ec643f479b67cd669249f1f0dc81847e25f6d026ed5bd036a02` |
-| `pacman.bin` | sha256 `8b7fc504471a74363ec98ae920e82499438e3c3e1b1c87bf94f4fa1bbceba898` |
+| flash | 109,068 B of 504 kB — 21.1 % |
+| RAM | 234,352 B of 256 kB — 89.4 %, plus 12,008 B of SRAM4 — 73.3 % |
+| `pacman.hex` | sha256 `03b66e2a823d22eef62dabf3be7a871502062167be2c75fe455eaf3e8dfb9af2` |
+| `pacman.bin` | sha256 `9b4a9bddc4c23eea23e847152362ba0534e677e962cf16c203ada0411aa2ff12` |
 
 **Verified on hardware, unlike the image this replaces.** This exact build was flashed to the board
 and the whole automatic suite passed — thirteen tests including `ai_equivalence`, `high_score` and
@@ -53,6 +53,9 @@ Use `pacman.hex` for either. `pacman.bin` is the same image without addresses in
 written to `0x08000000` explicitly; it is here only for a tool that insists on raw binary.
 
 ## What to press
+
+`PAC-MAN` and the row of actors are at the top of every screen now, and the loading screen lasts one
+second rather than three.
 
 **The menu asks one question a screen.** The options on a screen start at the same column — left
 aligned to each other, the block of them centred — so the cursor runs straight down. Up and down move

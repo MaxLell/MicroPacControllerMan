@@ -78,8 +78,20 @@ int main(int argc, char** argv)
         bool first_cell = true;
         unsigned t = 0U;
 
-        /* A ceiling on simulated time, so one lucky policy cannot hold a whole generation up. */
-        while ((game_get_state(&g) == GAME_STATE_RUNNING) && (t < 120000U))
+        /* **Points in a fixed time, not points however long it takes.**
+         *
+         * This was a ceiling of 120,000 ticks — 32 minutes of game time — chosen when a run ended long
+         * before it. It does not any more: a candidate that weights survival heavily simply *hides*,
+         * reaches the ceiling on all sixteen runs, and holds a core for hours. Measured, one
+         * generation of nine candidates took **fourteen hours** where the incumbent's sixteen runs
+         * took two and a half minutes.
+         *
+         * Thirty thousand ticks is eight minutes of game time, and it changes what is being fitted
+         * rather than only what it costs — which is the point. A fitness with no time limit rewards
+         * a policy that survives without scoring; this one rewards getting on with it, which is
+         * exactly the complaint that started this branch: a third of every level was being spent
+         * wandering after the last few pellets. */
+        while ((game_get_state(&g) == GAME_STATE_RUNNING) && (t < 30000U))
         {
             game_tick(&g, 16U);
             ++t;

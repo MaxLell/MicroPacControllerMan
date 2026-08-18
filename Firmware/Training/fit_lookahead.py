@@ -95,7 +95,9 @@ def main():
     say(f"incumbent (the hand-picked defaults): {best_score:.0f}, level {best_levels:.2f}")
 
     generation = 0
-    workers = max(1, (os.cpu_count() or 2) - 1)
+    # All of them: the driver itself does nothing but wait, so leaving a core for it wastes a quarter
+    # of a four-core machine.
+    workers = max(1, os.cpu_count() or 2)
 
     while time.time() - started < BUDGET_S:
         generation += 1

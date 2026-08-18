@@ -93,8 +93,13 @@ typedef enum
 /*! \brief How long the panel stays dark before the title appears (NFR-005). */
 #define SHELL_LOGO_DELAY_MS (200U)
 
-/*! \brief How long the loading screen lasts in total, the delay included (NFR-001). */
-#define SHELL_LOADING_MS    (3000U)
+/*! \brief How long the loading screen lasts in total, the delay included (NFR-001).
+ *
+ * One second, not three, at the owner's request. NFR-001 asks for *no more than* three, so this is
+ * well inside it — and the screen has less to say than it used to: since the masthead is on every
+ * screen, the loading screen is no longer the only place the title is shown, it is only the moment
+ * before the menu. */
+#define SHELL_LOADING_MS    (1000U)
 
 /*! \brief How long the score screen stays up before the menu returns (FR-023). */
 #define SHELL_SCORE_MS      (2000U)

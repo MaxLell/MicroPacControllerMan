@@ -180,7 +180,23 @@ typedef struct
  * level are further away than that, so a leaf standing among cleared corridors saw nothing at all and
  * every branch was worth the same. That is the wandering the owner noticed and §18 measured.
  */
-static uint8_t g_food_distance[PACMAN_LOOKAHEAD_CELL_COUNT];
+static uint8_t g_food[2][PACMAN_LOOKAHEAD_CELL_COUNT];
+
+/*! \brief Which of the two is finished and may be read, and which is being filled.
+ *
+ * **Two, because the walk is spread across frames.** One 868-cell walk in a single frame took the
+ * worst frame to 14 ms of the 13 it has — and shaving a constant to fit it was done twice and had run
+ * out of room. So the walk is resumable: a bounded number of cells per `think`, into the *other*
+ * field, and the two swap when it finishes. Until then every leaf reads the last finished one, which
+ * is stale by however many pellets have been eaten since — a handful, and the branch that ate them was
+ * already paid in score.
+ *
+ * It is the same answer as everything else in this module: what a frame owes is milliseconds, so the
+ * work is cut into pieces a frame can hold rather than the answer being cut down to fit one. */
+static uint8_t g_food_ready;
+static uint16_t g_food_head;
+static uint16_t g_food_tail;
+static bool g_food_is_building;
 
 /*! \brief The pellet count the field was built at, so it is rebuilt only when it is wrong.
  *
@@ -205,6 +221,10 @@ static uint16_t g_food_field_pellets = 0xFFFFU;
 static uint16_t g_scan_mark[PACMAN_LOOKAHEAD_CELL_COUNT];
 static uint16_t g_scan_stamp;
 static uint16_t g_scan_queue[PACMAN_LOOKAHEAD_CELL_COUNT];
+
+/*! \brief The food walk's queue, which cannot be the scan's: the walk now spans frames, and a leaf
+ *         scan runs in every one of them. */
+static uint16_t g_food_queue[PACMAN_LOOKAHEAD_CELL_COUNT];
 
 static uint16_t prv_cell_index(cell_t in_cell)
 {
@@ -342,37 +362,39 @@ static void prv_scan_around(const game_t* const in_game, pacman_lookahead_scan_t
     }
 }
 
-/* Fill #g_food_distance from a position: one breadth-first walk outward from **every** remaining
- * pellet at once.
+/* Begin a walk outward from **every** remaining pellet at once, if the last one is out of date.
  *
  * Multi-source, which is what makes one walk answer for every cell: seed the queue with each pellet at
- * distance zero and the frontier arrives at each cell by its shortest route from the *nearest* of
- * them. Asking per cell, or per leaf, would be hundreds of walks over the same maze.
+ * distance zero and the frontier reaches each cell by its shortest route from the *nearest* of them.
+ * Asking per cell, or per leaf, would be hundreds of walks over the same maze.
  *
- * Uncapped in radius and bounded only by the maze, because that is the point — the cells this has to
- * reach are the far ones, and the whole field is 868 cells against a decision's ~2,000 simulated
- * ticks. Cells with no pellet reachable read #PACMAN_LOOKAHEAD_FOOD_HORIZON, which is what "nothing
- * left that way" already meant. */
-static void prv_build_food_field(const game_t* const in_game)
+ * **The expensive case and the case needing no rebuild are the same case.** A full maze stops the
+ * frontier after a cell or two, because every cell is next to a pellet; an almost-empty one lets it
+ * cross all 868 — and an almost-empty maze is one where nothing is being eaten, which is the wandering
+ * §18 measured, so the last field is still exactly right. The pellet count is the whole of the test:
+ * pellets only ever disappear, so a count that has not moved means the same pellets in the same
+ * places. A level change raises it, which differs, and so rebuilds. */
+static void prv_start_food_field(const game_t* const in_game)
 {
     const playfield_t* const playfield = game_get_playfield(in_game);
     const uint16_t pellets = playfield_get_remaining_pellet_count(playfield);
-    uint16_t head = 0U;
-    uint16_t tail = 0U;
+    uint8_t* const building = g_food[g_food_ready ^ 1U];
     int16_t x;
     int16_t y;
-    uint8_t index;
 
-    if (pellets == g_food_field_pellets)
+    if ((pellets == g_food_field_pellets) || g_food_is_building)
     {
         return;
     }
 
     g_food_field_pellets = pellets;
+    g_food_head = 0U;
+    g_food_tail = 0U;
+    g_food_is_building = true;
 
     for (uint16_t cell = 0U; cell < PACMAN_LOOKAHEAD_CELL_COUNT; ++cell)
     {
-        g_food_distance[cell] = (uint8_t)PACMAN_LOOKAHEAD_FOOD_HORIZON;
+        building[cell] = (uint8_t)PACMAN_LOOKAHEAD_FOOD_HORIZON;
     }
 
     for (y = 0; y < PLAYFIELD_HEIGHT; ++y)
@@ -389,19 +411,39 @@ static void prv_build_food_field(const game_t* const in_game)
                 continue;
             }
 
-            g_food_distance[prv_cell_index(cell)] = 0U;
-            g_scan_queue[tail] = prv_cell_index(cell);
-            ++tail;
+            building[prv_cell_index(cell)] = 0U;
+            g_food_queue[g_food_tail] = prv_cell_index(cell);
+            ++g_food_tail;
         }
     }
+}
 
-    while (head < tail)
+/* Carry the walk on for at most `in_cells` cells, and swap the fields when it finishes.
+ *
+ * The bound is what makes the frame's promise hold: every cell a walk visits costs the same, so cells
+ * are the unit, exactly as they are for the leaf scan. Nothing reads the half-built field — the swap
+ * is the only moment it becomes visible — so a frame that runs out mid-walk leaves a *complete*, if
+ * slightly older, answer in place. */
+static void prv_advance_food_field(const game_t* const in_game, uint16_t in_cells)
+{
+    const playfield_t* const playfield = game_get_playfield(in_game);
+    uint8_t* const building = g_food[g_food_ready ^ 1U];
+    uint16_t done = 0U;
+
+    if (!g_food_is_building)
     {
-        const uint16_t here = g_scan_queue[head];
-        const uint8_t depth = g_food_distance[here];
-        cell_t cell;
+        return;
+    }
 
-        ++head;
+    while ((g_food_head < g_food_tail) && (done < in_cells))
+    {
+        const uint16_t here = g_food_queue[g_food_head];
+        const uint8_t depth = building[here];
+        cell_t cell;
+        uint8_t index;
+
+        ++g_food_head;
+        ++done;
 
         cell.x = (int16_t)(here % PLAYFIELD_WIDTH);
         cell.y = (int16_t)(here / PLAYFIELD_WIDTH);
@@ -418,15 +460,21 @@ static void prv_build_food_field(const game_t* const in_game)
 
             /* Already at or below this depth, so the frontier has been here by a shorter route — or it
              * is a wall, which no route passes through. The tunnel wraps, because Pacman does. */
-            if (!playfield_is_walkable(playfield, next) || (g_food_distance[next_index] <= (uint8_t)(depth + 1U)))
+            if (!playfield_is_walkable(playfield, next) || (building[next_index] <= (uint8_t)(depth + 1U)))
             {
                 continue;
             }
 
-            g_food_distance[next_index] = (uint8_t)(depth + 1U);
-            g_scan_queue[tail] = next_index;
-            ++tail;
+            building[next_index] = (uint8_t)(depth + 1U);
+            g_food_queue[g_food_tail] = next_index;
+            ++g_food_tail;
         }
+    }
+
+    if (g_food_head >= g_food_tail)
+    {
+        g_food_ready ^= 1U;
+        g_food_is_building = false;
     }
 }
 
@@ -462,7 +510,8 @@ static int32_t prv_evaluate(const game_t* const in_leaf, const game_t* const in_
     return (points * g_weights.point) - (lives_lost * g_weights.death)
            + ((int32_t)scan.ghost_distance * g_weights.threat)
            + ((radius - (int32_t)scan.prey_distance) * g_weights.prey)
-           + ((food_horizon - (int32_t)g_food_distance[prv_cell_index(game_get_pacman_cell(in_leaf))]) * g_weights.food)
+           + ((food_horizon - (int32_t)g_food[g_food_ready][prv_cell_index(game_get_pacman_cell(in_leaf))])
+              * g_weights.food)
            + ((int32_t)scan.escape_count * g_weights.escape);
 }
 
@@ -783,11 +832,10 @@ void pacman_lookahead_restart(const game_t* in_game, uint8_t in_depth, uint16_t 
 
     game_clone(&g_root, in_game);
 
-    /* Once, here, rather than at every leaf: pellets do not move, so the field a leaf reads is the
-     * root's and is right about everything but the handful the branch itself ate — which the branch
-     * was already paid for in score. It shares the scan's queue, which is idle at this moment and
-     * large enough for the whole maze. */
-    prv_build_food_field(in_game);
+    /* Started here and carried on a slice at a time by #pacman_lookahead_think: pellets do not move,
+     * so the field a leaf reads is right about everything but the handful the branch itself ate —
+     * which the branch was already paid for in score. */
+    prv_start_food_field(in_game);
 
     /* The root is a simulation too — it is the board every clone is copied from, and a root that
      * drew would spend the played game's numbers before any branch was tried. */
@@ -797,6 +845,10 @@ void pacman_lookahead_restart(const game_t* in_game, uint8_t in_depth, uint16_t 
 bool pacman_lookahead_think(uint16_t in_slice_ticks)
 {
     ASSERT(in_slice_ticks > 0U);
+
+    /* The food walk first and bounded, because it is the one part of a frame that is not paid for in
+     * simulated ticks — see #PACMAN_LOOKAHEAD_FOOD_CELLS_PER_SLICE. */
+    prv_advance_food_field(&g_root, PACMAN_LOOKAHEAD_FOOD_CELLS_PER_SLICE);
 
     return prv_advance(in_slice_ticks);
 }

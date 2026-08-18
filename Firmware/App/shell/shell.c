@@ -39,8 +39,10 @@
 /* Where the two word screens put their rows, in panel pixels. Written as named constants
  * rather than arithmetic in the drawing code, because a layout is read far more often than
  * it is computed. */
-#define LOADING_TITLE_Y     (136)
-#define LOADING_ACTORS_Y    (168)
+/* The masthead's own rows, at the top of every screen (not the middle of the loading one, which is
+ * where they used to sit when they belonged to it alone). */
+#define MASTHEAD_TITLE_Y    (16)
+#define MASTHEAD_ACTORS_Y   (32)
 
 /* The menu carries the scores and the choice of game and nothing else — no title and no cast.
  * Both were on it because it used to be the only screen a player waited on; the loading screen
@@ -278,12 +280,26 @@ static void prv_draw_title_actors(msg_display_list_t* inout_list, int16_t in_y)
     }
 }
 
+/* `PAC-MAN` and the row of actors, at the top of **every** screen.
+ *
+ * The owner asked for it, and it is the one thing the machine shows that says what it is. It used to
+ * belong to the loading screen alone and the menu inherited it only because the loading screen had
+ * just drawn it and nothing painted over it — which is not the same as being drawn, and stopped being
+ * true the moment a screen cleared the panel.
+ *
+ * The actors are the closest thing to a logo the tile ROM has, so the masthead is the title and the
+ * cast together. */
+static void prv_draw_masthead(msg_display_list_t* inout_list)
+{
+    prv_draw_centred_text(inout_list, MASTHEAD_TITLE_Y, TITLE_TEXT);
+    prv_draw_title_actors(inout_list, MASTHEAD_ACTORS_Y);
+}
+
 static void prv_draw_loading(void)
 {
     msg_display_list_t list = {0};
 
-    prv_draw_centred_text(&list, LOADING_TITLE_Y, TITLE_TEXT);
-    prv_draw_title_actors(&list, LOADING_ACTORS_Y);
+    prv_draw_masthead(&list);
     prv_flush(&list);
 }
 
@@ -452,7 +468,12 @@ static void prv_open_page(shell_menu_page_e in_page)
 
 static void prv_draw_menu(void)
 {
+    msg_display_list_t list = {0};
+
     render_init();
+
+    prv_draw_masthead(&list);
+    prv_flush(&list);
 
     /* Nothing of the menu is drawn here any more: every part of it can change without the screen
      * being re-entered — the options with the page, the heading and the scores with what is
@@ -469,6 +490,7 @@ static void prv_draw_score(void)
 
     render_init();
 
+    prv_draw_masthead(&list);
     prv_draw_centred_text(&list, SCORE_HEADING_Y, has_won ? "YOU WIN" : "GAME OVER");
     prv_draw_number(&list, prv_get_centred_x(SCORE_DIGITS), SCORE_VALUE_Y, g_last_score, SCORE_DIGITS);
 

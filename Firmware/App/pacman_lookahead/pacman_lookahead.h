@@ -110,7 +110,7 @@ typedef struct
  * what stops a leaf being blind to everything the branches did not walk into
  * ([M6 §15.5](../../../Docu/Design/M6-Pacman-AI.md)), and it bounds the scan that measures it.
  */
-#define PACMAN_LOOKAHEAD_SCAN_RADIUS  (20U)
+#define PACMAN_LOOKAHEAD_SCAN_RADIUS          (20U)
 
 /*! \brief The most cells one scan may look at, whatever the radius allows.
  *
@@ -128,7 +128,7 @@ typedef struct
  * What it costs in answers is small and one-sided: a distance further than this reads as
  * #PACMAN_LOOKAHEAD_SCAN_RADIUS, which is what "nothing near" already meant.
  */
-#define PACMAN_LOOKAHEAD_SCAN_CELLS   (48U)
+#define PACMAN_LOOKAHEAD_SCAN_CELLS           (48U)
 
 /*! \brief How far the food term looks, in cells of maze distance.
  *
@@ -143,7 +143,22 @@ typedef struct
  * nearest one — and then a leaf is an array lookup. That is one walk a decision against forty-five,
  * which is the whole reason the leaf scan has to be capped and this does not.
  */
-#define PACMAN_LOOKAHEAD_FOOD_HORIZON (64U)
+#define PACMAN_LOOKAHEAD_FOOD_HORIZON         (64U)
+
+/*! \brief Cells of the food walk one frame may do.
+ *
+ * The walk crosses up to 868 cells in an almost-empty maze, and doing that in one frame took the worst
+ * frame to **14 ms of the 13 a frame has** — twice, after two attempts to shave a constant until it
+ * fitted. So the walk is cut up instead of the answer being: sixty-four cells a frame, into a second
+ * field that nothing reads until it is finished, and the two swap when it is.
+ *
+ * A whole walk therefore takes at worst fourteen frames — **longer than the ten a cell lasts**, and
+ * deliberately so. There is no reason for the field to be ready within one decision: pellets move
+ * slowly, so an answer that arrives a cell or two later is the same answer. Every leaf in the meantime
+ * reads the last *complete* field — stale by however many pellets were eaten since, which is
+ * a handful, and the branch that ate them was already paid for them in score.
+ */
+#define PACMAN_LOOKAHEAD_FOOD_CELLS_PER_SLICE (64U)
 
 /*! \brief What each thing a leaf can see is worth, relative to the others.
  *
@@ -212,21 +227,6 @@ void pacman_lookahead_set_weights(const pacman_lookahead_weights_t* in_weights);
  * cell that does not occur. It is a backstop against a search that never converges, not a target.
  */
 #define PACMAN_LOOKAHEAD_ANYTIME_TICK_BUDGET (4000U)
-
-/*! \brief What the *first* frame of a decision may spend on thinking.
- *
- * Less than the others, because that frame does two things they do not: it copies the root, and it
- * builds the food field over the whole maze (#PACMAN_LOOKAHEAD_FOOD_HORIZON). Measured on the board,
- * those took the worst frame from 11 ms to **14 of the 13 a frame has spare** — so the frame that
- * pays for them thinks less, and the promise about the frame holds without the field having to be
- * cut down to fit.
- *
- * It is the module's own recurring lesson once more: a budget has to be denominated in what is
- * actually paid for. What a frame owes is not ticks, it is milliseconds, and on this one frame most of
- * them are spent before a tick is simulated at all — so this is almost nothing, and the frame is
- * effectively the field's. The nine other frames of the cell do the thinking.
- */
-#define PACMAN_LOOKAHEAD_RESTART_SLICE_TICKS (20U)
 
 /*! \brief Begin a search, rooted here, thrown away by the next call.
  *
