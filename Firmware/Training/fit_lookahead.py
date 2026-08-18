@@ -47,15 +47,26 @@ STEP = [2, 15000, 4, 15, 3, 4]
 LOW = [0, 1000, 0, 0, 0, 0]
 HIGH = [200, 2000000, 200, 400, 200, 200]
 
+# **Two disjoint fitting sets, and a candidate is judged by its *worse* one.**
+#
+# Fitting on one set of draws overfits it, and measurably: on 2026-08-18 a candidate reaching 4.65
+# levels on twelve draws managed 3.80 on twenty it had not seen, and one reaching 5.00 managed 2.25 —
+# worse than the weights it was started from. Ranking by the minimum of two independent sets is a
+# robustness criterion: weights that only work on one set cannot win. It costs exactly twice the
+# simulation per candidate, which is the honest price of a number that transfers.
+#
+# `1000..1019` is in neither set and stays untouched, so a reported result is still measured on draws
+# nothing was fitted or selected against.
 FIRST_SEED = 2000
+SECOND_SEED = 3000
 RUNS = int(os.environ.get("FIT_RUNS", "12"))
 LAMBDA = int(os.environ.get("FIT_LAMBDA", "12"))
 BUDGET_S = float(os.environ.get("FIT_HOURS", "1.4")) * 3600.0
 
 
-def score(weights):
-    """Mean score of these weights over the training seeds; -1 if the run failed."""
-    args = [BINARY, str(FIRST_SEED), str(RUNS)] + [str(int(w)) for w in weights]
+def measure(weights, first_seed):
+    """Mean score and mean levels cleared over one set of seeds; (-1, 0) if the run failed."""
+    args = [BINARY, str(first_seed), str(RUNS)] + [str(int(w)) for w in weights]
     try:
         out = subprocess.run(args, capture_output=True, text=True, timeout=1800)
     except subprocess.TimeoutExpired:
@@ -70,6 +81,18 @@ def score(weights):
         return -1.0, 0.0
 
     return float(fields[0]), float(fields[1])
+
+
+def score(weights):
+    """What a candidate is worth: the **worse** of its two seed sets, levels first."""
+    left = measure(weights, FIRST_SEED)
+    right = measure(weights, SECOND_SEED)
+
+    if (left[0] < 0.0) or (right[0] < 0.0):
+        return -1.0, 0.0
+
+    # Levels decide, so the set with fewer levels is the one that counts; its own score comes with it.
+    return (left if left[1] <= right[1] else right)[0], min(left[1], right[1])
 
 
 def mutate(weights, steps, rng):
@@ -94,7 +117,8 @@ def main():
 
     started = time.time()
     say(f"fitting {len(NAMES)} weights, {RUNS} runs a candidate, lambda {LAMBDA}, "
-        f"budget {BUDGET_S/3600:.2f} h, seeds {FIRST_SEED}..{FIRST_SEED+RUNS-1}")
+        f"budget {BUDGET_S/3600:.2f} h, seeds {FIRST_SEED}..{FIRST_SEED+RUNS-1} "
+        f"and {SECOND_SEED}..{SECOND_SEED+RUNS-1}, judged by the worse set")
 
     best_score, best_levels = score(best)
     say(f"incumbent: {best_levels:.2f} levels cleared, {best_score:.0f} points")
