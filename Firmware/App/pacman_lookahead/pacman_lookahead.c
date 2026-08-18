@@ -33,21 +33,6 @@
  */
 #define PACMAN_LOOKAHEAD_MAX_LEG_CELLS  (24U)
 
-/*! \brief What a point of score is worth against the other terms.
- *
- * Ten, so that the smallest thing worth having — one pellet, ten points — outranks the whole
- * range of the safety term below. Score is what the game is scored on; safety only sorts branches
- * that are worth the same.
- */
-#define PACMAN_LOOKAHEAD_POINT_WEIGHT   (10)
-
-/*! \brief What losing a life costs the branch that leads to it.
- *
- * Large enough that no reachable amount of score buys one. A search whose branches all die still
- * picks the one that dies latest, because the score gathered on the way is what separates them.
- */
-#define PACMAN_LOOKAHEAD_DEATH_PENALTY  (100000)
-
 /*! \brief Where the safety term stops caring, as a squared distance.
  *
  * 64, which is eight cells — the arcade's own figure for "far enough away", the radius Clyde
@@ -478,14 +463,26 @@ static void prv_advance_food_field(const game_t* const in_game, uint16_t in_cell
     }
 }
 
-/*! \brief The weights in force. Defaults until a host trainer says otherwise. */
+/*! \brief The weights in force. Defaults until a host fit says otherwise.
+ *
+ * **Fitted, not chosen** — `Training/fit_lookahead.py`, a (1+6) evolution strategy over twelve whole
+ * games on seeds 2000..2011, two independent runs of two hours from the previous defaults. This is the
+ * better of the two at generation 29: **19,818 mean score at mean level 4.83**, against the 14,692 the
+ * numbers it replaces score on the same twelve draws.
+ *
+ * What the fit found is worth more than the number. It went **further** the way [M6 §17](
+ * ../../../Docu/Design/M6-Pacman-AI.md) first went: `prey` 53 -> 68 and `point` 2 -> 8, while `death`
+ * came *down* by a third and `escape` 10 -> 2. It plays for ghosts and for pellets and has all but
+ * stopped paying for elbow room — which is the game's own arithmetic, a four-ghost sweep being 3,000
+ * against 2,440 for a whole level of pellets.
+ */
 static pacman_lookahead_weights_t g_weights = {
-    .point = 2,
-    .death = 70791,
-    .threat = 13,
-    .prey = 53,
-    .food = 2,
-    .escape = 10,
+    .point = 8,
+    .death = 44033,
+    .threat = 17,
+    .prey = 68,
+    .food = 3,
+    .escape = 2,
 };
 
 /* What a simulated position is worth, measured against the position the search started from.
@@ -890,12 +887,12 @@ void pacman_lookahead_get_report(pacman_lookahead_report_t* out_report)
 void pacman_lookahead_get_default_weights(pacman_lookahead_weights_t* out_weights)
 {
     static const pacman_lookahead_weights_t k_defaults = {
-        .point = 2,
-        .death = 70791,
-        .threat = 13,
-        .prey = 53,
-        .food = 2,
-        .escape = 10,
+        .point = 8,
+        .death = 44033,
+        .threat = 17,
+        .prey = 68,
+        .food = 3,
+        .escape = 2,
     };
 
     ASSERT(out_weights != NULL);

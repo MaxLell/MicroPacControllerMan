@@ -34,7 +34,7 @@ OUT = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + "_weights.
 LOG = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + ".log")
 
 NAMES = ["point", "death", "threat", "prey", "food", "escape"]
-START = [2, 70791, 13, 53, 2, 10]   # what the firmware ships; a fit starts from it, not from nothing
+START = [8, 44033, 17, 68, 3, 2]   # what the firmware ships; a fit starts from it, not from nothing
 
 # How far each may move at the start, and the floor it may not fall below. `death` is deliberately
 # coarse: it only has to stay far larger than anything a branch can gain.
