@@ -20,48 +20,73 @@
  * shell - private
  * ========================================================================= */
 
-#define GLYPH_SIZE          (8)
-#define ACTOR_SIZE          (16)
+#define GLYPH_SIZE        (8)
+#define ACTOR_SIZE        (16)
 
 /* The five actors of the title row, spaced so they do not touch. */
-#define TITLE_ACTOR_COUNT   (5)
-#define TITLE_ACTOR_PITCH   (24)
+#define TITLE_ACTOR_COUNT (5)
+#define TITLE_ACTOR_PITCH (24)
 
 /* The game's own name, hyphen and all. It read `PACMAN` for a long time, because the font decoded
  * out of the tile ROM is the digits, the letters and a space — so this is the one string on the
  * panel that needed a glyph drawn rather than decoded (`SPRITE_SET_GLYPH_HYPHEN`). A hyphen in an
  * 8 x 8 monospace font is not the invention the project avoids elsewhere; a logo bitmap would be. */
-#define TITLE_TEXT          "PAC-MAN"
+#define TITLE_TEXT        "PAC-MAN"
 
-#define SCORE_DIGITS        (7U)
-#define PLACE_DIGITS        (1U)
+/* What wipes the title's row. Spaces rather than a rectangle, which is how every other row on these
+ * screens is cleared; the assertion below is what keeps it the same width as the thing it erases. */
+#define TITLE_BLANK       "       "
 
-/* Where the two word screens put their rows, in panel pixels. Written as named constants
- * rather than arithmetic in the drawing code, because a layout is read far more often than
- * it is computed. */
-/* The masthead's own rows, at the top of every screen (not the middle of the loading one, which is
- * where they used to sit when they belonged to it alone). */
-#define MASTHEAD_TITLE_Y    (16)
-#define MASTHEAD_ACTORS_Y   (32)
+_Static_assert(sizeof(TITLE_BLANK) == sizeof(TITLE_TEXT), "the blank must cover the title exactly");
 
-/* The menu carries the scores and the choice of game and nothing else — no title and no cast.
- * Both were on it because it used to be the only screen a player waited on; the loading screen
- * shows them 3 s earlier, and a screen that has to be *read* is better off without them. The rows
- * are placed so that the block from the heading to the last option is centred on the panel. */
-#define MENU_HEADING_Y      (56)
-#define MENU_FIRST_SCORE_Y  (80)
-#define MENU_SCORE_PITCH    (16)
-#define MENU_FIRST_OPTION_Y (176)
-#define MENU_OPTION_PITCH   (34)
+#define SCORE_DIGITS           (7U)
+#define PLACE_DIGITS           (1U)
+
+/* Where the word screens put their rows, in panel pixels. Written as named constants rather than
+ * arithmetic in the drawing code, because a layout is read far more often than it is computed.
+ *
+ * The masthead is two rows and the gap between them: the gap rather than a second absolute row, so
+ * the title and the cast travel as one block wherever a screen puts it. */
+#define MASTHEAD_ACTORS_OFFSET (16)
+#define MASTHEAD_HEIGHT        (MASTHEAD_ACTORS_OFFSET + ACTOR_SIZE)
+
+/* Where each screen that carries the masthead puts the title row. Three screens, three rows, each
+ * named rather than derived from the others: the owner placed them by eye and there is no
+ * relationship between them for arithmetic to preserve.
+ *
+ * The loading screen **centres** the block, because it carries nothing else — it is a title card, and
+ * that is computed so the only two things deciding it are the panel's height and the block's own. The
+ * menu puts it low, in the middle of the space above the two options, and only on the **first** page:
+ * once PLAY or AI has been chosen, the pages that follow are questions to be read and the masthead
+ * has said what it had to say. The score screen keeps it at the top, above `GAME OVER`. */
+#define LOADING_MASTHEAD_Y     ((FRAMEBUFFER_HEIGHT - MASTHEAD_HEIGHT) / 2)
+#define MENU_MASTHEAD_Y        (72)
+#define SCORE_MASTHEAD_Y       (32)
+
+/* The menu's own rows: the scores, and the choice of game.
+ *
+ * They used to be placed so that the block from the heading to the last option was centred on the
+ * panel; they sit two rows lower than that now, which is what the owner asked for while the masthead
+ * was still above them on every page.
+ *
+ * **The heading shares its row with the masthead's title, and the first score with the masthead's
+ * cast.** That is safe because the two are mutually exclusive — the first page has no table to head
+ * and no scores to list, and no other page has the masthead — but it is the reason
+ * #prv_draw_selection wipes the masthead before drawing these rows and draws it after them. */
+#define MENU_HEADING_Y         (72)
+#define MENU_FIRST_SCORE_Y     (96)
+#define MENU_SCORE_PITCH       (16)
+#define MENU_FIRST_OPTION_Y    (176)
+#define MENU_OPTION_PITCH      (34)
 
 /* Pacman marks the selection, one sprite's width plus a gap to the left of the label, and raised
  * so his 16 px sit centred on an 8 px row of text. */
-#define MENU_CURSOR_GAP     (8)
-#define MENU_CURSOR_RISE    ((ACTOR_SIZE - GLYPH_SIZE) / 2)
+#define MENU_CURSOR_GAP        (8)
+#define MENU_CURSOR_RISE       ((ACTOR_SIZE - GLYPH_SIZE) / 2)
 
-#define SCORE_HEADING_Y     (120)
-#define SCORE_VALUE_Y       (152)
-#define SCORE_NOTE_Y        (184)
+#define SCORE_HEADING_Y        (120)
+#define SCORE_VALUE_Y          (152)
+#define SCORE_NOTE_Y           (184)
 
 /* The palette each actor of the title row is drawn in, in the order they stand. */
 static const sprite_set_palette_e g_title_palettes[TITLE_ACTOR_COUNT] = {
@@ -263,8 +288,8 @@ static void prv_draw_number(msg_display_list_t* inout_list, int16_t in_x, int16_
 }
 
 /* Pacman and the four ghosts in a row — the arcade's own cast, and the closest thing to a
- * logo that exists in the tile ROM. */
-static void prv_draw_title_actors(msg_display_list_t* inout_list, int16_t in_y)
+ * logo that exists in the tile ROM. Drawn, or wiped when `in_is_visible` is false. */
+static void prv_draw_title_actors(msg_display_list_t* inout_list, int16_t in_y, bool in_is_visible)
 {
     static const sprite_set_id_e k_sprites[TITLE_ACTOR_COUNT] = {
         SPRITE_SET_PACMAN_WIDE_EAST, SPRITE_SET_GHOST_EAST_A, SPRITE_SET_GHOST_EAST_A,
@@ -275,31 +300,33 @@ static void prv_draw_title_actors(msg_display_list_t* inout_list, int16_t in_y)
 
     for (uint8_t index = 0U; index < TITLE_ACTOR_COUNT; ++index)
     {
-        prv_add(inout_list, k_sprites[index], g_title_palettes[index], (int16_t)(first_x + (index * TITLE_ACTOR_PITCH)),
-                in_y);
+        prv_add(inout_list, k_sprites[index], in_is_visible ? g_title_palettes[index] : SPRITE_SET_PALETTE_EMPTY,
+                (int16_t)(first_x + (index * TITLE_ACTOR_PITCH)), in_y);
     }
 }
 
-/* `PAC-MAN` and the row of actors, at the top of **every** screen.
+/* `PAC-MAN` and the row of actors — the title and the cast together, because the actors are the
+ * closest thing to a logo the tile ROM has.
  *
- * The owner asked for it, and it is the one thing the machine shows that says what it is. It used to
- * belong to the loading screen alone and the menu inherited it only because the loading screen had
- * just drawn it and nothing painted over it — which is not the same as being drawn, and stopped being
- * true the moment a screen cleared the panel.
+ * It is on the loading screen, the menu's first page and the score screen, and each of those places
+ * it for itself. It once inherited its place on the menu from the loading screen having just drawn it
+ * with nothing painting over it — which is not the same as being drawn, and stopped being true the
+ * moment a screen cleared the panel.
  *
- * The actors are the closest thing to a logo the tile ROM has, so the masthead is the title and the
- * cast together. */
-static void prv_draw_masthead(msg_display_list_t* inout_list)
+ * `in_is_visible` false **wipes** it: the same sprites in the empty palette, so what is erased has
+ * exactly the footprint of what was drawn and cannot drift from it. That is the same idiom as a spent
+ * life in the HUD, which is a blank Pac-Man rather than a hole of counted spaces. */
+static void prv_draw_masthead(msg_display_list_t* inout_list, int16_t in_title_y, bool in_is_visible)
 {
-    prv_draw_centred_text(inout_list, MASTHEAD_TITLE_Y, TITLE_TEXT);
-    prv_draw_title_actors(inout_list, MASTHEAD_ACTORS_Y);
+    prv_draw_centred_text(inout_list, in_title_y, in_is_visible ? TITLE_TEXT : TITLE_BLANK);
+    prv_draw_title_actors(inout_list, (int16_t)(in_title_y + MASTHEAD_ACTORS_OFFSET), in_is_visible);
 }
 
 static void prv_draw_loading(void)
 {
     msg_display_list_t list = {0};
 
-    prv_draw_masthead(&list);
+    prv_draw_masthead(&list, LOADING_MASTHEAD_Y, true);
     prv_flush(&list);
 }
 
@@ -421,9 +448,22 @@ static void prv_draw_options(msg_display_list_t* inout_list)
 static void prv_draw_selection(void)
 {
     msg_display_list_t list = {0};
+    const bool is_page_new = !g_are_rows_drawn;
+    const bool has_masthead = (g_menu_page == SHELL_MENU_PAGE_PLAYER);
 
-    if (!g_are_rows_drawn)
+    if (is_page_new)
     {
+        /* **The masthead is wiped before the rows and drawn after them**, and the asymmetry is the
+         * whole reason this is written out rather than being one call: its title shares row
+         * #MENU_MASTHEAD_Y with `HIGH SCORES`, and its cast shares the row below with the first
+         * score. Wiped last it would eat the heading of the page it just left; drawn first it would
+         * be eaten by the blanks of the page it belongs to. */
+        if (!has_masthead)
+        {
+            prv_draw_masthead(&list, MENU_MASTHEAD_Y, false);
+            prv_flush(&list);
+        }
+
         /* The heading goes with the options and not with the scores, although it is a label for them:
          * whether there *is* a table depends on the page and on who is playing, which is exactly what
          * changes when the options do. Moving the cursor within a page changes which table is shown
@@ -437,9 +477,20 @@ static void prv_draw_selection(void)
     }
 
     /* The scores follow the cursor on the maze page — each maze has its own table — so they are
-     * redrawn with it and not with the options. */
-    prv_draw_scores(&list);
-    prv_flush(&list);
+     * redrawn with it and not with the options. A page with no table has nothing that follows the
+     * cursor: its blank rows erase what the previous page left, which is a page's business and not a
+     * cursor's. Blanking them on every move would also wipe the masthead the first page carries. */
+    if (prv_does_page_show_scores() || is_page_new)
+    {
+        prv_draw_scores(&list);
+        prv_flush(&list);
+    }
+
+    if (is_page_new && has_masthead)
+    {
+        prv_draw_masthead(&list, MENU_MASTHEAD_Y, true);
+        prv_flush(&list);
+    }
 
     prv_add_cursor(&list, prv_get_cursor_x(), (int16_t)(prv_get_option_y(g_selected_option) - MENU_CURSOR_RISE));
     prv_flush(&list);
@@ -468,16 +519,12 @@ static void prv_open_page(shell_menu_page_e in_page)
 
 static void prv_draw_menu(void)
 {
-    msg_display_list_t list = {0};
-
     render_init();
 
-    prv_draw_masthead(&list);
-    prv_flush(&list);
-
-    /* Nothing of the menu is drawn here any more: every part of it can change without the screen
-     * being re-entered — the options with the page, the heading and the scores with what is
-     * highlighted — so #prv_draw_selection owns all of it and this only clears the panel. */
+    /* Nothing of the menu is drawn here, which is why there is no display list to draw it into: every
+     * part of it can change without the screen being re-entered — the options with the page, the
+     * heading and the scores with what is highlighted, the masthead with whether this is the first
+     * page — so #prv_draw_selection owns all of it and this only clears the panel. */
     g_are_rows_drawn = false;
 
     prv_draw_selection();
@@ -490,7 +537,7 @@ static void prv_draw_score(void)
 
     render_init();
 
-    prv_draw_masthead(&list);
+    prv_draw_masthead(&list, SCORE_MASTHEAD_Y, true);
     prv_draw_centred_text(&list, SCORE_HEADING_Y, has_won ? "YOU WIN" : "GAME OVER");
     prv_draw_number(&list, prv_get_centred_x(SCORE_DIGITS), SCORE_VALUE_Y, g_last_score, SCORE_DIGITS);
 

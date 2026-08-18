@@ -58,17 +58,36 @@ void game_session_test_reset(void);
  * fixtures
  * ========================================================================= */
 
-#define TEST_START_TICK  (1000U)
-#define TEST_ERASED_BYTE (0xFFU)
+#define TEST_START_TICK          (1000U)
+#define TEST_ERASED_BYTE         (0xFFU)
+
+/* Everything the menu draws above this row is the masthead and nothing else. It is `shell.c`'s first
+ * option row less the 4 px the cursor is raised by, so the cursor's own top does not count as ink.
+ * Copied rather than exported, because a getter for it would exist for this one test. */
+#define TEST_MENU_BAND_BOTTOM    (172)
+
+/* And the rows the maze page writes its scores on. The first is the row the masthead's cast stands on
+ * and the second is out of its reach, which is what makes the pair worth comparing. The score field is
+ * a place digit, two spaces and seven digits, centred as a block. Copied from `shell.c` for the same
+ * reason as the band above. */
+#define TEST_MENU_FIRST_SCORE_Y  (96)
+#define TEST_MENU_SCORE_PITCH    (16)
+#define TEST_SCORE_FIELD_GLYPHS  (10)
+#define TEST_SCORE_NUMBER_GLYPHS (7)
 
 static uint32_t g_now_ms;
 static uint32_t g_region_count;
 static uint8_t g_page[FLASH_BSP_BLOCK_SIZE];
 
+/* The panel as the shell left it. Kept from the presenting stub because that is the only place a test
+ * is handed it, and pixels are the only honest way to ask what survived a redraw. */
+static const framebuffer_t* g_panel;
+
 static void prv_count_region(const framebuffer_t* in_framebuffer, int16_t in_x, int16_t in_y, int16_t in_width,
                              int16_t in_height, int in_call_count)
 {
-    (void)in_framebuffer;
+    g_panel = in_framebuffer;
+
     (void)in_x;
     (void)in_y;
     (void)in_width;
@@ -663,6 +682,134 @@ void test_moving_the_selection_redraws_the_scores_and_the_cursor_and_not_the_scr
      * changing a row's *value* does, which is why `g_are_rows_drawn` is a flag of its own. */
     TEST_ASSERT_GREATER_THAN_UINT32(0U, move_regions);
     TEST_ASSERT_LESS_THAN_UINT32(menu_regions / 2U, move_regions);
+}
+
+/* How much ink the panel carries in a band of rows. */
+static uint32_t prv_count_ink_in_rows(int16_t in_first_y, int16_t in_last_y)
+{
+    uint32_t lit = 0U;
+
+    TEST_ASSERT_NOT_NULL(g_panel);
+
+    for (int16_t y = in_first_y; y < in_last_y; ++y)
+    {
+        for (int16_t x = 0; x < FRAMEBUFFER_WIDTH; ++x)
+        {
+            if (g_panel->pixels[y][x] != FRAMEBUFFER_COLOR_BLACK)
+            {
+                ++lit;
+            }
+        }
+    }
+
+    return lit;
+}
+
+/* Whether two bands of the panel hold exactly the same pixels. */
+static bool prv_do_bands_match(int16_t in_first_y, int16_t in_second_y, int16_t in_x, int16_t in_width,
+                               int16_t in_height)
+{
+    TEST_ASSERT_NOT_NULL(g_panel);
+
+    for (int16_t row = 0; row < in_height; ++row)
+    {
+        for (int16_t column = 0; column < in_width; ++column)
+        {
+            if (g_panel->pixels[in_first_y + row][in_x + column] != g_panel->pixels[in_second_y + row][in_x + column])
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+/* What the menu has above its two options. On the first page that is the masthead and nothing else;
+ * on the endless page it should be nothing at all. */
+static uint32_t prv_count_ink_above_the_options(void)
+{
+    return prv_count_ink_in_rows(0, TEST_MENU_BAND_BOTTOM);
+}
+
+/* `PAC-MAN` and the cast belong to the **first** page of the menu and to no page after it: once PLAY
+ * or AI has been chosen, the pages that follow are questions to be read.
+ *
+ * Measured in the panel's own pixels rather than in display items, because the mistake this defends
+ * against is one item painting over another. The masthead's title shares its row with `HIGH SCORES`
+ * and its cast shares one with the first score, so what survives is decided by the order the three are
+ * sent in — and counting items would call every order correct. The endless page is the one worth
+ * comparing against: it has no heading and no table either, so anything left in the band is the
+ * masthead that was not wiped.
+ *
+ * Walking back matters as much as walking in. A page has to come back carrying what it carries. */
+void test_the_masthead_is_on_the_first_page_only(void)
+{
+    prv_reach_the_menu();
+
+    const uint32_t on_the_first_page = prv_count_ink_above_the_options();
+
+    TEST_ASSERT_GREATER_THAN_UINT32(0U, on_the_first_page);
+
+    /* The AI's path, because it is the one with all three pages. */
+    shell_move_selection(DIRECTION_SOUTH);
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+    TEST_ASSERT_TRUE(prv_advance(0U));
+
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_ENDLESS, shell_get_menu_page());
+    TEST_ASSERT_TRUE(prv_advance(0U));
+
+    TEST_ASSERT_EQUAL_UINT32(0U, prv_count_ink_above_the_options());
+
+    TEST_ASSERT_TRUE(shell_press_back());
+    TEST_ASSERT_TRUE(prv_advance(0U));
+    TEST_ASSERT_TRUE(shell_press_back());
+    TEST_ASSERT_TRUE(prv_advance(0U));
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_PLAYER, shell_get_menu_page());
+    TEST_ASSERT_EQUAL_UINT32(on_the_first_page, prv_count_ink_above_the_options());
+}
+
+/* The other half of the wipe: it must take the masthead away **without** taking the page underneath
+ * with it.
+ *
+ * The maze page writes `HIGH SCORES` on the masthead's title row and its first score on the cast's
+ * row, so the wipe has to go in before that text and not after it. After it is the tidier-looking
+ * code — one call with a flag instead of two guarded ones — and it silently eats a score line. Only a
+ * person's path is worth asking, because the AI's maze page has no table to lose (DEC-056).
+ */
+void test_leaving_the_first_page_wipes_the_masthead_and_not_the_scores(void)
+{
+    const sprite_t* const zero = sprite_set_get(sprite_set_get_glyph('0'));
+    const int16_t number_x = (int16_t)(((FRAMEBUFFER_WIDTH - (TEST_SCORE_FIELD_GLYPHS * zero->width)) / 2)
+                                       + ((TEST_SCORE_FIELD_GLYPHS - TEST_SCORE_NUMBER_GLYPHS) * zero->width));
+    const int16_t number_width = (int16_t)(TEST_SCORE_NUMBER_GLYPHS * zero->width);
+
+    prv_reach_the_menu();
+
+    /* PLAY is already the highlighted option, so this is one push onward. */
+    shell_press_start();
+
+    TEST_ASSERT_EQUAL_UINT(SHELL_MENU_PAGE_MAZE, shell_get_menu_page());
+    TEST_ASSERT_TRUE(prv_advance(0U));
+
+    TEST_ASSERT_GREATER_THAN_UINT32(
+        0U, prv_count_ink_in_rows(TEST_MENU_FIRST_SCORE_Y, (int16_t)(TEST_MENU_FIRST_SCORE_Y + zero->height)));
+
+    /* **Intact, not merely present.** A wipe that goes in after this page's text eats the cast's own
+     * footprint out of the first score and leaves the gaps between the five figures standing, so a
+     * count of ink survives it. What does not survive is this: the three places all read 0 on a fresh
+     * table, so the row standing where the cast stood has to render exactly like the row below it,
+     * which the cast never reaches. Compared to the right of the place digit, which is the one part
+     * the two rows do not share. */
+    TEST_ASSERT_TRUE_MESSAGE(prv_do_bands_match(TEST_MENU_FIRST_SCORE_Y,
+                                                (int16_t)(TEST_MENU_FIRST_SCORE_Y + TEST_MENU_SCORE_PITCH), number_x,
+                                                number_width, (int16_t)zero->height),
+                             "the first score row lost pixels the second one kept");
 }
 
 void test_the_normal_maze_option_plays_the_arcade_maze(void)
