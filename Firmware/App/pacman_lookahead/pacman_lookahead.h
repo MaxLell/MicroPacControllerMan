@@ -51,7 +51,7 @@
  * so a fourth clone would be memory bought for a level the budget never pays for. Whatever binds
  * this module, it is not this constant.
  */
-#define PACMAN_LOOKAHEAD_MAX_DEPTH           (3U)
+#define PACMAN_LOOKAHEAD_MAX_DEPTH           (4U)
 
 /*! \brief What a search may simulate, in `game_tick` calls, unless the caller says otherwise.
  *

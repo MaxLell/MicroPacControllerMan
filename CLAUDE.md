@@ -42,11 +42,12 @@ silently working around a wart.
 ## Status
 
 **Deployed today, measured on the board (2026-08-18):** flash **21.2 %** (109,420 B of the 504 kB
-the linker leaves the firmware), main RAM **89.4 %** (234,344 B of 256 kB), SRAM4 **73.3 %**
+the linker leaves the firmware), main RAM **94.0 %** (246,360 B of 256 kB), SRAM4 **73.3 %**
 (12,008 B of 16 kB). **450** host unit tests green; **6 of 6** automatic on-target tests green,
-7 more need somebody at the board. Worst look-ahead slice **12 ms of the 13 ms** a frame has
-spare. Every other percentage below is the figure *at its own milestone* and is kept as history —
-check this line, not those, for what the image on the board costs.
+7 more need somebody at the board. The look-ahead searches **4 junctions** deep and its worst
+slice is **11 ms of the 13 ms** a frame has spare. Every other percentage below is the figure
+*at its own milestone* and is kept as history — check this line, not those, for what the image
+on the board costs.
 
 - **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
