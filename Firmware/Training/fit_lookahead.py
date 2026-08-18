@@ -29,12 +29,17 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BINARY = os.path.join(HERE, os.pardir, "build-host", "pacman_lookahead_fitness")
+# `FIT_BINARY` so an experiment can fit a *variant* of the player — another search depth, another
+# tie-break — without rebuilding what the rest of the tree points at.
+BINARY = os.environ.get("FIT_BINARY") or os.path.join(HERE, os.pardir, "build-host", "pacman_lookahead_fitness")
 OUT = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + "_weights.json")
 LOG = os.path.join(HERE, os.environ.get("FIT_TAG", "fit_lookahead") + ".log")
 
 NAMES = ["point", "death", "threat", "prey", "food", "escape"]
-START = [8, 44033, 17, 68, 3, 2]   # what the firmware ships; a fit starts from it, not from nothing
+# What the firmware ships; a fit starts from it, not from nothing. `FIT_START` overrides it, as six
+# comma-separated numbers, so a run can begin from whatever the last experiment found.
+START = [int(v) for v in os.environ["FIT_START"].split(",")] if os.environ.get("FIT_START") \
+    else [8, 44033, 17, 68, 3, 2]
 
 # How far each may move at the start, and the floor it may not fall below. `death` is deliberately
 # coarse: it only has to stay far larger than anything a branch can gain.
@@ -92,7 +97,7 @@ def main():
         f"budget {BUDGET_S/3600:.2f} h, seeds {FIRST_SEED}..{FIRST_SEED+RUNS-1}")
 
     best_score, best_levels = score(best)
-    say(f"incumbent (the hand-picked defaults): {best_score:.0f}, level {best_levels:.2f}")
+    say(f"incumbent: {best_levels:.2f} levels cleared, {best_score:.0f} points")
 
     generation = 0
     # `FIT_WORKERS` so two independent runs can share a four-core machine — the driver itself does
@@ -106,13 +111,16 @@ def main():
         with ProcessPoolExecutor(max_workers=workers) as pool:
             results = list(pool.map(score, candidates))
 
-        ranked = sorted(zip(results, candidates), key=lambda pair: pair[0][0], reverse=True)
+        # **Levels cleared first, points only to break a tie.** The objective is how far the player gets,
+        # and a caught ghost is worth 3,000 points and no progress at all — so ranking by score was
+        # ranking by the wrong thing for this question.
+        ranked = sorted(zip(results, candidates), key=lambda pair: (pair[0][1], pair[0][0]), reverse=True)
         (top_score, top_levels), top = ranked[0]
 
-        if top_score > best_score:
-            gain = top_score - best_score
+        if (top_levels, top_score) > (best_levels, best_score):
+            gain = top_levels - best_levels
             best, best_score, best_levels = top, top_score, top_levels
-            say(f"gen {generation}: {best_score:.0f} (+{gain:.0f}), level {best_levels:.2f}  "
+            say(f"gen {generation}: {best_levels:.2f} levels (+{gain:+.2f}), {best_score:.0f} points  "
                 + " ".join(f"{n}={v}" for n, v in zip(NAMES, best)))
             json.dump({"weights": dict(zip(NAMES, best)), "score": best_score,
                        "levels": best_levels, "runs": RUNS, "first_seed": FIRST_SEED,
@@ -121,10 +129,10 @@ def main():
         else:
             # Nothing better this round: look in a smaller neighbourhood rather than wander.
             steps = [max(1.0, s * 0.85) for s in steps]
-            say(f"gen {generation}: nothing better (best candidate {top_score:.0f}), "
-                f"steps now {[round(s, 1) for s in steps]}")
+            say(f"gen {generation}: nothing better (best candidate {top_levels:.2f} levels, "
+                f"{top_score:.0f} points), steps now {[round(s, 1) for s in steps]}")
 
-    say(f"done after {generation} generations: {best_score:.0f} with "
+    say(f"done after {generation} generations: {best_levels:.2f} levels, {best_score:.0f} points with "
         + " ".join(f"{n}={v}" for n, v in zip(NAMES, best)))
     return 0
 

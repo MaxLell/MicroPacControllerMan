@@ -33,13 +33,20 @@
  */
 #define PACMAN_LOOKAHEAD_MAX_LEG_CELLS  (24U)
 
+/* Whether a tie at the root is broken by carrying straight on rather than by the compass order the
+ * branches happen to be tried in. Off in what ships, because it changes *what* the player decides; it
+ * exists so the change can be measured against the same seeds. */
+#ifndef PACMAN_LOOKAHEAD_STRAIGHT_TIE_BREAK
+#define PACMAN_LOOKAHEAD_STRAIGHT_TIE_BREAK (0)
+#endif
+
 /*! \brief Where the safety term stops caring, as a squared distance.
  *
  * 64, which is eight cells — the arcade's own figure for "far enough away", the radius Clyde
  * turns shy at (§10.4). Beyond it one ghost is as harmless as another and the branch should be
  * decided by what there is to eat.
  */
-#define PACMAN_LOOKAHEAD_SAFE_DISTANCE  (64)
+#define PACMAN_LOOKAHEAD_SAFE_DISTANCE (64)
 
 /*! \brief The order branches are tried in.
  *
@@ -677,7 +684,20 @@ static void prv_close_level(int32_t in_value)
 
     pacman_lookahead_level_t* const parent = &g_level[g_top];
 
-    if (!parent->has_branch || (in_value > parent->best_value))
+    /* Strictly better wins. On a **tie at the root**, `PACMAN_LOOKAHEAD_STRAIGHT_TIE_BREAK` keeps him
+     * going the way he already is, instead of letting the fixed compass order of `g_branch_order` send him
+     * north — which is what makes him step back and forth where two ways out are worth the same. */
+    bool takes_it = (!parent->has_branch || (in_value > parent->best_value));
+
+#if PACMAN_LOOKAHEAD_STRAIGHT_TIE_BREAK
+    if (!takes_it && (g_top == 0U) && (in_value == parent->best_value)
+        && (parent->pending_direction == pacman_get_direction(&g_root.pacman)))
+    {
+        takes_it = true;
+    }
+#endif
+
+    if (takes_it)
     {
         parent->has_branch = true;
         parent->best_value = in_value;
