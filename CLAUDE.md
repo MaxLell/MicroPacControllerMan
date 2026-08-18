@@ -153,13 +153,29 @@ silently working around a wart.
   being half the spare depth capped at 5 — so width and setback are arithmetic rather than a
   choice from 24 ROM tiles that only composed at one thickness. The pixels travel in the display
   list (`DISPLAY_ITEM_WALL`). The arcade tile comparison is gone with them; what replaces it are
-  two unit tests that rebuild the picture and measure it — every pellet within 1 px of its
-  corridor's centre, every tunnel mouth exactly a corridor's gap wide. Every wall stroke's centre
+  three unit tests that rebuild the picture and measure it — every pellet within 1 px of its
+  corridor's centre, every tunnel mouth exactly a corridor's gap wide, and every outside corner cut
+  back on the diagonal. Every wall stroke's centre
   lands on a cell boundary — including the ghost house's, which needed a second drawing cell to get
   there (a one-cell ring can have the 6 px stroke, the grid, or a roomy inside: any two, and the
   owner chose the grid).
   RAM 68.0 %, flash 18.7 %; frame cost unchanged at 8 ms of 16.
-  See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md).
+  **And a wall turns its outside corners with an arc, which needed a case after all** (DEC-057,
+  2026-08-18): the owner asked for the arcade look back and gave two reference pictures, which
+  disagree about hollow versus massive walls and agree that every corner is round; he chose **massive
+  plus round**. Hollow versus massive is free — the two numbers, 6/5 against 2/1 — and that is what
+  DEC-034's arithmetic bought. The corner is not: **a distance field offset from outside cannot round
+  an outside corner**, because there the nearest non-wall pixel lies straight out and never
+  diagonally, so `min(x, y) + 1` is the answer under every metric. Switching the walk to true
+  Euclidean distance was tried and moved 106 of 15,396 ink pixels, all at *inside* corners. So a
+  corner is cut deliberately: it is a **bend in the stroke's centre line**, that line runs
+  `inset + width/2` in from a face — 8 px, one cell, so the bend sits on a cell corner — and the arc
+  is the disc of `width/2` around it. One function serves all four orientations by mirroring its
+  inputs, and where a cell has more than one corner the arcs are intersected, which is what makes a
+  bar's end a round cap. Flash +304 B, RAM and frame cost unchanged. The morphological route (erode,
+  dilate) was costed and rejected: two 240×264 bitmaps at 7.9 kB against ~28 kB free, for 3 px a
+  corner.
+  See [M4 Random Mazes](Docu/Design/M4-Random-Mazes.md) — the corner is §2.8.
 
 - **M6 Pacman AI — done, and the trained network is gone (DEC-038..054).** M6 was an agent evolved
   on the host with **NEAT**, ported to the target as `const` weights. **All of it was deleted on
@@ -326,6 +342,20 @@ silently working around a wart.
     the serial line and would otherwise be reading silence. `prv_walk_to` in `test_shell.c` is the
     helper that made the third rewrite of these tests short — it drives the pushes rather than
     setting state, so the next change to the menu's shape rewrites one function, not twenty tests.
+  - **Each screen places the masthead for itself, and Pac-Man is yellow whoever steers** (DEC-058,
+    2026-08-18). The loading screen **centres** `PAC-MAN` and the cast because it carries nothing
+    else; the menu's **first page** puts the block in the middle of the space above `PLAY` and `AI`;
+    the pages after it drop it entirely — once who plays is chosen, what follows is a question to be
+    read; the score screen keeps it at the top. The green Pac-Man is gone with its palette: its
+    reason was FR-032, deleted with the trained network, and the HUD's two glyphs reading `AI` say
+    the same thing where a player looks for facts about the run. **The drawing order is load-bearing
+    and asymmetric**: the masthead is wiped *before* a page's own rows and drawn *after* them,
+    because its title shares a row with `HIGH SCORES` and its cast shares one with the first score.
+    Wiped last it eats the heading of the page just entered; drawn first it is eaten by that page's
+    blanks. Wiping is the same sprites in the empty palette, so what is erased has the footprint of
+    what was drawn. Both new tests measure the panel's **pixels**, not display items — the mistake
+    being defended against is one item painting over another, and a count of items calls every order
+    correct.
 
 - **The ghosts are paced randomly, from the MCU's own generator (DEC-047, FR-044/045).** Every
   timing the ghosts are paced by — the house's dot counts, the scatter/chase phases, the frightened

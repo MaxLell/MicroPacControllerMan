@@ -983,27 +983,42 @@ void test_a_tunnel_mouth_is_as_wide_as_a_corridor(void)
     game_view_set_maze(&g_view, &map);
     prv_paint_the_field();
 
-    /* The standard gap: the black between two wall strokes across a one-cell corridor, measured
-     * on the row Pacman starts on, which has wall above and below along most of its length. */
+    /* The standard gap: the black between two wall strokes across a one-cell corridor.
+     *
+     * Taken as the **commonest** run wider than a cell, not the widest. It used to be the widest, and
+     * that stopped being the gap a corridor leaves the moment corners were turned with an arc: an arc
+     * cuts its corner back, so the black at a bend is legitimately a few pixels wider than the black
+     * along a straight run. The widest run in the picture is now at a bend. Wider than a cell, because
+     * the setback a wall keeps inside its own edge is a run too and there are hundreds of them. */
+    int16_t histogram[(3 * GAME_VIEW_TILE_SIZE) + 1] = {0};
+
     for (int16_t y = 0; y < PICTURE_HEIGHT; ++y)
     {
         int16_t run = 0;
 
-        for (int16_t x = 0; x < PICTURE_WIDTH; ++x)
+        for (int16_t x = 0; x <= PICTURE_WIDTH; ++x)
         {
-            if (!g_wall_ink[y][x])
+            if ((x < PICTURE_WIDTH) && !g_wall_ink[y][x])
             {
                 ++run;
             }
             else
             {
-                if ((run > corridor_gap) && (run <= (3 * GAME_VIEW_TILE_SIZE)))
+                if ((run > GAME_VIEW_TILE_SIZE) && (run <= (3 * GAME_VIEW_TILE_SIZE)))
                 {
-                    corridor_gap = run;
+                    ++histogram[run];
                 }
 
                 run = 0;
             }
+        }
+    }
+
+    for (int16_t run = 0; run <= (3 * GAME_VIEW_TILE_SIZE); ++run)
+    {
+        if ((corridor_gap == 0) || (histogram[run] > histogram[corridor_gap]))
+        {
+            corridor_gap = run;
         }
     }
 
@@ -1038,6 +1053,78 @@ void test_a_tunnel_mouth_is_as_wide_as_a_corridor(void)
         (void)snprintf(message, sizeof(message), "the mouth on row %d is %d px", row, gap);
         TEST_ASSERT_EQUAL_INT16_MESSAGE(corridor_gap, gap, message);
     }
+}
+
+/* A wall turns its **outside** corners with an arc, the way the arcade's own corner tile does.
+ *
+ * This is the one thing a computed offset cannot give, and the reason is worth keeping: at a convex
+ * corner of a wall the nearest pixel that is not wall lies straight out — left or up — and never
+ * diagonally, so the distance there is `min(x, y) + 1` whatever metric is used, and every metric puts
+ * the corner at a right angle. Switching the walk from Chebyshev to true Euclidean distance was tried
+ * and moved 106 pixels of 15,396, all of them at *inside* corners. The corner has to be cut on purpose.
+ *
+ * Asserted as a **relationship** rather than against a radius, so it survives the stroke being
+ * re-tuned: along a straight face the stroke keeps a setback, and out of a corner along the diagonal
+ * it must keep more than that. A mitred corner puts the two at the same distance.
+ */
+void test_a_wall_turns_its_outside_corners_with_an_arc(void)
+{
+    playfield_map_t map;
+    int16_t straight_setback = -1;
+    int16_t corner_setback = -1;
+
+    playfield_get_arcade_map(&map);
+    game_view_set_maze(&g_view, &map);
+    prv_paint_the_field();
+
+    for (uint8_t row = 1U; row < (PLAYFIELD_HEIGHT - 1U); ++row)
+    {
+        for (uint8_t column = 1U; column < (PLAYFIELD_WIDTH - 1U); ++column)
+        {
+            const int16_t x = (int16_t)((column + GAME_VIEW_MAZE_BORDER) * GAME_VIEW_TILE_SIZE);
+            const int16_t y = (int16_t)((row + GAME_VIEW_MAZE_BORDER) * GAME_VIEW_TILE_SIZE);
+
+            if (!game_view_is_wall_drawn_at(&g_view, column, row)
+                || game_view_is_wall_drawn_at(&g_view, column, (uint8_t)(row - 1U)))
+            {
+                /* Only cells whose top face is open have a top face to measure. */
+                continue;
+            }
+
+            const bool is_left_wall = game_view_is_wall_drawn_at(&g_view, (uint8_t)(column - 1U), row);
+            const bool is_right_wall = game_view_is_wall_drawn_at(&g_view, (uint8_t)(column + 1U), row);
+
+            if (is_left_wall && is_right_wall && (straight_setback < 0))
+            {
+                int16_t offset = 0;
+
+                while ((offset < GAME_VIEW_TILE_SIZE) && !g_wall_ink[y + offset][x])
+                {
+                    ++offset;
+                }
+
+                straight_setback = offset;
+            }
+
+            if (!is_left_wall && (corner_setback < 0))
+            {
+                /* Open above and to the left: this cell carries the wall's top-left corner, and the
+                 * diagonal out of it is where an arc shows and a mitre does not. */
+                int16_t offset = 0;
+
+                while ((offset < GAME_VIEW_TILE_SIZE) && !g_wall_ink[y + offset][x + offset])
+                {
+                    ++offset;
+                }
+
+                corner_setback = offset;
+            }
+        }
+    }
+
+    TEST_ASSERT_GREATER_THAN_INT16_MESSAGE(0, straight_setback, "no straight top face was found");
+    TEST_ASSERT_GREATER_THAN_INT16_MESSAGE(0, corner_setback, "no top-left corner was found");
+    TEST_ASSERT_GREATER_THAN_INT16_MESSAGE(straight_setback, corner_setback, "the corner is mitred, not arced");
 }
 
 /* ==========================================================================

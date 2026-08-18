@@ -319,15 +319,16 @@ Two known departures, both deliberate:
 
 **What it costs is the arcade comparison**, entirely: there is no tile left to compare against the
 1980 map, and §2.1's 764-of-764 goes with the alphabet. What replaces it is aimed at what was
-actually going wrong. Two unit tests rebuild the picture from the display list and measure it:
+actually going wrong. Three unit tests rebuild the picture from the display list and measure it:
 
 | | asserted |
 |---|---|
 | Every pellet | within **1 px** of its corridor's centre line |
 | Every tunnel mouth | exactly as wide as a corridor's own gap (**18 px**) |
+| Every outside corner | cut back further on the diagonal than the stroke's setback along a straight face — §2.8 |
 
-Those are the two faults the owner reported, and they are now caught by `ceedling` rather than by
-looking at the panel.
+The first two are the faults the owner reported, and they are now caught by `ceedling` rather than
+by looking at the panel.
 
 One more fault was reported and it was not geometry at all: a wall was drawn straight across the
 tunnel mouths. The border outside the maze mirrors the maze's edge cell — wall beside wall, open
@@ -342,6 +343,69 @@ purpose, because a maze of free-standing blocks is far too easy. The two missing
 top tees **turned upside down, row for row**: a mirrored arcade tile still has the arcade's line
 weight, its 2-pixel bar and its diagonal step, which is why that is a fair way to fill the gap
 rather than new art in an old style.
+
+### 2.8 The corner, which needed a case after all
+
+[DEC-057](../PrePlanning/11-Decisions-and-As-Built.md). The owner asked for the maze to look like
+the original again and gave two reference pictures: the arcade cabinet, whose walls are **hollow**,
+and a wallpaper rendition, whose walls are **massive**. They disagree about that and agree that
+**every corner is round**. He chose massive plus round.
+
+Hollow against massive is free, and it is the clearest thing §2.6's arithmetic bought: it is the two
+numbers, `6 / 5` against `2 / 1`, and either falls out of the one rule at every wall thickness. A
+tile alphabet could not have given the second at all without a new family per thickness.
+
+The corner is not free, and **the wrong turning is worth writing down** because §2.6 invites it.
+That section says the distance is Chebyshev *so that a stroke turns a corner squarely* — which reads
+as though a true Euclidean distance would round it. It does not. At a **convex** corner of a wall the
+nearest pixel that is not wall lies straight out, left or up, and never diagonally; the distance
+there is `min(x, y) + 1` under every metric, and the contour is an L. Measured, switching the walk to
+Euclidean moved **106 of 15,396 ink pixels, all of them at *inside* corners**.
+
+> A distance field offset from outside cannot round an outside corner. It can only displace it.
+
+So the corner is cut on purpose, and the rule is the stroke's own geometry rather than a shape from
+an alphabet:
+
+> A convex corner is a **bend in the stroke's centre line**. The centre line runs
+> `inset + width / 2` in from a face — 8 px here, exactly one cell, which is why the bend sits on a
+> cell corner. The arc is the disc of `width / 2` around the bend.
+
+`prv_is_inside_the_corner_arc` is given the pixel's distance to the **two faces that meet at the
+corner**, so mirroring its inputs serves all four orientations from one function: there is no case
+analysis by direction, only the question *is there a corner here*, answered from the 3×3 cell
+neighbourhood the code already reads. `prv_is_kept_by_every_corner` intersects the arcs where a cell
+has more than one corner — the end of a one-cell bar is two, a wall one cell square is four — and
+that intersection is what makes a bar's end a round cap.
+
+**The alternative was costed and rejected.** Rounding the wall *shape* morphologically —
+erode by a disc, dilate by the same — is the textbook answer and gives concave fillets for free. It
+needs a pixel-level distance field over the whole maze: two 240 × 264 bitmaps at 7.9 kB each against
+about 28 kB of free main RAM at 89.4 %, and some 36 million comparisons per level build. For three
+pixels a corner that is the wrong price.
+
+| | |
+|---|---|
+| Flash | **+304 B** → 21.2 % |
+| RAM | **unchanged** → 89.4 % |
+| Frame | **unchanged** — wall pixels are built with a level's field, not per frame; worst slice 12 ms of 13 |
+| Tests | 450 host green (one new), 11 of 11 on-target green |
+
+**What it costs the spec** is §2.6's proudest claim, and only partly: the appearance needs no case
+analysis *along a straight run*. There is exactly one case now, it is *is there a corner*, and it is
+not the fault that killed the alphabet — that was a family of tiles per wall thickness, and this is
+one formula that does not know how thick anything is.
+
+**How the corner is tested** is a relationship and not a radius, so it survives the stroke being
+re-tuned: along a straight face the stroke keeps a setback, and out of a corner along the diagonal it
+must keep *more*. A mitre puts the two at the same distance. Checked against the rounding switched
+off, where it fails with `Expected 5 to be greater than 5: the corner is mitred, not arced`.
+
+One measurement had to change with it. The corridor gap was taken as the **widest** black run up to
+three cells; an arc cuts its corner back, so the black at a bend is legitimately a few pixels wider
+than along a straight run, and the widest run in the picture is now at a bend. It is the
+**commonest** run wider than a cell instead — 18 px, unchanged — and the tunnel mouth is still
+exactly 18, so the claim the test exists for is untouched.
 
 ## 3 What it costs
 

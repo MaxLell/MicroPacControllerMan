@@ -51,6 +51,12 @@ static const sprite_set_palette_e g_ghost_palettes[MSG_GHOST_COUNT] = {
 #define WALL_STROKE_WIDTH      (6)
 #define WALL_STROKE_INSET      (5)
 
+/* Half the stroke. A convex corner of a wall is a **bend in the stroke's centre line**, and the
+ * arcade turns it with an arc rather than a mitre; the arc is a disc of this radius around the bend,
+ * which is what a round join is. The centre line runs `inset + WALL_STROKE_RADIUS` in from a face,
+ * so for the two-cell walls of a maze the bend sits exactly on a cell corner. */
+#define WALL_STROKE_RADIUS     (WALL_STROKE_WIDTH / 2)
+
 /* The ghost house gate: not a wall, but drawn like one and in its own colour. */
 #define HOUSE_GATE_ROW         (12)
 
@@ -242,6 +248,73 @@ static int16_t prv_get_distance_to_edge(const playfield_map_t* const in_map, int
     return (nearest > 0) ? (int16_t)(nearest - 1) : 0;
 }
 
+/* Whether a pixel of a convex corner cell survives the arc that turns the stroke there.
+ *
+ * `in_across` and `in_down` are the pixel's distance from the **two faces that meet at the corner**,
+ * so mirroring the inputs serves all four orientations from one function and there is no case
+ * analysis by direction — only by whether a corner is there at all.
+ *
+ * Beyond the bend along either face the bend is no longer the nearest thing on the centre line, and
+ * the straight rule already has the right answer; inside the corner square it is the arc that decides.
+ */
+static bool prv_is_inside_the_corner_arc(int16_t in_across, int16_t in_down, int16_t in_inset)
+{
+    const int16_t bend = (int16_t)(in_inset + WALL_STROKE_RADIUS);
+
+    if ((in_across >= bend) || (in_down >= bend))
+    {
+        return true;
+    }
+
+    const int16_t across = (int16_t)(in_across - bend);
+    const int16_t down = (int16_t)(in_down - bend);
+
+    return ((across * across) + (down * down)) <= (WALL_STROKE_RADIUS * WALL_STROKE_RADIUS);
+}
+
+/*! \brief Which of a cell's four quadrants are convex corners of the wall it belongs to. */
+typedef struct
+{
+    bool above;
+    bool below;
+    bool left;
+    bool right;
+} wall_neighbours_t;
+
+/* Every corner a cell has must accept the pixel.
+ *
+ * A cell can be a convex corner in more than one quadrant: the end of a one-cell bar is two, a wall
+ * one cell square is four. Intersecting their arcs is what turns a bar's end into a round cap. */
+static bool prv_is_kept_by_every_corner(const wall_neighbours_t* const in_neighbours, int16_t in_column, int16_t in_row,
+                                        int16_t in_inset)
+{
+    const int16_t far_column = (int16_t)(GAME_VIEW_TILE_SIZE - 1 - in_column);
+    const int16_t far_row = (int16_t)(GAME_VIEW_TILE_SIZE - 1 - in_row);
+    bool is_kept = true;
+
+    if (!in_neighbours->above && !in_neighbours->left)
+    {
+        is_kept = is_kept && prv_is_inside_the_corner_arc(in_column, in_row, in_inset);
+    }
+
+    if (!in_neighbours->above && !in_neighbours->right)
+    {
+        is_kept = is_kept && prv_is_inside_the_corner_arc(far_column, in_row, in_inset);
+    }
+
+    if (!in_neighbours->below && !in_neighbours->left)
+    {
+        is_kept = is_kept && prv_is_inside_the_corner_arc(in_column, far_row, in_inset);
+    }
+
+    if (!in_neighbours->below && !in_neighbours->right)
+    {
+        is_kept = is_kept && prv_is_inside_the_corner_arc(far_column, far_row, in_inset);
+    }
+
+    return is_kept;
+}
+
 /* The pixels of one wall cell.
  *
  * Everything the old alphabet had a piece for — edges, outer corners, inner corners, junctions,
@@ -261,13 +334,21 @@ static void prv_get_wall_bitmap(const playfield_map_t* const in_map, int16_t in_
     const int16_t inset = prv_get_smaller(prv_get_stroke_inset((int16_t)(left + right + GAME_VIEW_TILE_SIZE)),
                                           prv_get_stroke_inset((int16_t)(above + below + GAME_VIEW_TILE_SIZE)));
 
+    const wall_neighbours_t neighbours = {
+        .above = prv_is_wall(in_map, in_x, (int16_t)(in_y - 1)),
+        .below = prv_is_wall(in_map, in_x, (int16_t)(in_y + 1)),
+        .left = prv_is_wall(in_map, (int16_t)(in_x - 1), in_y),
+        .right = prv_is_wall(in_map, (int16_t)(in_x + 1), in_y),
+    };
+
     for (int16_t row = 0; row < GAME_VIEW_TILE_SIZE; ++row)
     {
         uint8_t bits = 0U;
 
         for (int16_t column = 0; column < GAME_VIEW_TILE_SIZE; ++column)
         {
-            if (prv_is_on_stroke(prv_get_distance_to_edge(in_map, in_x, in_y, column, row), inset))
+            if (prv_is_on_stroke(prv_get_distance_to_edge(in_map, in_x, in_y, column, row), inset)
+                && prv_is_kept_by_every_corner(&neighbours, column, row, inset))
             {
                 bits |= (uint8_t)(0x80U >> column);
             }
