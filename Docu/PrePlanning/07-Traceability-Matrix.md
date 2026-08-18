@@ -4,7 +4,7 @@
 
 Every requirement from [02 Requirements](02-Requirements.md) is listed below with the verification test(s) from [06 Verification & Validation](06-Verification-and-Validation.md) that verify it. The two tables group requirements only by ID band (`0xx` vs `1xx`); the numbering carries no system-vs-software meaning.
 
-A few items are structural/process requirements rather than automatically observable runtime behaviour and are verified by build tooling, manual fault-injection, or code review rather than a dynamic `VT-*` test: CON-101 (language, enforced by the compiler), NFR-102 (coding standard), the non-observable aspects of FR-109 (run-to-completion, no shared state), and FR-111 (fatal-error halt). This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
+A few items are structural/process requirements rather than automatically observable runtime behaviour and are verified by build tooling, manual fault-injection, or code review rather than a dynamic `VT-*` test: CON-101 (language, enforced by the compiler), NFR-102 (coding standard), the non-observable aspects of FR-103 (no shared mutable state) and FR-105 (cooperative execution), and FR-111 (fatal-error halt). This is called out explicitly rather than forcing a fabricated test ID, and is itself flagged as a gap to close with an automated check (e.g. a linter run in CI) if that is ever added.
 
 ## 7.1 Product Requirements (FR-0xx / NFR-0xx / CON-0xx)
 

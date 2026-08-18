@@ -159,7 +159,7 @@ bool ott_pacman_ai_run(const uint8_t* in_parameter, char* out_reason, size_t in_
     prv_measure_frame_cost();
 
     cli_print("The AI has Pac-Man. Watch for, and confirm:");
-    cli_print("  - the HUD shows AI between the score and the level (FR-032)");
+    cli_print("  - the HUD shows AI between the score and the level");
     cli_print("  - the stick does nothing at all while it plays (FR-031)");
     cli_print("  - it is still playing after a level turns over and after a life is lost");
     cli_print("  - it hunts ghosts rather than only eating pellets, and reaches level 5 or 6");

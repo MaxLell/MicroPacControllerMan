@@ -41,6 +41,13 @@ silently working around a wart.
 
 ## Status
 
+**Deployed today, measured on the board (2026-08-18):** flash **21.2 %** (109,420 B of the 504 kB
+the linker leaves the firmware), main RAM **89.4 %** (234,344 B of 256 kB), SRAM4 **73.3 %**
+(12,008 B of 16 kB). **450** host unit tests green; **6 of 6** automatic on-target tests green,
+7 more need somebody at the board. Worst look-ahead slice **12 ms of the 13 ms** a frame has
+spare. Every other percentage below is the figure *at its own milestone* and is kept as history —
+check this line, not those, for what the image on the board costs.
+
 - **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
   (7.4 %), RAM 3.5 kB (1.3 %), `.noinit` present for the retained-RAM reset flow.
@@ -205,7 +212,8 @@ silently working around a wart.
     search. §1–§14 are the trained agent and are history — kept because a fortnight of measured
     negative results is the most useful part of this milestone.
 
-- **The machine that plays is the look-ahead search: 21,870 at Ø level 5.9 on the classic maze, 19,744 at 5.0 on generated ones (DEC-050..055).** `App/pacman_lookahead`
+- **The machine that plays is the look-ahead search: 19,818 on the seeds it was fitted to and 16,637 on twenty reserved ones (DEC-050..057).**
+  **Every AI score written down before 2026-08-18 was measured on a different stopwatch and does not compare with these.** `Training/fit_lookahead.c` used to let a run go 120,000 ticks — 32 minutes of game time — and commit `974aeb2` cut that to **30,000**, eight minutes, deliberately: a candidate weighting survival heavily simply hid, reached the ceiling on every run and held a core for hours. So the **21,870 at Ø level 5.9** this line used to claim is real and belongs to the old ceiling; it is not a regression and it is not reproducible today. Anything quoted from [M6 §15](Docu/Design/M6-Pacman-AI.md)–§17 carries the same caveat. `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
