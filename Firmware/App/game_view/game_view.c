@@ -717,15 +717,15 @@ static void prv_fill_actor_items(const game_view_t* const in_view, msg_display_l
     /* Pacman last, so he is on top where he and a ghost share a cell — which is exactly
      * the moment the player is looking at.
      *
-     * Green while the agent has him, yellow while the player does (FR-032). The HUD's three letters
-     * say the same thing, and this says it about the thing the eye is already following — which is
-     * the difference between knowing and having to look. The *lives* in the HUD stay yellow: they
-     * are a count of what is left, not the figure somebody is steering. */
+     * **Yellow whoever is steering.** He used to turn green while the machine had him, so that who
+     * was playing could be seen from across the room; the owner asked for the arcade's yellow back.
+     * The HUD's `AI` says the same thing in the place a player looks for facts about the run, and it
+     * says it without recolouring the one figure the eye follows for a whole game. */
     prv_get_actor_pixel(&in_view->state.pacman, &x, &y);
     prv_add_item(
         inout_list, DISPLAY_ITEM_ACTOR,
         sprite_set_get_pacman_sprite((direction_e)in_view->state.pacman.direction, in_view->state.pacman.progress),
-        (in_view->player != 0U) ? SPRITE_SET_PALETTE_PACMAN_AI : SPRITE_SET_PALETTE_PACMAN, x, y);
+        SPRITE_SET_PALETTE_PACMAN, x, y);
 }
 
 /* ==========================================================================

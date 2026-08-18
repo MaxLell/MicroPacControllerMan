@@ -132,13 +132,6 @@ typedef enum
 typedef enum
 {
     SPRITE_SET_PALETTE_PACMAN = 0,
-
-    /*! \brief Pac-Man while the trained agent is steering him (FR-032).
-     *
-     * Green, so that who is playing is visible from across the room rather than only in the three
-     * letters the HUD has room for. */
-    SPRITE_SET_PALETTE_PACMAN_AI,
-
     SPRITE_SET_PALETTE_BLINKY,
     SPRITE_SET_PALETTE_PINKY,
     SPRITE_SET_PALETTE_INKY,

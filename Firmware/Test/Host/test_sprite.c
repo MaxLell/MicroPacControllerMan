@@ -299,26 +299,6 @@ void test_the_font_has_a_hyphen(void)
     }
 }
 
-/* The AI's green is a colour of this palette and not merely a free one: it is the maze's own blue
- * with its channels rotated, so it carries the same saturation and brightness as the walls it is
- * seen against. Asserted as a *relationship*, because a bare hex value in a test says nothing
- * about why that value and not another. */
-void test_the_ai_recolours_pacman_without_leaving_the_palette(void)
-{
-    const sprite_palette_t* const player = sprite_set_get_palette(SPRITE_SET_PALETTE_PACMAN);
-    const sprite_palette_t* const agent = sprite_set_get_palette(SPRITE_SET_PALETTE_PACMAN_AI);
-    const sprite_palette_t* const wall = sprite_set_get_palette(SPRITE_SET_PALETTE_WALL);
-
-    TEST_ASSERT_NOT_EQUAL_HEX16(player->colors[1], agent->colors[1]);
-    TEST_ASSERT_NOT_EQUAL_HEX16(wall->colors[1], agent->colors[1]);
-
-    /* RGB565: five bits of red, six of green, five of blue. The wall's red and blue are equal and
-     * its green is the bright one; the agent's swaps green with blue, which is the rotation. */
-    TEST_ASSERT_EQUAL_UINT((wall->colors[1] >> 11) & 0x1FU, (agent->colors[1] >> 11) & 0x1FU);
-    TEST_ASSERT_EQUAL_UINT(wall->colors[1] & 0x1FU, (agent->colors[1] >> 6) & 0x1FU);
-    TEST_ASSERT_EQUAL_UINT(((wall->colors[1] >> 5) & 0x3FU) >> 1, agent->colors[1] & 0x1FU);
-}
-
 void test_the_four_ghosts_differ_only_in_colour(void)
 {
     const sprite_palette_t* const blinky = sprite_set_get_palette(SPRITE_SET_PALETTE_BLINKY);

@@ -975,14 +975,6 @@ static const sprite_t g_sprites[SPRITE_SET_ID_COUNT] = {
  * slot, kept so the array index matches the digit in the art. */
 static const sprite_palette_t g_palettes[SPRITE_SET_PALETTE_COUNT] = {
     [SPRITE_SET_PALETTE_PACMAN] = {{0U, FRAMEBUFFER_COLOR_YELLOW, 0U, 0U}},
-
-    /* The same drawing while the AI is steering. The green is **the maze's own blue with its
-     * channels rotated** — (33, 33, 222) becomes (33, 222, 33) — which is why it belongs to this
-     * palette rather than merely avoiding a clash with it: it is the same saturation and the same
-     * brightness as the walls it is seen against, so it reads as a colour of this game. Pure green
-     * would sit at the palette's edge next to Inky's cyan, and yellow-green would be mistaken for
-     * the yellow it replaces at 16 pixels. */
-    [SPRITE_SET_PALETTE_PACMAN_AI] = {{0U, FRAMEBUFFER_RGB(33U, 222U, 33U), 0U, 0U}},
     [SPRITE_SET_PALETTE_BLINKY] = {{0U, FRAMEBUFFER_RGB(255U, 0U, 0U), FRAMEBUFFER_COLOR_WHITE,
                                     FRAMEBUFFER_RGB(0U, 0U, 160U)}},
     [SPRITE_SET_PALETTE_PINKY] = {{0U, FRAMEBUFFER_RGB(255U, 184U, 255U), FRAMEBUFFER_COLOR_WHITE,
