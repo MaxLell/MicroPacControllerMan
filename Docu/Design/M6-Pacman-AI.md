@@ -1362,6 +1362,20 @@ Three sets gain about a level and a half, one gains nothing, so the honest headl
 average, not a uniform improvement**. Absolute levels vary far more between seed sets than between the
 two weightings: **mazes differ in difficulty more than players do.**
 
+**Generation 14 was checked too, and it lost.** The fit's own cross-validation preferred it — 5.40
+against generation 8's 5.35 — so the better-selected candidate was measured on the held-back seeds
+before anything was adopted:
+
+| candidate | cross-validated | held-back `1000..1019` | points | idle endings |
+|---|---|---|---|---|
+| **generation 8** (adopted) | 5.35 | **5.50** | 27,835 | 8 / 20 |
+| generation 14 | 5.40 | 5.20 | 27,898 | 6 / 20 |
+
+The ordering flipped, which is the useful part: **a 0.05-level difference in cross-validation is
+noise**, not a ranking. Generation 14 is marginally better on points and stalls slightly less often,
+and on the objective — levels cleared — it is 0.30 worse. Where two candidates are within a tenth of
+a level of each other, the choice has to be made on the held-back set or not at all.
+
 The shape of the winner is the part worth keeping. `prey` 68 → **97** and `death` 44,033 →
 **100,170** while `point` 8 → **4**: the player that clears levels **hunts harder, fears death more,
 and has stopped playing for single pellets.** §18.2's "turn hunting off" was an artefact of a limit
