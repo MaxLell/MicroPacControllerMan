@@ -28,6 +28,10 @@ Start at **[`Docu/PrePlanning/Index.md`](Docu/PrePlanning/Index.md)**. Most-used
 - **[09 OTT Mechanism](Docu/PrePlanning/09-OTT-Mechanism-and-Reset-Flow.md)** — the reset-based on-target-test flow.
 - **[11 Decisions & As-Built](Docu/PrePlanning/11-Decisions-and-As-Built.md)** — what was actually built and why (deviations from the intended design).
 
+**[`Docu/How-Pac-Man-Thinks.md`](Docu/How-Pac-Man-Thinks.md)** is the readable explanation of the machine
+that plays — the forward model, the six weights and what they cost, with diagrams. It renders on GitHub
+and is the page to hand somebody who wants to understand the AI without reading M6.
+
 Each milestone also gets its own **design document** under **[`Docu/Design/`](Docu/Design/)**
 carrying the *how* — pin assignments, clock settings, transfer budgets, tool choices. The
 requirements deliberately carry none of that: keep hardware detail out of `02` and put it there.

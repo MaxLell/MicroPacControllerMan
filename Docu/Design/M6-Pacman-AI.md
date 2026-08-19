@@ -7,6 +7,10 @@ The *how* behind FR-030..039 and FR-112..114: an agent trained on the host that 
 the board. The requirements say what it must do; this document says how it is built, and it is
 the place for every number, tool choice and trap.
 
+> **For a reader rather than a maintainer:** [How Pac-Man Thinks](../How-Pac-Man-Thinks.md) explains the
+> machine that plays today — the forward model, the six weights, what a frame costs — with diagrams and
+> without the dead ends. This document is the record; that one is the explanation.
+
 > **The trained agent no longer exists either.** On **2026-08-17** the owner asked for the NEAT
 > implementation to be deleted and only the look-ahead search kept
 > ([DEC-054](../PrePlanning/11-Decisions-and-As-Built.md)). `App/pacman_ai`, `Services/neural_net`,
