@@ -39,7 +39,7 @@ NAMES = ["point", "death", "threat", "prey", "food", "escape"]
 # What the firmware ships; a fit starts from it, not from nothing. `FIT_START` overrides it, as six
 # comma-separated numbers, so a run can begin from whatever the last experiment found.
 START = [int(v) for v in os.environ["FIT_START"].split(",")] if os.environ.get("FIT_START") \
-    else [8, 44033, 17, 68, 3, 2]
+    else [4, 100170, 22, 97, 5, 5]
 
 # How far each may move at the start, and the floor it may not fall below. `death` is deliberately
 # coarse: it only has to stay far larger than anything a branch can gain.
