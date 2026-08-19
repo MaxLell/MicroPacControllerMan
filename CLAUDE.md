@@ -41,13 +41,17 @@ silently working around a wart.
 
 ## Status
 
-**Deployed today, measured on the board (2026-08-18):** flash **21.2 %** (109,420 B of the 504 kB
-the linker leaves the firmware), main RAM **94.0 %** (246,360 B of 256 kB), SRAM4 **73.3 %**
-(12,008 B of 16 kB). **450** host unit tests green; **6 of 6** automatic on-target tests green,
-7 more need somebody at the board. The look-ahead searches **4 junctions** deep and its worst
-slice is **11 ms of the 13 ms** a frame has spare. Every other percentage below is the figure
-*at its own milestone* and is kept as history — check this line, not those, for what the image
-on the board costs.
+**Deployed today, measured on the board (2026-08-19):** flash **21.2 %** (109,420 B of the 504 kB
+the linker leaves the firmware), main RAM **94.0 %** (246,368 B of 256 kB), SRAM4 **73.3 %**
+(12,008 B of 16 kB). **450** host unit tests green; the automatic on-target suite is **11 of 11**
+green (six `ott` scenarios plus five console checks), 7 more need somebody at the board. The
+look-ahead searches **4 junctions** deep, plays for **levels cleared** rather than for score
+(DEC-060, weights `4 100170 22 97 5 5`), and its frame slice costs **7.3 ms mean / 11 ms worst** of
+the 13 a frame has spare. **The 2.9 ms mean quoted further down is a depth-3 figure and was never
+re-measured when depth 4 shipped** (DEC-059); both weightings were measured back to back at 7.28 and
+7.33 ms, so the mean belongs to the depth, not to the weights. Every other percentage below is the
+figure *at its own milestone* and is kept as history — check this line, not those, for what the
+image on the board costs.
 
 - **M1 Toolchain Bring-Up on the U545RE — done, verified on hardware.** Build → flash →
   boot → console, with the OTT CLI answering and `ott user_button` passing. Flash 38.9 kB
@@ -213,8 +217,8 @@ on the board costs.
     search. §1–§14 are the trained agent and are history — kept because a fortnight of measured
     negative results is the most useful part of this milestone.
 
-- **The machine that plays is the look-ahead search: 19,818 on the seeds it was fitted to and 16,637 on twenty reserved ones (DEC-050..057).**
-  **Every AI score written down before 2026-08-18 was measured on a different stopwatch and does not compare with these.** `Training/fit_lookahead.c` used to let a run go 120,000 ticks — 32 minutes of game time — and commit `974aeb2` cut that to **30,000**, eight minutes, deliberately: a candidate weighting survival heavily simply hid, reached the ceiling on every run and held a core for hours. So the **21,870 at Ø level 5.9** this line used to claim is real and belongs to the old ceiling; it is not a regression and it is not reproducible today. Anything quoted from [M6 §15](Docu/Design/M6-Pacman-AI.md)–§17 carries the same caveat. `App/pacman_lookahead`
+- **The machine that plays is the look-ahead search, and since DEC-060 it plays for levels cleared: 5.50 levels and 27,835 points on twenty reserved seeds (DEC-050..057, DEC-060).**
+  **Every AI figure written down before 2026-08-19 was measured on a different stopwatch and against a different objective — score, not levels — and does not compare with these.** The scores below are history for that reason, not a regression. `Training/fit_lookahead.c` used to let a run go 120,000 ticks — 32 minutes of game time — and commit `974aeb2` cut that to **30,000**, eight minutes, deliberately: a candidate weighting survival heavily simply hid, reached the ceiling on every run and held a core for hours. So the **21,870 at Ø level 5.9** this line used to claim is real and belongs to the old ceiling; it is not a regression and it is not reproducible today. Anything quoted from [M6 §15](Docu/Design/M6-Pacman-AI.md)–§17 carries the same caveat. `App/pacman_lookahead`
   decides by **playing the game forward**: `game_clone` copies the run, the clone is driven down
   each way out to the next junction, and the branch whose end position is worth most wins. There is
   no model of the game in it — the forward model *is* `game_tick`, so no second set of rules can
@@ -317,6 +321,30 @@ on the board costs.
     this part, three of them plus the frame buffer put main RAM at **89.9 %**, and the root copy is
     the 12 kB in **SRAM4**. Until something calls the module the linker drops it whole.
     See [M6 §15](Docu/Design/M6-Pacman-AI.md) and [§16](Docu/Design/M6-Pacman-AI.md).
+  - **It plays for levels cleared now, and the weights say something the arguing had backwards
+    (DEC-060, 2026-08-19).** The owner's objective changed from score to levels, so
+    `fit_lookahead.py` ranks by levels with points only breaking a tie, and a run ends on
+    **idleness** rather than on a total-tick ceiling that allowed 5.4 levels and was ending 7 of 20
+    runs — the measurement was capping what it measured. Weights `8 44033 17 68 3 2` →
+    **`4 100170 22 97 5 5`**: `prey` 68 → 97 and `death` 44,033 → 100,170 while `point` 8 → 4, so
+    **the player that clears levels hunts harder, fears death more, and has stopped playing for
+    single pellets.** Turning hunting off was measured and loses levels. On the held-back
+    `1000..1019`: **5.50 levels / 27,835 points against 4.00 / 20,659**; across four seed sets 4.70
+    against 3.67, **+28 % and not uniform** — one set gains nothing, so mazes differ more than the
+    weightings do.
+    - **A candidate is selected on two disjoint seed sets and ranked by the worse of them**, because
+      three fits selected on one set alone each reached five levels on their own draws and under four
+      on unseen ones. That doubled the simulation per candidate and is what made a number transfer.
+    - **`death` is a switch, not a dial:** 8,000 through 100,170 give byte-identical runs on seed set
+      6000. It only has to be large; a future fit should spend its search elsewhere.
+    - **`threat` is why the player sometimes stands still, and that is how it survives.** Cutting it
+      to 8 nearly removes the idling and costs a third of the levels, because deaths go from 12 of 20
+      runs to 19. Do not "fix" the standing still that way.
+    - **The open risk is the standing still**: 8 of 20 host runs end on the idle rule where the old
+      numbers ended 1, and **the board has no idle rule** — there Pac-Man simply stands. Watching a
+      run is the check no table performs.
+    - **The weights cost no frame time**, measured back to back on the board: 7.28 ms mean / 12 ms
+      worst before, 7.33 / 11 after, of the 13 a frame has spare. Suite 11 of 11.
 
 - **The menu is a list and a confirm, one page per question (DEC-056, FR-040..043).** The owner
   sketched it as one screen after another:

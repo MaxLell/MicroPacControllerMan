@@ -472,24 +472,38 @@ static void prv_advance_food_field(const game_t* const in_game, uint16_t in_cell
 
 /*! \brief The weights in force. Defaults until a host fit says otherwise.
  *
- * **Fitted, not chosen** — `Training/fit_lookahead.py`, a (1+6) evolution strategy over twelve whole
- * games on seeds 2000..2011, two independent runs of two hours from the previous defaults. This is the
- * better of the two at generation 29: **19,818 mean score at mean level 4.83**, against the 14,692 the
- * numbers it replaces score on the same twelve draws.
+ * **Fitted against levels cleared, not against score** — `Training/fit_lookahead.py`, a (1+6)
+ * evolution strategy over twenty whole games, points only breaking a tie. A candidate is scored on
+ * **two disjoint seed sets** (2000..2019 and 3000..3019) and ranked by the *worse* of the two: three
+ * earlier fits that were selected on one set alone all reached five levels on their own draws and
+ * fewer than four on unseen ones, so single-set selection is what had to change, not the search.
  *
- * What the fit found is worth more than the number. It went **further** the way [M6 §17](
- * ../../../Docu/Design/M6-Pacman-AI.md) first went: `prey` 53 -> 68 and `point` 2 -> 8, while `death`
- * came *down* by a third and `escape` 10 -> 2. It plays for ghosts and for pellets and has all but
- * stopped paying for elbow room — which is the game's own arithmetic, a four-ghost sweep being 3,000
- * against 2,440 for a whole level of pellets.
+ * On the held-back `1000..1019`, which nothing was fitted *or* selected on: **5.50 levels cleared and
+ * 27,835 points, against the 4.00 and 20,659 the numbers this replaces get on the same draws.** Across
+ * four seed sets the mean is 4.70 against 3.67 — **+28 %, not a uniform win**: three sets gain about a
+ * level and a half and one gains nothing at all. Mazes differ in difficulty more than players do.
+ *
+ * What the fit found is worth more than the number, and it is the opposite of the hypothesis it
+ * started from. `prey` 68 -> 97 and `death` 44,033 -> 100,170 while `point` 8 -> 4: the player that
+ * clears levels **hunts harder and fears death more**, and has stopped playing for single pellets.
+ * Turning hunting off was measured too and loses levels.
+ *
+ * Two things about these numbers that a future fit should not have to rediscover:
+ *
+ *   - **`death` is a switch, not a dial.** On seed set 6000 the values 8,000, 30,000, 60,000 and
+ *     100,170 produce byte-identical runs — same levels, same deaths. Over a factor of twelve it
+ *     changes no decision, so it only has to be *large*. Spend the search elsewhere.
+ *   - **`threat` is why the player sometimes stands still, and that is how it survives.** Cutting it
+ *     to 8 all but removes the idling and costs a third of the levels, because deaths go from 12 of 20
+ *     runs to 19. Do not "fix" the standing still by lowering it.
  */
 static pacman_lookahead_weights_t g_weights = {
-    .point = 8,
-    .death = 44033,
-    .threat = 17,
-    .prey = 68,
-    .food = 3,
-    .escape = 2,
+    .point = 4,
+    .death = 100170,
+    .threat = 22,
+    .prey = 97,
+    .food = 5,
+    .escape = 5,
 };
 
 /* What a simulated position is worth, measured against the position the search started from.
@@ -907,12 +921,12 @@ void pacman_lookahead_get_report(pacman_lookahead_report_t* out_report)
 void pacman_lookahead_get_default_weights(pacman_lookahead_weights_t* out_weights)
 {
     static const pacman_lookahead_weights_t k_defaults = {
-        .point = 8,
-        .death = 44033,
-        .threat = 17,
-        .prey = 68,
-        .food = 3,
-        .escape = 2,
+        .point = 4,
+        .death = 100170,
+        .threat = 22,
+        .prey = 97,
+        .food = 5,
+        .escape = 5,
     };
 
     ASSERT(out_weights != NULL);

@@ -15,8 +15,10 @@ the place for every number, tool choice and trap.
 > network that is not in the tree, and a fortnight of measured results about training it. They are
 > kept deliberately: four separate ideas measured *not* to help is the most useful thing this
 > milestone produced, and a reader who is about to try one of them should find it written down.
-> **[§15](#15-the-look-ahead-player-the-game-as-its-own-forward-model)–[§17](#17-a-leaf-that-can-see-and-weights-that-were-fitted-rather-than-argued)
-> are the current state.**
+> **[§15](#15-the-look-ahead-player-the-game-as-its-own-forward-model)–[§18](#18-fitting-for-levels-instead-of-for-score)
+> are the current state**, and [§18](#18-fitting-for-levels-instead-of-for-score) is what is on the
+> board: since **2026-08-19** the objective is **levels cleared, not score**, so every score quoted in
+> §15–§17 was measured against a different question as well as on a different stopwatch.
 
 > **FR-037 no longer exists.** The owner withdrew the play-strength requirement and its test on
 > **2026-08-17** ([DEC-053](../PrePlanning/11-Decisions-and-As-Built.md)) — he wants the score
@@ -24,7 +26,9 @@ the place for every number, tool choice and trap.
 > sections are dated records of what was true when they were written and because a threshold that was
 > chased and missed for a fortnight is part of how this milestone went. What survives is the *scale*:
 > 4,600 was ten times a random policy, and a cleared level 1 is 2,600. [§17](#17-a-leaf-that-can-see-and-weights-that-were-fitted-rather-than-argued)
-> is the current state, and the player there scores **21,870**.
+> was the current state when it was written, and the player there scores **21,870** — a figure
+> [§18](#18-fitting-for-levels-instead-of-for-score) does not compare with, because the objective
+> changed from score to levels cleared.
 
 > **As-built, with FR-037 outstanding again — and this time for an instructive reason.** Everything
 > below is implemented and, where it touches hardware, verified on the board: `Services/neural_net`,
@@ -1263,7 +1267,8 @@ runs on the board.
 
 - **The weights were fitted before the cap and the slice change**, so they are the best weights for a
   player that no longer exists. Refitting against the shipped configuration is the obvious next
-  hour of wall clock and nobody has spent it.
+  hour of wall clock and nobody has spent it. **Done — [§18](#18-fitting-for-levels-instead-of-for-score),
+  2026-08-19 — and against a different objective, levels cleared rather than score.**
 - **`density` is gone** — pellets within the radius, weight 2 out of a range where prey got 53. It
   was the only term that forced a full sweep, so the cheapest term to compute was carrying the most
   and the dearest almost nothing.
@@ -1271,3 +1276,151 @@ runs on the board.
   (90 % of a decision is `game_tick`, and every tick pays for a broker whose output the search throws
   away), and drawing less often in the AI's own game (7 ms of a 20 ms frame goes on drawing a game
   nobody is steering). Either would buy back what §17.3 spent.
+
+## 18 Fitting for levels instead of for score
+
+§17.4 left one thing open: the weights were the best ones for a player that no longer existed,
+because they had been fitted before the leaf-scan cap and the shorter slice. The night of
+**2026-08-18** spent that hour of wall clock — and against a different objective, because the owner's
+question changed from *how much does it score* to **how many levels does it clear** (DEC-060).
+
+### 18.1 The objective, and why the old harness could not measure it
+
+A caught ghost is worth 3,000 points and no progress at all, and ghosts were **36 %** of the score
+over twenty runs. So a fit ranking by score was rewarding the wrong thing for the question being
+asked. `fit_lookahead.py` now ranks by **levels cleared** with points only breaking a tie, and levels
+are counted when **cleared**, not when entered — otherwise a per-level limit is gameable by hiding
+through a level having eaten nothing.
+
+The harness itself was the first thing that had to change, and it is the more useful lesson: a level
+costs about 5,550 ticks and a run was cut off at **30,000**, so the ceiling allowed 5.4 levels and was
+already ending **7 of 20** runs. *The measurement was capping the very quantity it measured.* For
+comparison, ALE's convention for Atari is 108,000 frames — about thirty minutes — where ours was
+eight. The ceiling is replaced by two rules that bound a run without capping a player still getting
+somewhere:
+
+- **idleness** (`FIT_IDLE_TICKS`, 2,000): no score of any kind for that long ends the run. This is
+  what stops a candidate that only survives from holding a core for hours, which is why the tick
+  ceiling existed in the first place. A caught ghost counts as progress — the rule is against
+  standing still, not against hunting.
+- **a per-level limit** (`FIT_LEVEL_TICKS`), the Ms. Pac-Man vs Ghosts competition's rule. Theirs
+  pushes Pac-Man into the next level and pays half the remaining pills; ours ends the run, because a
+  level nobody cleared is worth nothing to this objective either way.
+
+### 18.2 The constant that was doing the comparing
+
+The first experiment ran five hand-built variants under `FIT_LEVEL_TICKS = 7,500` and concluded
+*turn ghost-hunting off*. It was wrong, and the way it was wrong is worth keeping:
+
+| per-level limit | baseline `prey=68` | `prey=0` | |
+|---|---|---|---|
+| 7,500 | 3.15 levels | **3.85** | `prey=0` wins by 0.70 |
+| 15,000 | **4.00** | 3.85 | baseline wins by 0.15 |
+
+`prey=0` is identical under both because it never hit the limit. Only the *hunting* player changed —
+it was being cut off in 6 of 20 runs — so **the ordering flipped on a constant nobody had questioned.**
+At 15,000 neither arm hits the limit at all, so it is a backstop again rather than a shaper.
+
+**The rule that came out of it:** any arm cut off by a limit more often than its rivals is not being
+measured, it is being handicapped. Check `ended_by_cap` before believing an ordering.
+
+### 18.3 Selection, not search, was the thing that was too weak
+
+Three fits in one evening produced weights that were excellent on their own draws and worse than
+untouched on unseen ones:
+
+| fit | on its own seeds | on the held-back 1000..1019 | shipped weights, same harness |
+|---|---|---|---|
+| one-fold, tight limit | 5.00 | 2.25 | 3.15 |
+| one-fold, loose limit | 4.65 | 3.80 | 4.00 |
+
+The diagnostics say how, not just that: the fitted policies **stall** on mazes they have not seen —
+`ended_by_idle` 7 of 20 against the baseline's 1 — and a slow player is what a per-level limit
+punishes first.
+
+Twenty runs of a coarse integer objective is not enough signal from one seed set, so a candidate is
+now evaluated on **two disjoint sets** (2000..2019 and 3000..3019) and ranked by the **worse** of the
+two. Weights that only work on one set cannot win. It costs exactly twice the simulation per
+candidate, which is the price of a number that transfers — and it did transfer, conservatively:
+cross-validation reported 3.90 where the holdout gave 4.05, and 5.35 where it gave 5.50. **It
+understates rather than flatters**, which is precisely what one-fold selection failed to do.
+`1000..1019` was in neither set and stays reserved.
+
+### 18.4 What was adopted, and what it says
+
+**`point=4 death=100170 threat=22 prey=97 food=5 escape=5`** — generation 8 of the two-fold fit.
+
+| seed set | fitted weights | shipped `8 44033 17 68 3 2` | gain |
+|---|---|---|---|
+| 1000..1019 | **5.50** | 4.00 | +37.5 % |
+| 4000..4019 | **5.35** | 3.95 | +35.4 % |
+| 5000..5019 | **4.40** | 3.20 | +37.5 % |
+| 6000..6019 | 3.55 | 3.55 | ±0 % |
+| **mean** | **4.70** | **3.67** | **+27.9 %** |
+
+Three sets gain about a level and a half, one gains nothing, so the honest headline is **+28 % on
+average, not a uniform improvement**. Absolute levels vary far more between seed sets than between the
+two weightings: **mazes differ in difficulty more than players do.**
+
+The shape of the winner is the part worth keeping. `prey` 68 → **97** and `death` 44,033 →
+**100,170** while `point` 8 → **4**: the player that clears levels **hunts harder, fears death more,
+and has stopped playing for single pellets.** §18.2's "turn hunting off" was an artefact of a limit
+that punished the time hunting costs; with the limit loosened the fit moved the opposite way. No
+amount of arguing finds that, which is the same conclusion §17.2 reached about `point` and `prey` one
+objective earlier.
+
+### 18.5 Two things a future fit should not have to rediscover
+
+**`death` is a switch, not a dial.** On seed set 6000 the values 8,000, 30,000, 60,000 and 100,170
+produce **byte-identical** runs — same score, same levels, same 8 idle endings, same 12 deaths. Over a
+factor of twelve it changes no decision at all: it dominates every other term in every comparison it
+enters, so it only has to be *large*. Spend the search elsewhere.
+
+**The stalling is not a defect — it is how the player survives.** The winner ends many runs on the
+idle rule, which looks like the obvious thing to fix. It is caused by `threat`:
+
+| on 6000..6019 | levels | idle endings | deaths |
+|---|---|---|---|
+| `threat=22` (adopted) | **3.55** | 8/20 | 12/20 |
+| `threat=8` | 2.40 | **1/20** | 19/20 |
+
+Cutting `threat` all but eliminates the idling and costs **a third of the levels**, because the player
+then dies in 19 of 20 runs instead of 12. Keeping its distance is what keeps it alive. **Do not "fix"
+the idling by lowering `threat`.**
+
+### 18.6 On the board
+
+The weights are six `int32_t`; no code changed and no memory moved. Measured back to back on the
+target with `ott lookahead_cost`:
+
+| | mean slice | worst slice |
+|---|---|---|
+| `8 44033 17 68 3 2` | 7,280 µs | 12 ms |
+| `4 100170 22 97 5 5` | 7,332 µs | 11 ms |
+
+Both inside the 13 ms a frame has spare, and the difference is noise — **the weights are not what a
+frame pays for.** Worth recording because §16's `2.9 ms mean` is still quoted in places: that figure
+is **depth 3**, and it was never re-measured when DEC-059 made the depth 4. The mean belongs to the
+depth. Flash 109,420 B (21.2 %), main RAM 246,368 B (94.0 %), SRAM4 12,008 B (73.3 %), 450 host unit
+tests and the whole automatic on-target suite green.
+
+**The open risk is the standing still.** The adopted weights end 8 of 20 host runs on the idle rule
+where the old numbers ended 1 — and **the board has no idle rule**, so there Pac-Man simply stands
+still until somebody does something. That is a real fragility rather than a scoring trick, and
+watching a run is the check no table performs.
+
+### 18.7 Where the search ended, and what to try next
+
+Two arms ran the night: one refining continuously, one restarted from the winner with fresh step
+sizes and a different mutation stream. The first found nothing better in its last five generations,
+the second never beat its own starting point in nine. **The neighbourhood of these six numbers is
+exhausted**; the next gain will not come from re-weighting them.
+
+1. **A term the six weights cannot express.** The stall-or-die trade-off is currently one number for
+   every situation. What the player lacks is a *state-dependent* pull: toward pellets when no ghost is
+   near, away when one is. That is a new evaluation term, not a new weight.
+2. **Depth 5**, worth +0.30 levels when it was measured, needs a cheaper depth level first: `walls`,
+   `tunnels`, `house` and `gates` are 3,472 B of every 12,008 B `game_t` and never change during a
+   search, so clones could share them.
+3. **A quarter of the simulation moves Pac-Man nowhere** — 9.7 ticks per simulated cell where
+   movement needs seven to eight. Branches walking into walls.
