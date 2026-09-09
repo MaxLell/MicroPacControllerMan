@@ -141,20 +141,31 @@ above, so changing one number and re-running rebuilds both parts.
 
 ### The snap
 
-Six cantilever hooks hang off the lid — two per long side, one per end — and spring into
-through windows in the base's walls. **14 mm long, 1.6 mm thick, 8 mm wide, 0.80 mm of
-engagement.** In PLA what matters is the arm's peak strain, which for a rectangular
-cantilever is `1.5 · thickness · deflection / length²`; here that is **1.16 %**, comfortably
-under the roughly 2 % where PLA stops springing back. Lengthening the arm is the cheap way to
-lower it, thickening it the expensive way to raise it.
+**What flexes is a horizontal tongue cut out of the base's wall**, not a finger hanging off
+the lid — and that is a layer-direction decision rather than a strength one. Printed
+lid-face-down, a hanging finger grows in Z and bends *across* its layers, which is the one
+direction PLA is weak in: about 30 MPa against 55 along them. The first version of this
+design had exactly that, at 41 MPa nominal and near 75 with the sharp corner at its root. It
+would have broken, and no amount of extra material behind it would have helped — peak strain
+is `1.5 · thickness · deflection / length²`, so a beefier spring breaks *sooner*.
 
-The lug's lead-in and its retention face are both at 45°, so the lid pushes on with a
-moderate shove and can be pulled off with a firm one. The windows go **all the way through**
-on purpose: the engagement is visible from outside, a paper clip releases a hook, and a snap
-that cannot be released is a box that has to be broken open.
+A tongue in a wall printed floor-down bends within its layers instead:
 
-Both faces at 45° is also what makes the arms printable with the lid face-down — steeper
-retention would hold better and would need support.
+| | |
+|---|---|
+| tongue | 28 × 6 mm, the wall's own 2.4 mm thick, freed by a 1.2 mm slot |
+| engagement | **0.75 mm** |
+| peak strain | **0.56 %** — about 20 MPa against ~55 |
+
+Six of them: two per long side, one per end. The one on the USB wall sits off to the side
+because the socket's opening takes the middle.
+
+The lid's half is a **rigid nub**, stepped so the tongue's nose has an upward-facing ledge to
+sit on. Nothing on the lid flexes, and nothing on it is long enough to snap off in a pocket.
+
+Both mating faces are at 45°, which is the steepest either can be and still print without
+support, and which makes the lid come off with a firm pull. To open it deliberately, push a
+tongue outward with a fingernail — it is part of the outer wall, so it is right there.
 
 ### What else decided its shape
 
@@ -169,8 +180,9 @@ supported on all sides, not a span.
 holds the board stack down — on three sides only. On the fourth the display's flex crosses
 the board edge on its way to the slot and stands 1.30 mm proud, so the pocket runs past it.
 
-**The walls stand 3.0 mm off the boards** — enough for an arm, its sliding gap, and the
-0.95 mm it swings inward as it goes in. That is the whole reason the box is not tighter.
+**The walls stand 3.0 mm off the boards** — enough for the lid's nub and its sliding gap.
+That is the whole reason the box is not tighter. The tongues need no room inside: they bulge
+*outward* when the lid goes on.
 
 **The Nucleo is located, not screwed.** Three standoffs 4 mm high, each with a Ø2.90 peg into
 the board's Ø3.20 holes, and the lid's rim above.
@@ -185,8 +197,9 @@ opening and of the six snap windows, all short bridges. Print the **lid top-face
 the visible surface is against the bed and the hooks grow upward off it. Neither part needs
 support.
 
-The hooks are the one place where **layer direction matters**: printed this way an arm bends
-across its layers rather than peeling them apart, which is the orientation PLA survives.
+**Layer direction is load-bearing here**, which is why the spring is in the base and not on
+the lid. Printed floor-down, a tongue bends along its layers. Do not reorient either part to
+save time: printing the base on its side would put every tongue back into the weak direction.
 
 ### What has been checked, and what has not
 
@@ -196,14 +209,19 @@ intersects it with both parts, then intersects the two parts with each other:
 ```
 checking 1077 component solids
 BASE_LID_OVERLAP 0.0000 mm3
+SNAP_HOLDS 11.62 mm3 of interference when lifted 0.5 mm
 COLLISIONS 0
 ```
+
+The lifted check is there because the other two only prove the parts go *together*. A snap
+that does not get in the way of the lid coming off is not a snap, and that is invisible in
+both a render and an overlap test.
 
 It clips the two drawing artefacts above rather than skipping them, so a real part that
 happens to be low or long still counts. It has earned its keep: it found the lid's first
 locating lip coming down onto the shield's edge, a rim overlapping components by 0.08 mm, a
-rim landing on the display's flex, and — from the parts-against-each-other check — snap
-windows cut 1 mm short, which left a skin of wall for the hooks to jam against.
+rim landing on the display's flex, and snap windows cut 1 mm short, which left a skin of wall
+for the hooks to jam against — 34.76 mm³ of overlap, invisible in a render.
 
 What it cannot check is **SHIELD_PCB_TOP**, the derived stack height. Every vertical
 dimension hangs off it. **Measure it before printing.**

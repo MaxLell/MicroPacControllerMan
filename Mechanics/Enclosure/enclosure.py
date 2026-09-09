@@ -65,23 +65,32 @@ POCKET_FLEX_MARGIN = 0.6  # the pocket runs this far past the shield's flex edge
 OUTER_CORNER_RADIUS = 3.0
 INNER_CORNER_RADIUS = 1.5
 
-# The snap. A cantilever hook on the lid springs into a window in the base's wall.
-# In PLA the arm's peak strain is what matters, and for a rectangular cantilever it is
-# 1.5 * thickness * deflection / length^2. With these numbers that is 1.2 %, comfortably
-# under the ~2 % where PLA stops coming back. Lengthening the arm is the cheap way to
-# lower it; thickening it is the expensive way to raise it.
-ARM_LENGTH = 14.0
-ARM_THICKNESS = 1.6
-ARM_WIDTH = 8.0
-ARM_GAP = 0.15  # arm's back to the wall, so it can slide
-LUG_PROJECTION = 0.95  # of which ARM_GAP is taken up reaching the wall face
-LUG_LEAD_IN = 1.2  # the ramp the lug rides in on
-WINDOW_WIDTH = ARM_WIDTH + 1.0
-WINDOW_SLACK = 0.3  # under the lug, so the lid seats on the wall and not on the window
-SNAP_CLEARANCE = 3.0  # board edge to inner wall: arm, its gap, and room to flex
+# The snap. The part that flexes is a horizontal tongue cut out of the base's wall, not a
+# finger hanging off the lid, and that is a layer-direction decision rather than a strength
+# one: printed lid-face-down, a hanging finger bends *across* its layers, which is the one
+# direction PLA is weak in. A tongue in a wall printed floor-down bends within them.
+#
+# Peak strain in a rectangular cantilever is 1.5 * thickness * deflection / length^2. Here
+# that is 0.56 %, about 20 MPa, against roughly 55 MPa for PLA along its layers. Note that
+# thickness is in the numerator: making the spring beefier makes it break sooner.
+TONGUE_LENGTH = 28.0
+TONGUE_HEIGHT = 6.0
+SLOT_WIDTH = 1.2
+WALL_ABOVE_TONGUE = 2.0  # what the lid still rests on
+NOSE_PROJECTION = 0.90  # inward from the wall's inner face
+NOSE_WIDTH = 8.0
+NOSE_LEAD_IN = 1.8  # the ramp the lid's nub rides in on
+NOSE_INSET = 6.0  # from the tongue's free end, where the leverage is
 
-# Where the six snaps sit: (axis of the wall's normal, which side, position along it).
-SNAPS = (("x", 0, 8.0), ("x", 0, 58.0), ("x", 1, 8.0), ("x", 1, 58.0), ("y", 0, 35.0), ("y", 1, 35.0))
+NUB_GAP = 0.15  # the lid's nub to the wall
+NUB_THICKNESS = 2.2
+NUB_WIDTH = 12.0
+NUB_BOTTOM = 2.0
+SNAP_CLEARANCE = 3.0  # board edge to inner wall: enough for the lid's nub and its gap
+
+# Where the six snaps sit: (axis of the wall's normal, which side, centre along it). The
+# one on the USB wall is off to the side because the socket's opening is in the middle.
+SNAPS = (("x", 0, 8.0), ("x", 0, 58.0), ("x", 1, 8.0), ("x", 1, 58.0), ("y", 0, 35.0), ("y", 1, 20.0))
 
 # ----------------------------------------------------------------- derived
 
@@ -102,8 +111,10 @@ OUTER_Y = (INTERIOR_Y[0] - WALL, INTERIOR_Y[1] + WALL)
 POCKET_X = (SHIELD_X[0] + SHIELD_RIM_OVERLAP, SHIELD_X[1] - SHIELD_RIM_OVERLAP)
 POCKET_Y = (SHIELD_Y[0] - POCKET_FLEX_MARGIN, SHIELD_Y[1] - SHIELD_RIM_OVERLAP)
 
-ARM_BOTTOM = WALL_TOP - ARM_LENGTH
-LUG_TOP = ARM_BOTTOM + LUG_LEAD_IN + LUG_PROJECTION
+ENGAGEMENT = NOSE_PROJECTION - NUB_GAP  # how far the nose actually overlaps the nub
+RECESS = ENGAGEMENT + 0.05  # the nub steps in by this above its ledge, leaving the nose room
+TONGUE_Z = (WALL_TOP - WALL_ABOVE_TONGUE - SLOT_WIDTH - TONGUE_HEIGHT, WALL_TOP - WALL_ABOVE_TONGUE - SLOT_WIDTH)
+LEDGE_Z = TONGUE_Z[0] + (TONGUE_HEIGHT - NOSE_PROJECTION - NOSE_LEAD_IN) / 2.0
 
 
 def prv_rounded_box(in_x, in_y, in_z, in_radius):
@@ -124,47 +135,86 @@ def prv_pillar(in_centre, in_diameter, in_z):
     return Part.makeCylinder(in_diameter / 2.0, in_z[1] - in_z[0], Vector(in_centre[0], in_centre[1], in_z[0]))
 
 
-def prv_snap_geometry(in_axis, in_side, in_along):
-    """The arm and lug that hang off the lid, and the window they snap into.
-
-    The wall's inner face is the reference. `outward` is the direction the lug projects,
-    which is away from the box's middle.
-    """
+def prv_snap_frame(in_axis, in_side):
+    """Where a wall is, and which way is out of the box through it."""
     interior = INTERIOR_X if in_axis == "x" else INTERIOR_Y
     outer = OUTER_X if in_axis == "x" else OUTER_Y
-    face = interior[in_side]
-    outward = -1.0 if in_side == 0 else 1.0
+    inward = 1.0 if in_side == 0 else -1.0
+    return interior[in_side], outer[in_side], inward
 
-    back = face - outward * ARM_GAP  # the arm's outward face
-    front = back - outward * ARM_THICKNESS
-    across = (in_along - ARM_WIDTH / 2.0, in_along + ARM_WIDTH / 2.0)
-    window_across = (in_along - WINDOW_WIDTH / 2.0, in_along + WINDOW_WIDTH / 2.0)
-    through = (face - outward * 1.0, outer[in_side] + outward * 1.0)  # the full wall, and past it
 
-    def spanning(in_low_high):
-        return (min(in_low_high), max(in_low_high))
+def prv_across(in_axis, in_face, in_inward, in_offsets, in_along, in_z_pairs):
+    """A prism whose cross section is given as (offset inward from the wall face, z)."""
+    points = []
+    for offset, z in zip(in_offsets, in_z_pairs):
+        depth = in_face + in_inward * offset
+        points.append(Vector(depth, in_along[0], z) if in_axis == "x" else Vector(in_along[0], depth, z))
+    face = Part.Face(Part.makePolygon(points + [points[0]]))
+    span = in_along[1] - in_along[0]
+    return face.extrude(Vector(0, span, 0) if in_axis == "x" else Vector(span, 0, 0))
 
-    if in_axis == "x":
-        arm = prv_box(spanning((front, back)), across, (ARM_BOTTOM, WALL_TOP))
-        window = prv_box(spanning(through), window_across, (ARM_BOTTOM - WINDOW_SLACK, LUG_TOP))
-        profile = [
-            Vector(back, across[0], ARM_BOTTOM),
-            Vector(back + outward * LUG_PROJECTION, across[0], ARM_BOTTOM + LUG_LEAD_IN),
-            Vector(back, across[0], LUG_TOP),
-        ]
-        sweep = Vector(0, ARM_WIDTH, 0)
-    else:
-        arm = prv_box(across, spanning((front, back)), (ARM_BOTTOM, WALL_TOP))
-        window = prv_box(window_across, spanning(through), (ARM_BOTTOM - WINDOW_SLACK, LUG_TOP))
-        profile = [
-            Vector(across[0], back, ARM_BOTTOM),
-            Vector(across[0], back + outward * LUG_PROJECTION, ARM_BOTTOM + LUG_LEAD_IN),
-            Vector(across[0], back, LUG_TOP),
-        ]
-        sweep = Vector(ARM_WIDTH, 0, 0)
 
-    lug = Part.Face(Part.makePolygon(profile + [profile[0]])).extrude(sweep)
-    return arm.fuse(lug), window
+def prv_slab(in_axis, in_face, in_inward, in_depths, in_along, in_z):
+    """A box given as a depth range measured inward from the wall face."""
+    low = in_face + in_inward * in_depths[0]
+    high = in_face + in_inward * in_depths[1]
+    depth = (min(low, high), max(low, high))
+    return prv_box(depth, in_along, in_z) if in_axis == "x" else prv_box(in_along, depth, in_z)
+
+
+def prv_snap_slots(in_axis, in_side, in_centre):
+    """The cut that frees the tongue: under it, over it, and past its free end."""
+    face, outside, inward = prv_snap_frame(in_axis, in_side)
+    through = (-1.0, -(abs(outside - face) + 1.0))  # from inside the box out through the wall
+    anchor, free = in_centre - TONGUE_LENGTH / 2.0, in_centre + TONGUE_LENGTH / 2.0
+    return (
+        prv_slab(in_axis, face, inward, through, (anchor, free + SLOT_WIDTH), (TONGUE_Z[0] - SLOT_WIDTH, TONGUE_Z[0]))
+        .fuse(prv_slab(in_axis, face, inward, through, (anchor, free + SLOT_WIDTH), (TONGUE_Z[1], TONGUE_Z[1] + SLOT_WIDTH)))
+        .fuse(
+            prv_slab(
+                in_axis, face, inward, through, (free, free + SLOT_WIDTH),
+                (TONGUE_Z[0] - SLOT_WIDTH, TONGUE_Z[1] + SLOT_WIDTH),
+            )
+        )
+    )
+
+
+def prv_snap_nose(in_axis, in_side, in_centre):
+    """The catch on the tongue's inner face: a 45 degree retention face, then a gentle ramp."""
+    face, _, inward = prv_snap_frame(in_axis, in_side)
+    at = in_centre + TONGUE_LENGTH / 2.0 - NOSE_INSET
+    return prv_across(
+        in_axis, face, inward,
+        (0.0, NOSE_PROJECTION, 0.0),
+        (at - NOSE_WIDTH / 2.0, at + NOSE_WIDTH / 2.0),
+        (LEDGE_Z, LEDGE_Z + NOSE_PROJECTION, LEDGE_Z + NOSE_PROJECTION + NOSE_LEAD_IN),
+    )
+
+
+def prv_snap_nub(in_axis, in_side, in_centre):
+    """The lid's half: rigid, and stepped so the nose has something to sit on."""
+    face, _, inward = prv_snap_frame(in_axis, in_side)
+    at = in_centre + TONGUE_LENGTH / 2.0 - NOSE_INSET
+    along = (at - NUB_WIDTH / 2.0, at + NUB_WIDTH / 2.0)
+    wide = (along[0] - 1.0, along[1] + 1.0)
+
+    nub = prv_slab(in_axis, face, inward, (NUB_GAP, NUB_GAP + NUB_THICKNESS), along, (NUB_BOTTOM, WALL_TOP))
+    nub = nub.cut(
+        prv_across(
+            in_axis, face, inward,
+            (NUB_GAP, NUB_GAP + RECESS, NUB_GAP + RECESS, NUB_GAP),
+            wide,
+            (LEDGE_Z, LEDGE_Z + RECESS, WALL_TOP + 1.0, WALL_TOP + 1.0),
+        )
+    )
+    return nub.cut(
+        prv_across(
+            in_axis, face, inward,
+            (NUB_GAP, NUB_GAP + 1.0, NUB_GAP),
+            wide,
+            (NUB_BOTTOM, NUB_BOTTOM, NUB_BOTTOM + 1.0),
+        )
+    )
 
 
 def prv_build_base():
@@ -178,10 +228,12 @@ def prv_build_base():
             prv_pillar(centre, PEG_DIAMETER, (-NUCLEO_PCB_THICKNESS, -NUCLEO_PCB_THICKNESS + PEG_HEIGHT))
         )
 
-    # The windows are through holes on purpose: the engagement is visible, and a snap that
-    # cannot be released is a box that has to be broken open.
+    # The tongues are cut out of the wall, so releasing one is a fingernail from outside
+    # rather than a paper clip through a hole.
     for snap in SNAPS:
-        base = base.cut(prv_snap_geometry(*snap)[1])
+        base = base.cut(prv_snap_slots(*snap))
+    for snap in SNAPS:
+        base = base.fuse(prv_snap_nose(*snap))
 
     # The USB plug's overmould is wider than the socket, so the opening is sized for the
     # plug rather than for the receptacle measured out of the model.
@@ -196,7 +248,7 @@ def prv_build_lid():
     lid = prv_rounded_box(OUTER_X, OUTER_Y, (WALL_TOP, LID_TOP), OUTER_CORNER_RADIUS)
 
     for snap in SNAPS:
-        lid = lid.fuse(prv_snap_geometry(*snap)[0])
+        lid = lid.fuse(prv_snap_nub(*snap))
 
     # The lid is thin only where it has to be: over the shield there are 2.50 mm between
     # the PCB and the display's glass, and a 1.40 mm component in them. Everywhere else it
@@ -241,8 +293,12 @@ directory = sys.argv[2] if len(sys.argv) > 2 else "."
 print("outer %.2f x %.2f x %.2f mm" % (OUTER_X[1] - OUTER_X[0], OUTER_Y[1] - OUTER_Y[0], LID_TOP - FLOOR_BOTTOM))
 print("lid over the shield %.2f mm, elsewhere %.2f mm" % (LID_TOP - POCKET_FLOOR, LID_TOP - WALL_TOP))
 print(
-    "snap: %d arms, %.2f mm engagement, peak strain %.2f %%"
-    % (len(SNAPS), LUG_PROJECTION - ARM_GAP, 100.0 * 1.5 * ARM_THICKNESS * LUG_PROJECTION / ARM_LENGTH ** 2)
+    "snap: %d tongues, %.2f mm engagement, peak strain %.2f %%"
+    % (
+        len(SNAPS),
+        ENGAGEMENT,
+        100.0 * 1.5 * WALL * ENGAGEMENT / (TONGUE_LENGTH - NOSE_INSET) ** 2,
+    )
 )
 prv_write(prv_build_base(), directory, "enclosure-base")
 prv_write(prv_build_lid(), directory, "enclosure-lid")

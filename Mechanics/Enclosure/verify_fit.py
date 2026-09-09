@@ -6,9 +6,10 @@ Every solid of both board models is placed where the assembly puts it and inters
 with the base and the lid. Anything with a volume is a collision, and is printed with
 the component's name so it can be found.
 
-It then checks the two enclosure parts against each other: closed, they must touch and
-never overlap, which is what catches a snap lug that lands in the wall instead of in its
-window.
+It then checks the two enclosure parts against each other twice: closed, they must touch and
+never overlap, which is what catches a snap that lands in the wall instead of in its recess;
+and lifted half a millimetre, they must interfere, because a snap that does not get in the
+way of the lid coming off is not a snap.
 
 Two features of ST's models are drawings rather than geometry and would otherwise report
 as collisions -- the display's flex tail is drawn unfolded and reaches far past the board,
@@ -92,5 +93,16 @@ for name, solid in parts:
 overlap = base.common(lid)
 overlap_volume = 0.0 if overlap.isNull() else overlap.Volume
 print("BASE_LID_OVERLAP %.4f mm3" % overlap_volume, flush=True)
+
+# And the snap has to actually catch. Not overlapping proves the parts go together; it says
+# nothing about whether they stay. Lift the lid and the tongues' noses must be in the way.
+LIFT_MM = 0.5
+lifted = lid.copy()
+lifted.translate(Vector(0, 0, LIFT_MM))
+caught = base.common(lifted)
+print(
+    "SNAP_HOLDS %.2f mm3 of interference when lifted %.1f mm" % (0.0 if caught.isNull() else caught.Volume, LIFT_MM),
+    flush=True,
+)
 
 print("COLLISIONS %d" % collisions, flush=True)
