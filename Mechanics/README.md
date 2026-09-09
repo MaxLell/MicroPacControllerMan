@@ -15,7 +15,9 @@ ST-LINK's USB connector.
 | `Cad/MB1841-U545REQ-D01.step` | The NUCLEO-U545RE-Q, board revision D01 — ST's own 3D model |
 | `Cad/MB1642-TCXD022IB5-D01.step` | The X-NUCLEO-GFX01M2 display shield, LCD variant TCXD022IB5 |
 | `Cad/MB1642-DT022CTFT-D01.step` | The same shield with ST's other LCD variant |
+| `Stl/*.stl` | The same three boards tessellated, for looking at in any viewer or slicer |
 | `Tools/measure_step.py` | Reads part bounding boxes and PCB holes out of a STEP file, via FreeCAD |
+| `Tools/export_stl.py` | Tessellates a STEP file into one of those STLs |
 | `Tools/fetch_st_cad.sh` | Re-fetches the STEP files from ST |
 
 **The two LCD variants are mechanically identical** where it matters — module footprint,
@@ -137,6 +139,22 @@ is there for. Both are 2.8 mm below the shield's top surface, so they are reacha
 the notch but recessed. The design does not use `B1` — the joystick's left direction is the
 same "back" action (`shell_press_back`, DEC-056).
 
+## The STL copies
+
+`Stl/` holds the same geometry tessellated, so the boards can be opened in a slicer or any
+STL viewer without FreeCAD. They are **for looking at, not for printing** — they are the
+boards, not the enclosure, and a mesh has thrown away the exact surfaces the enclosure has
+to be dimensioned against. Take dimensions from the STEP files.
+
+| | Facets | Size |
+|---|---|---|
+| `MB1841-U545REQ-D01.stl` | 345,612 | 17 MB |
+| `MB1642-TCXD022IB5-D01.stl` | 36,120 | 1.8 MB |
+| `MB1642-DT022CTFT-D01.stl` | 36,448 | 1.8 MB |
+
+Both are at 0.1 mm linear deflection. `Tools/export_stl.py` takes the deflection as an
+optional argument if a smaller file is worth more than round holes.
+
 ## Re-running the measurements
 
 FreeCAD 1.1.3 as an AppImage; there is no `freecad` package in Ubuntu 24.04. Headless:
@@ -146,6 +164,7 @@ cd Mechanics/Tools
 FC=~/Applications/FreeCAD_1.1.3-x86_64.AppImage
 "$FC" freecadcmd measure_step.py bbox  ../Cad/MB1642-TCXD022IB5-D01.step
 "$FC" freecadcmd measure_step.py holes ../Cad/MB1841-U545REQ-D01.step
+"$FC" freecadcmd export_stl.py ../Cad/MB1841-U545REQ-D01.step ../Stl/MB1841-U545REQ-D01.stl 0.1
 ```
 
 The Nucleo model is 24 MB and takes a few minutes to import; the shield takes about one.
