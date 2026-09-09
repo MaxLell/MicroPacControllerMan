@@ -1,8 +1,7 @@
 # Mechanics
 
-Everything the 3D-printed enclosure is designed against. The enclosure itself is not here
-yet — this is the measured basis for it: the vendor's own 3D models of the two boards, the
-numbers read out of them, and the tools that read them.
+The 3D-printed enclosure, and the measured basis it is designed against: the vendor's own 3D
+models of the two boards, the numbers read out of them, and the tools that read them.
 
 The enclosure is a plain box that covers the Nucleo and the electronics, with the display
 flush in the lid, the joystick reachable from outside, and the device powered through the
@@ -16,6 +15,10 @@ ST-LINK's USB connector.
 | `Cad/MB1642-TCXD022IB5-D01.step` | The X-NUCLEO-GFX01M2 display shield, LCD variant TCXD022IB5 |
 | `Cad/MB1642-DT022CTFT-D01.step` | The same shield with ST's other LCD variant |
 | `Stl/*.stl` | The same three boards tessellated, for looking at in any viewer or slicer |
+| `Enclosure/enclosure.py` | The enclosure itself — parametric, builds both parts and exports them |
+| `Enclosure/verify_fit.py` | Intersects the enclosure with every component of both boards |
+| `Enclosure/enclosure-base.step` / `.stl` | The base — floor, walls, standoffs, screw bosses, USB opening |
+| `Enclosure/enclosure-lid.step` / `.stl` | The lid — display opening, joystick opening, four screws |
 | `Tools/measure_step.py` | Reads part bounding boxes and PCB holes out of a STEP file, via FreeCAD |
 | `Tools/export_stl.py` | Tessellates a STEP file into one of those STLs |
 | `Tools/fetch_st_cad.sh` | Re-fetches the STEP files from ST |
@@ -138,6 +141,71 @@ The shield's top-edge notch sits exactly over the Nucleo's `B1` and `B2`, which 
 is there for. Both are 2.8 mm below the shield's top surface, so they are reachable through
 the notch but recessed. The design does not use `B1` — the joystick's left direction is the
 same "back" action (`shell_press_back`, DEC-056).
+
+## The enclosure
+
+**76.36 × 120.28 × 23.07 mm**, two printed parts, four M3 screws into heat-set inserts.
+`Enclosure/enclosure.py` is the model: every dimension is a named constant at the top, taken
+from the tables above, so changing one number and re-running rebuilds both parts.
+
+```bash
+cd Mechanics/Enclosure
+FC=~/Applications/FreeCAD_1.1.3-x86_64.AppImage
+"$FC" freecadcmd enclosure.py .        # -> both parts, STEP and STL
+"$FC" freecadcmd verify_fit.py .       # -> COLLISIONS 0
+```
+
+### What decided its shape
+
+**The display sits flush, and that is what makes the lid thin.** There are only 2.50 mm
+between the shield's PCB and the display's glass, and the tallest component in that space —
+apart from the display and the joystick — is 1.40 mm. So over the shield the lid can be
+**1.00 mm** and no more. Everywhere else it keeps its full **2.50 mm**, and the step between
+the two is a pocket in its underside. That thin panel is a flange around a large opening,
+supported on all sides, not a span.
+
+**The joystick needs no cap.** It stands 2.70 mm above the glass, so once the lid is flush
+with the glass the knob comes through by itself.
+
+**The rim left standing around that pocket rests on the shield's bare edge**, which is what
+holds the board stack down — on three sides only. On the fourth the display's flex crosses
+the board edge on its way to the slot and stands 1.30 mm proud, so the pocket runs past it.
+
+**The screws are at the two short ends.** The boards are full width, so there is nowhere
+along the long sides to put a boss without making the box wider. At the ends there is
+7 mm of margin, which is where the four bosses and the lid's locating lip live. The lip
+runs at the ends only for the same reason: along the long sides it would come down onto
+the shield's edge.
+
+**The Nucleo is located, not screwed.** Three standoffs 4 mm high, each with a Ø2.90 peg
+into the board's Ø3.20 holes, and the lid's rim above. Screwing the board down would mean
+screws that can only be fitted before the shield goes on.
+
+### Print notes
+
+Assumed **0.2 mm** clearance for one printed part sitting inside another; it is
+`PRINT_CLEARANCE` in the model. About 54 cm³ of filament for both parts together.
+
+Print the **base floor-down** as exported — nothing overhangs except the top edge of the USB
+opening, which is a 14 mm bridge. Print the **lid top-face-down**, so the visible surface is
+against the bed and the countersinks taper inward as they rise. Neither part needs support.
+
+### What has been checked, and what has not
+
+`verify_fit.py` places every solid of both board models where the assembly puts it and
+intersects it with both parts: **1077 components, 0 collisions**. It clips the two known
+drawing artefacts rather than skipping them, so a real part that happens to be low or long
+still counts. That check found three genuine mistakes in the first version — the lip coming
+down on the shield's edge, the rim overlapping components by 0.08 mm, and the rim landing on
+the display's flex.
+
+What it cannot check is **SHIELD_PCB_TOP**, the derived stack height. Every vertical
+dimension hangs off it, and the display is flush *because of* it. If the sockets in fact seat
+2.54 mm lower, the display ends up recessed by exactly that. **Measure it before printing.**
+
+The tightest clearance in the design is **0.10 mm**, between the lid's pocket floor and that
+1.40 mm component. Recessing the display half a millimetre would buy a thicker lid, if the
+thin panel turns out to be a problem in the hand.
 
 ## The STL copies
 
