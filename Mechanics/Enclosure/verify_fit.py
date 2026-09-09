@@ -6,6 +6,10 @@ Every solid of both board models is placed where the assembly puts it and inters
 with the base and the lid. Anything with a volume is a collision, and is printed with
 the component's name so it can be found.
 
+It then checks the two enclosure parts against each other: closed, they must touch and
+never overlap, which is what catches a snap lug that lands in the wall instead of in its
+window.
+
 Two features of ST's models are drawings rather than geometry and would otherwise report
 as collisions -- the display's flex tail is drawn unfolded and reaches far past the board,
 and through-hole pins are drawn at full, unclipped length. Both are clipped away here
@@ -82,5 +86,11 @@ for name, solid in parts:
                 % (name[:24], part_name, hit.Volume, hb.XMin, hb.XMax, hb.YMin, hb.YMax, hb.ZMin, hb.ZMax),
                 flush=True,
             )
+
+# The two parts must touch and not overlap. A lug that landed in the wall instead of in
+# its window shows up here as solid volume, which is the mistake a snap fit invites.
+overlap = base.common(lid)
+overlap_volume = 0.0 if overlap.isNull() else overlap.Volume
+print("BASE_LID_OVERLAP %.4f mm3" % overlap_volume, flush=True)
 
 print("COLLISIONS %d" % collisions, flush=True)

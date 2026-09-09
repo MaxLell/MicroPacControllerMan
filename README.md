@@ -19,7 +19,7 @@ after the high-score page), RAM 68.0 % (178,244 of 256 kB), both builds warning-
 | [`Docu/Design/`](Docu/Design/) | Per-milestone design docs — the *how* the requirements deliberately omit: pin assignments, clock settings, transfer budgets, algorithms. |
 | [`Docu/Idea.md`](Docu/Idea.md) | The original idea capture (historical). |
 | [`Firmware/`](Firmware/README.md) | The STM32 firmware — CMake + arm-none-eabi-gcc, STM32CubeMX/HAL, STM32CubeProgrammer. See its README for build/flash/test. |
-| [`Mechanics/`](Mechanics/README.md) | The enclosure work: ST's own STEP models of both boards, the dimensions read out of them, and the FreeCAD tools that read them. |
+| [`Mechanics/`](Mechanics/README.md) | The 3D-printed enclosure — a parametric FreeCAD model built against ST's own board geometry, with a fit check that intersects it with all 1077 components. Source only; the CAD is generated or fetched. |
 | [`Docu/Refactoring-Backlog.md`](Docu/Refactoring-Backlog.md) | Known work deliberately not done (`RF-xxx`) — deferrals, warts, and what "done" would look like for each. |
 | [`CLAUDE.md`](CLAUDE.md) | Quick-start + conventions (auto-loaded by Claude Code). |
 
