@@ -6,3 +6,8 @@ Stl/
 Enclosure/*.step
 Enclosure/*.stl
 verify.log
+
+# Syncthing markers, from sharing this folder with the Macbook
+.stfolder/
+.stversions/
+.stignore
