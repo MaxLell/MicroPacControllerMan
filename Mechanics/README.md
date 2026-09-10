@@ -15,6 +15,7 @@ cd ../Enclosure && "$FC" freecadcmd enclosure.py .           # -> both parts, ST
 | Path | What it is |
 |---|---|
 | `Enclosure/enclosure.py` | The enclosure — parametric, builds both parts and exports them |
+| `Enclosure/game_font.py` | Reads the game's own font out of the firmware, for the legend on the lid |
 | `Enclosure/verify_fit.py` | Intersects the enclosure with every component of both boards, and the two parts with each other |
 | `Tools/fetch_st_cad.sh` | Fetches ST's board models |
 | `Tools/measure_step.py` | Reads part bounding boxes and PCB holes out of a STEP file |
@@ -176,6 +177,20 @@ apart from the display and the joystick — is 1.40 mm. So over the shield the l
 **1.00 mm** and no more. Everywhere else it keeps its full **2.50 mm**, and the step between
 the two is a pocket in its underside. That thin panel is a flange around a large opening,
 supported on all sides, not a span.
+
+**The front and back faces are chamfered 1.5 mm at 45°.** Both are the face that goes against
+the bed, so the chamfer rises off it at 45° and neither part needs support for it.
+
+**The legend is the game's own font, not a lookalike.** `game_font.py` parses the glyphs
+straight out of `Firmware/App/sprite_set/sprite_set.c`, where the art is stored as ASCII with
+one character per pixel — so the letters cut into the lid are the same 1980 tile ROM letters
+the panel draws, and editing either cannot make them disagree. The font has no lower case, so
+*Pacman AI* is set as **PACMAN AI**: 71 × 7 pixels of ink at 0.9 mm a pixel, 63.9 × 6.3 mm,
+centred across the lid and in the blank band the display leaves above itself.
+
+It is sunk **0.40 mm** — two layers at 0.2 — measured at 0.40 in the strokes and 0.00 between
+them on the finished solid. Runs of ink along a row become one box rather than one box per
+pixel, which is the same shape and a tenth of the solids to subtract.
 
 **The joystick's opening is 13.56 mm square, bevelled to 14.56 at the top face**, and that is
 close to the most this board allows. Its knob has to tilt, and the 11.40 mm opening the first
