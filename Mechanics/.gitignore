@@ -1,0 +1,13 @@
+# Geometry is generated or fetched, never committed: ST's board models come back with
+# Tools/fetch_st_cad.sh, the enclosure with Enclosure/enclosure.py. Keeping them out is
+# what stops 55 MB of CAD from living in the history of a firmware repository.
+Cad/
+Stl/
+Enclosure/*.step
+Enclosure/*.stl
+verify.log
+
+# Syncthing markers, from sharing this folder with the Macbook
+.stfolder/
+.stversions/
+.stignore
