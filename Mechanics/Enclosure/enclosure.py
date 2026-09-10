@@ -58,8 +58,15 @@ PEG_HEIGHT = 3.0
 PEG_DIAMETER = NUCLEO_HOLE_DIAMETER - 0.3
 
 DISPLAY_GAP = 0.3  # around the display module in the lid
-JOYSTICK_GAP = 0.32  # around the joystick's keepout
-JOYSTICK_CORNER_RADIUS = 2.0
+# The joystick's knob has to be able to tilt, and 0.32 mm around the keepout was not enough
+# to do it in. 1.40 is close to the most this board allows: the knob's centre is 8.50 mm from
+# the display window and 7.18 mm from the shield's own edge, so a symmetric opening wider than
+# about 14.4 mm breaks out past the board, and one wider than this leaves under 1.7 mm of lid
+# between the two openings -- a strip that cannot be made thicker either, because two 0.56 mm
+# resistors sit under it.
+JOYSTICK_GAP = 1.40  # around the joystick's keepout
+JOYSTICK_CORNER_RADIUS = 3.0
+JOYSTICK_CHAMFER = 0.5  # the top edge is bevelled outwards, where the tilting knob needs it
 SHIELD_RIM_OVERLAP = 1.0  # how far the lid's full-thickness rim rests on the shield
 POCKET_FLEX_MARGIN = 0.6  # the pocket runs this far past the shield's flex edge
 OUTER_CORNER_RADIUS = 3.0
@@ -268,14 +275,24 @@ def prv_build_lid():
     # The joystick's actuator is drawn simplified in ST's model, so the opening is sized to
     # the 10.76 mm keepout the model does state rather than to a cap diameter it does not.
     side = JOYSTICK_KEEPOUT + 2 * JOYSTICK_GAP
-    return lid.cut(
-        prv_rounded_box(
-            (JOYSTICK_CENTRE[0] - side / 2.0, JOYSTICK_CENTRE[0] + side / 2.0),
-            (JOYSTICK_CENTRE[1] - side / 2.0, JOYSTICK_CENTRE[1] + side / 2.0),
-            (WALL_TOP - 1.0, LID_TOP + 1.0),
-            JOYSTICK_CORNER_RADIUS,
-        )
-    )
+    span_x = (JOYSTICK_CENTRE[0] - side / 2.0, JOYSTICK_CENTRE[0] + side / 2.0)
+    span_y = (JOYSTICK_CENTRE[1] - side / 2.0, JOYSTICK_CENTRE[1] + side / 2.0)
+    lid = lid.cut(prv_rounded_box(span_x, span_y, (WALL_TOP - 1.0, LID_TOP + 1.0), JOYSTICK_CORNER_RADIUS))
+
+    # Bevel its top edge outwards. A tilting knob leans furthest at the top, which is exactly
+    # where the lid is in its way, and the bevel widens the opening there without touching the
+    # 1.7 mm of lid left standing between it and the display window.
+    rim = [
+        edge
+        for edge in lid.Edges
+        if abs(edge.BoundBox.ZMin - LID_TOP) < 1e-6
+        and abs(edge.BoundBox.ZMax - LID_TOP) < 1e-6
+        and span_x[0] - 0.01 <= edge.BoundBox.XMin
+        and edge.BoundBox.XMax <= span_x[1] + 0.01
+        and span_y[0] - 0.01 <= edge.BoundBox.YMin
+        and edge.BoundBox.YMax <= span_y[1] + 0.01
+    ]
+    return lid.makeChamfer(JOYSTICK_CHAMFER, rim)
 
 
 def prv_write(in_shape, in_directory, in_name):
@@ -292,6 +309,10 @@ def prv_write(in_shape, in_directory, in_name):
 directory = sys.argv[2] if len(sys.argv) > 2 else "."
 print("outer %.2f x %.2f x %.2f mm" % (OUTER_X[1] - OUTER_X[0], OUTER_Y[1] - OUTER_Y[0], LID_TOP - FLOOR_BOTTOM))
 print("lid over the shield %.2f mm, elsewhere %.2f mm" % (LID_TOP - POCKET_FLOOR, LID_TOP - WALL_TOP))
+print(
+    "joystick opening %.2f mm square, %.2f mm at the top face"
+    % (JOYSTICK_KEEPOUT + 2 * JOYSTICK_GAP, JOYSTICK_KEEPOUT + 2 * JOYSTICK_GAP + 2 * JOYSTICK_CHAMFER)
+)
 print(
     "snap: %d tongues, %.2f mm engagement, peak strain %.2f %%"
     % (

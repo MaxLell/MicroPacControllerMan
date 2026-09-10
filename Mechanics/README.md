@@ -71,8 +71,9 @@ The active area is 33.84 × 45.12 mm to the hundredth, which is 240 × 320 pixel
 0.141 mm — a good sign that the model is the real one and not a placeholder.
 
 The joystick's actuator is drawn simplified — a 10.76 mm square block 5.20 tall, where the
-real part has a round cap. The lid's opening is sized to that keepout rather than to a cap
-diameter the model does not state.
+real part has a round cap that tilts. The lid's opening is sized to that keepout rather than
+to a cap diameter the model does not state, which is why the clearance around it was set by a
+printed part in the hand rather than by this table.
 
 The shield has **no mounting holes**; it is held entirely by CN2/CN3. The two Ø3.00 holes at
 y = 3.53 are the ends of the flex slot, not fixings.
@@ -175,6 +176,22 @@ apart from the display and the joystick — is 1.40 mm. So over the shield the l
 **1.00 mm** and no more. Everywhere else it keeps its full **2.50 mm**, and the step between
 the two is a pocket in its underside. That thin panel is a flange around a large opening,
 supported on all sides, not a span.
+
+**The joystick's opening is 13.56 mm square, bevelled to 14.56 at the top face**, and that is
+close to the most this board allows. Its knob has to tilt, and the 11.40 mm opening the first
+version had — 0.32 mm around ST's keepout — was too tight to do it in. The knob's centre sits
+**8.50 mm from the display window and 7.18 mm from the shield's own edge**, so a symmetric
+opening wider than about 14.4 mm breaks out past the board and opens into the box. What binds
+first is the strip of lid between the two openings: **1.72 mm**, measured on the finished
+solid, and it cannot be made thicker either, because two 0.56 mm resistors sit under it.
+
+The bevel is where the tilt is actually paid for. A knob leans furthest at its top, which is
+exactly the height the lid is in the way, so the top edge is chamfered 0.5 mm outward — it
+buys a millimetre of lean without taking anything off that 1.72 mm strip.
+
+If it still is not enough, the axes are not equal: **Y is unconstrained** and could take
+another 9 mm either way, so a slot rather than a square is the move that is left. Widening it
+in X further means merging it into the display window.
 
 **The rim left standing around that pocket rests on the shield's bare edge**, which is what
 holds the board stack down — on three sides only. On the fourth the display's flex crosses
