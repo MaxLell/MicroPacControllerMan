@@ -14,13 +14,18 @@ neither states the mated height. The display sits flush in the lid *because of* 
 number: get it wrong and the display is recessed or proud by exactly the error.
 """
 
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[1])))
 
 import FreeCAD
 import Mesh
 import MeshPart
 import Part
 from FreeCAD import Vector
+
+import game_font
 
 # ---------------------------------------------------------------- the boards
 
@@ -95,6 +100,17 @@ NUB_WIDTH = 12.0
 NUB_BOTTOM = 2.0
 SNAP_CLEARANCE = 3.0  # board edge to inner wall: enough for the lid's nub and its gap
 
+# The front and back faces are chamfered at 45 degrees. Both print flat on the bed, so the
+# chamfer rises off it at 45 degrees and needs no support either way round.
+EDGE_CHAMFER = 1.5
+
+# The legend on the front face, in the game's own font -- read out of the firmware by
+# game_font.py rather than redrawn, so the two cannot drift apart. The font has no lower
+# case, so "Pacman AI" is set as PACMAN AI. Sunk two 0.2 mm layers deep.
+LEGEND_TEXT = "PACMAN AI"
+LEGEND_PIXEL = 0.9  # mm per font pixel; the letters are seven pixels tall
+LEGEND_DEPTH = 0.4
+
 # Where the six snaps sit: (axis of the wall's normal, which side, centre along it). The
 # one on the USB wall is off to the side because the socket's opening is in the middle.
 SNAPS = (("x", 0, 8.0), ("x", 0, 58.0), ("x", 1, 8.0), ("x", 1, 58.0), ("y", 0, 35.0), ("y", 1, 20.0))
@@ -122,6 +138,12 @@ ENGAGEMENT = NOSE_PROJECTION - NUB_GAP  # how far the nose actually overlaps the
 RECESS = ENGAGEMENT + 0.05  # the nub steps in by this above its ledge, leaving the nose room
 TONGUE_Z = (WALL_TOP - WALL_ABOVE_TONGUE - SLOT_WIDTH - TONGUE_HEIGHT, WALL_TOP - WALL_ABOVE_TONGUE - SLOT_WIDTH)
 LEDGE_Z = TONGUE_Z[0] + (TONGUE_HEIGHT - NOSE_PROJECTION - NOSE_LEAD_IN) / 2.0
+
+# Centred across the lid, and centred in the blank band the display leaves above itself.
+LEGEND_CENTRE = (
+    (OUTER_X[0] + OUTER_X[1]) / 2.0,
+    ((DISPLAY_Y[1] + DISPLAY_GAP) + (OUTER_Y[1] - EDGE_CHAMFER)) / 2.0,
+)
 
 
 def prv_rounded_box(in_x, in_y, in_z, in_radius):
@@ -224,6 +246,62 @@ def prv_snap_nub(in_axis, in_side, in_centre):
     )
 
 
+def prv_outline_edges(in_shape, in_z):
+    """The edges of one flat face's outer boundary — the ones a chamfer should take, and
+    not the openings cut into the same face."""
+    box = in_shape.BoundBox
+    picked = []
+    for edge in in_shape.Edges:
+        limits = edge.BoundBox
+        if abs(limits.ZMin - in_z) > 1e-6 or abs(limits.ZMax - in_z) > 1e-6:
+            continue
+        if (
+            limits.XMin <= box.XMin + 1e-6
+            or limits.XMax >= box.XMax - 1e-6
+            or limits.YMin <= box.YMin + 1e-6
+            or limits.YMax >= box.YMax - 1e-6
+        ):
+            picked.append(edge)
+    return picked
+
+
+def prv_legend():
+    """The letters as one compound of boxes, ready to be cut into the front face.
+
+    Runs of ink along a row become one box each rather than one box per pixel: the result
+    is identical and there are a tenth as many solids to subtract.
+    """
+    grid = game_font.render(LEGEND_TEXT)
+    first_column, last_column, first_row, last_row = game_font.ink_extent(grid)
+    left = LEGEND_CENTRE[0] - (last_column - first_column) * LEGEND_PIXEL / 2.0
+    top = LEGEND_CENTRE[1] + (last_row - first_row) * LEGEND_PIXEL / 2.0
+
+    boxes = []
+    for row_index, cells in enumerate(grid):
+        column = 0
+        while column < len(cells):
+            if not cells[column]:
+                column += 1
+                continue
+            run = column
+            while run < len(cells) and cells[run]:
+                run += 1
+            boxes.append(
+                Part.makeBox(
+                    (run - column) * LEGEND_PIXEL,
+                    LEGEND_PIXEL,
+                    LEGEND_DEPTH + 1.0,
+                    Vector(
+                        left + (column - first_column) * LEGEND_PIXEL,
+                        top - (row_index - first_row + 1) * LEGEND_PIXEL,
+                        LID_TOP - LEGEND_DEPTH,
+                    ),
+                )
+            )
+            column = run
+    return Part.makeCompound(boxes)
+
+
 def prv_build_base():
     shell = prv_rounded_box(OUTER_X, OUTER_Y, (FLOOR_BOTTOM, WALL_TOP), OUTER_CORNER_RADIUS)
     cavity = prv_rounded_box(INTERIOR_X, INTERIOR_Y, (FLOOR_TOP, WALL_TOP + 1.0), INNER_CORNER_RADIUS)
@@ -246,9 +324,10 @@ def prv_build_base():
     # plug rather than for the receptacle measured out of the model.
     usb_centre_x = (USB_X[0] + USB_X[1]) / 2.0
     usb_centre_z = (USB_Z[0] + USB_Z[1]) / 2.0
-    return base.cut(
+    base = base.cut(
         Part.makeBox(14.0, WALL + 2.0, 9.0, Vector(usb_centre_x - 7.0, INTERIOR_Y[1] - 1.0, usb_centre_z - 4.5))
     )
+    return base.makeChamfer(EDGE_CHAMFER, prv_outline_edges(base, FLOOR_BOTTOM))
 
 
 def prv_build_lid():
@@ -292,7 +371,10 @@ def prv_build_lid():
         and span_y[0] - 0.01 <= edge.BoundBox.YMin
         and edge.BoundBox.YMax <= span_y[1] + 0.01
     ]
-    return lid.makeChamfer(JOYSTICK_CHAMFER, rim)
+    lid = lid.makeChamfer(JOYSTICK_CHAMFER, rim)
+
+    lid = lid.makeChamfer(EDGE_CHAMFER, prv_outline_edges(lid, LID_TOP))
+    return lid.cut(prv_legend())
 
 
 def prv_write(in_shape, in_directory, in_name):
@@ -309,6 +391,10 @@ def prv_write(in_shape, in_directory, in_name):
 directory = sys.argv[2] if len(sys.argv) > 2 else "."
 print("outer %.2f x %.2f x %.2f mm" % (OUTER_X[1] - OUTER_X[0], OUTER_Y[1] - OUTER_Y[0], LID_TOP - FLOOR_BOTTOM))
 print("lid over the shield %.2f mm, elsewhere %.2f mm" % (LID_TOP - POCKET_FLOOR, LID_TOP - WALL_TOP))
+print(
+    "front and back chamfered %.1f mm at 45 deg; legend %r sunk %.1f mm"
+    % (EDGE_CHAMFER, LEGEND_TEXT, LEGEND_DEPTH)
+)
 print(
     "joystick opening %.2f mm square, %.2f mm at the top face"
     % (JOYSTICK_KEEPOUT + 2 * JOYSTICK_GAP, JOYSTICK_KEEPOUT + 2 * JOYSTICK_GAP + 2 * JOYSTICK_CHAMFER)
